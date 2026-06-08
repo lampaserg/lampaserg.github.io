@@ -29,6 +29,12 @@
                     store: 'https://lampaserg.github.io/extensions.json',
                     with_installed: true
                 });
+                // Добавляем обработчик ошибки загрузки
+                setTimeout(function() {
+                    if ($('.extensions-list').children().length === 0) {
+                        Lampa.Noty.show('Ошибка: не удалось загрузить список плагинов. Проверьте файл extensions.json', 5000);
+                    }
+                }, 3000);
             });
         }
     });
