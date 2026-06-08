@@ -2,342 +2,1024 @@
   "secuses": true,
   "results": [
     {
-      "title": "🔥 Популярные",
+      "title": "🎨 Оформление и темы",
       "results": [
         {
-          "name": "Z01 Онлайн",
-          "author": "@z01support",
-          "link": "http://z01.online/live",
-          "descr": "Фильмы и сериалы в онлайн",
-          "available_lampa": 1
+          "name": "Золотая тема",
+          "author": "@BazZziliuS",
+          "link": "https://bazzzilius.github.io/scripts/gold_theme.js",
+          "descr": "Золотая тема оформления",
+          "version": "1.0.0"
         },
         {
-          "name": "TV Skaz",
-          "author": "@helpiptv",
-          "link": "http://skaz.tv/tv.js",
-          "descr": "Телевидение и Онлайн 4к. 1900+ каналов, фильмы и сериалы",
-          "available_lampa": 1
+          "name": "Тема Flixio",
+          "author": "@tvigl",
+          "link": "https://tvigl.github.io/plugins/Flixio.js",
+          "descr": "Тема оформления Flixio",
+          "version": "1.0.0"
         },
         {
-          "name": "BWA",
-          "author": "@bwa",
-          "link": "http://bwa.ad/rc",
-          "descr": "Фильмы и сериалы в онлайн",
-          "available_lampa": 1
+          "name": "Тема V",
+          "author": "@tvigl",
+          "link": "https://tvigl.github.io/plugins/TemaV.js",
+          "descr": "Тема оформления V",
+          "version": "1.0.0"
         },
         {
-          "name": "MODS's",
-          "author": "@modss_group",
-          "link": "http://lampa.stream/modss",
-          "descr": "Фильмы и сериалы в онлайн",
-          "available_lampa": 1
+          "name": "Темы Drxaos",
+          "author": "@tvigl",
+          "link": "https://tvigl.github.io/plugins/drxaos_themes.js",
+          "descr": "Дополнительные темы оформления",
+          "version": "1.0.0"
         },
         {
-          "name": "NetFix",
-          "author": "@netfix_party",
-          "link": "https://netfix.cc/netfix.js",
-          "descr": "Лучшее кино и сериалы - быстро, удобно, в высоком качестве",
-          "available_lampa": 1
+          "name": "Мои темы",
+          "author": "@bylampa",
+          "link": "https://bylampa.github.io/themes.js",
+          "descr": "Пользовательские темы оформления",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Netflix Premium Style",
+          "author": "@lampaserg",
+          "link": "https://lampaserg.github.io/netflix_premium_style.js",
+          "descr": "Стиль Netflix Premium",
+          "version": "1.0.0"
         }
       ]
     },
     {
-      "title": "🎬 Онлайн видео",
+      "title": "🎬 Подборки и коллекции",
       "results": [
         {
-          "name": "Онлисказ 4к",
-          "author": "@helpiptv",
-          "link": "http://skaz.tv/onlines.js",
-          "descr": "Онлайн фильмы и сериалы 4к",
-          "available_lampa": 1
+          "name": "Подборки TMDB (мод)",
+          "author": "@tvigl",
+          "link": "https://tvigl.github.io/plugins/tmdb_mod.js",
+          "descr": "Модифицированные подборки из TMDB",
+          "version": "1.0.0"
         },
         {
-          "name": "Онлайн Мод",
-          "author": "@t_anton",
-          "link": "https://nb557.github.io/plugins/online_mod.js",
-          "descr": "Фильмы и сериалы в онлайн",
-          "available_lampa": 1
-        },
-        {
-          "name": "Amedia",
-          "author": "@byskaz",
-          "link": "https://skaz.tv/amedia/a.js",
-          "descr": "Фильмы и сериалы в онлайн для Android устройств. Версия apk 1.12.5 и выше",
-          "available_lampa": 1
-        },
-        {
-          "name": "Filmix",
-          "author": "@filmix",
-          "link": "https://lampaplugins.github.io/store/fx.js",
-          "descr": "Фильмы и сериалы в онлайн",
-          "available_lampa": 1
-        },
-        {
-          "name": "Онлайн Stream",
-          "author": "@arkmv",
-          "link": "http://arkmv.ru/vod",
-          "descr": "Онлайн фильмы и сериалы",
-          "available_lampa": 1
-        },
-        {
-          "name": "Клубничка Z",
-          "author": "@z01",
-          "link": "http://z01.online/s.js",
-          "descr": "Онлайн просмотр контента для взрослых",
-          "available_lampa": 1
-        },
-        {
-          "name": "Клубничка BWA",
-          "author": "@bwa",
-          "link": "http://bwa.ad/re",
-          "descr": "Онлайн просмотр контента для взрослых",
-          "available_lampa": 1
-        }
-      ]
-    },
-    {
-      "title": "⚙️ Управление и интерфейс",
-      "results": [
-        {
-          "name": "Трейлеры с Рутуб",
-          "author": "@RootU",
-          "link": "https://plugin.rootu.top/rutube.js",
-          "descr": "Добавляет кнопку трейлеры с сервиса RuTube",
-          "available_lampa": 1
-        },
-        {
-          "name": "Трейлеры с iTunes",
-          "author": "@RootU",
-          "link": "https://plugin.rootu.top/trailers.js",
-          "descr": "Добавляет кнопку трейлеры с сервиса iTunes",
-          "available_lampa": 1
+          "name": "Подборки CUB",
+          "author": "@cub",
+          "link": "https://cub.rip/plugin/collections",
+          "descr": "Коллекции фильмов и сериалов",
+          "version": "1.0.0"
         },
         {
           "name": "Подборки",
           "author": "@helpiptv",
           "link": "https://lampaplugins.github.io/store/p.js",
           "descr": "Подборки от онлайн кинотеатров, мультсериалы и мультфильмы",
-          "available_lampa": 1
+          "version": "1.0.0"
         },
         {
           "name": "SURS",
           "author": "@RomanV",
           "link": "https://aviamovie.github.io/surs.js",
-          "descr": "Уникальные подборки фильмов и сериалов на главной странице по жанрам, стримингам, популярности, просмотрам и кассовым сборам",
-          "available_lampa": 1
+          "descr": "Уникальные подборки фильмов и сериалов по жанрам, стримингам, популярности",
+          "version": "1.0.0"
         },
         {
-          "name": "Torrent Styles MOD V2",
-          "author": "@pavelpikta",
-          "link": "https://lampaplugins.github.io/store/torrent_styles_v2.js",
-          "descr": "Улучшенные стили для списка торрентов. Цветная индикация битрейта, сидов, пиров и размера",
-          "available_lampa": 1
+          "name": "Большие постеры с релизами",
+          "author": "@tvigl",
+          "link": "https://tvigl.github.io/plugins/new_released.js",
+          "descr": "Отображение новых релизов с большими постерами",
+          "version": "1.0.0"
         },
         {
-          "name": "Navigation Bar",
-          "author": "@pavelpikta",
-          "link": "https://lampaplugins.github.io/store/navigation_bar.js",
-          "descr": "Добавляет кнопки из бокового меню в навигационную панель на мобильных устройствах",
-          "available_lampa": 1
+          "name": "Top ByLAMPA",
+          "author": "@bylampa",
+          "link": "https://bylampa.github.io/top.js",
+          "descr": "Топ контента на основе оценок пользователей",
+          "version": "1.0.0"
         },
         {
-          "name": "Добавляет пункт \"Парсер\" в меню",
-          "author": "@lampa",
-          "link": "http://cub.red/plugin/etor",
-          "descr": "Для ТВ, на которых Lampa установлена через LG Store и Tizen App Store",
-          "available_lampa": 1
+          "name": "Русские новинки",
+          "author": "@bylampa",
+          "link": "https://bylampa.github.io/rus_movie.js",
+          "descr": "Подборка русских новинок фильмов и сериалов",
+          "version": "1.0.0"
         },
         {
-          "name": "Shikimori catalog",
-          "author": "@lme_chat",
-          "link": "https://lampame.github.io/main/shikimori.js",
-          "descr": "Отображает информацию по аниме с Shikimori",
-          "available_lampa": 1
+          "name": "Зарубежные подборки",
+          "author": "@bylampa",
+          "link": "https://bylampa.github.io/inter_movie.js",
+          "descr": "Подборки зарубежных фильмов",
+          "version": "1.0.0"
         },
         {
-          "name": "Тип управления",
-          "author": "@nemiroff",
-          "link": "https://nemiroff.github.io/lampa/select_weapon.js",
-          "descr": "Позволяет выбрать тип управления (Пульт без мышки, Пульт с мышью, Тачскрин)",
-          "available_lampa": 1
+          "name": "Аниме TMDB",
+          "author": "@bylampa",
+          "link": "https://bylampa.github.io/anime.js",
+          "descr": "Подборки аниме от TMDB",
+          "version": "1.0.0"
         },
         {
-          "name": "Дополнительные категории",
-          "author": "@lme_chat",
-          "link": "https://lampame.github.io/main/nc/nc.js",
-          "descr": "Добавление категорий Мультфильмы, Netflix, Концерты и прочее",
-          "available_lampa": 1
+          "name": "Prisma Collections",
+          "author": "@levende",
+          "link": "https://levende.github.io/lampa-plugins/prisma_collections.js?v=2",
+          "descr": "Коллекции Prisma",
+          "version": "2.0.0"
         },
         {
-          "name": "Старый стиль (Закладки, Нравится, Позже)",
-          "author": "@VitalikPVA",
-          "link": "http://github.freebie.tom.ru/want.js",
-          "descr": "Возвращает в главное меню старый стиль отображения пунктов",
-          "available_lampa": 1
+          "name": "Aviamovie Surs",
+          "author": "@pilot_valliko",
+          "link": "https://aviamovie.github.io/surs.js",
+          "descr": "Уникальные подборки на главной странице",
+          "version": "1.0.0"
+        }
+      ]
+    },
+    {
+      "title": "⭐ Рейтинги и оценки",
+      "results": [
+        {
+          "name": "Рейтинг на карточках Все",
+          "author": "@amikdn",
+          "link": "https://amikdn.github.io/rate.js",
+          "descr": "Отображение рейтинга на всех карточках",
+          "version": "1.0.0"
         },
         {
-          "name": "Сброс настроек субтитров",
+          "name": "Рейтинг КиноПоиск и IMDB",
           "author": "@t_anton",
-          "link": "https://nb557.github.io/plugins/reset_subs.js",
-          "descr": "Сбрасывает настройки субтитров по умолчанию",
-          "available_lampa": 1
+          "link": "https://bylampa.github.io/rating.js",
+          "descr": "Показ рейтинга КиноПоиск и IMDB в карточке",
+          "version": "1.0.0"
         },
         {
-          "name": "Выключение тача",
-          "author": "@t_anton",
-          "link": "https://nb557.github.io/plugins/not_mobile.js",
-          "descr": "Выключает сенсорное управление, если оно было включено по ошибке",
-          "available_lampa": 1
-        },
-        {
-          "name": "Интерфейс мод",
-          "author": "@pavelpikta",
-          "link": "https://lampaplugins.github.io/store/interface_mod.js",
-          "descr": "Темы, стили карточки и торрентов, кнопки онлайн и другие улучшения интерфейса",
-          "available_lampa": 1
-        },
-        {
-          "name": "Рейтинг CUB в карточке фильма",
+          "name": "Средний рейтинг КУБА",
           "author": "@RootU",
           "link": "https://plugin.rootu.top/cub-rating.js",
           "descr": "Выводит средний рейтинг на основе реакций пользователей",
-          "available_lampa": 1
+          "version": "1.0.0"
         },
         {
-          "name": "Настройка шапки",
-          "author": "@and7ey",
-          "link": "https://and7ey.github.io/lampa/head_filter.js",
-          "descr": "Добавляет возможность скрыть элементы в шапке приложения",
-          "available_lampa": 1
-        },
-        {
-          "name": "Логотипы вместо названий",
-          "author": "@helpiptv",
-          "link": "https://lampaplugins.github.io/store/logo.js",
-          "descr": "Отображает логотипы фильмов вместо названий в карточках",
-          "available_lampa": 1
-        },
-        {
-          "name": "Кинопоиск",
-          "author": "@and7ey",
-          "link": "https://and7ey.github.io/lampa/kinopoisk.js",
-          "descr": "Отображает список фильмов из папки Буду смотреть на Кинопоиске",
-          "available_lampa": 1
-        },
-        {
-          "name": "Приятные мелочи",
+          "name": "Рейтинг Lampa",
           "author": "@AndreyURL54",
-          "link": "http://skaztv.online/js/tricks.js",
-          "descr": "Дополнение некоторых востребованных функций и дизайна",
-          "available_lampa": 1
+          "link": "https://bylampa.github.io/rate_lampa.js",
+          "descr": "Рейтинг на основе оценок пользователей Lampa",
+          "version": "1.0.0"
         },
         {
-          "name": "Отключение Websocket",
-          "author": "@rootu",
-          "link": "http://plugin.rootu.top/wsoff.js",
-          "descr": "Отключает протокол Websocket, помогает при ошибках на некоторых устройствах",
-          "available_lampa": 1
+          "name": "Цветные оценки",
+          "author": "@fovway",
+          "link": "https://bylampa.github.io/color_vote.js",
+          "descr": "Окрашивание оценок в цвета в зависимости от значения",
+          "version": "1.0.0"
         },
         {
-          "name": "Предзагрузка TS",
+          "name": "Качество Surs",
+          "author": "@tvigl",
+          "link": "https://tvigl.github.io/plugins/surs_quality.js",
+          "descr": "Отображение качества фильмов",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Рейтинг качества",
+          "author": "@tvigl",
+          "link": "https://tvigl.github.io/plugins/rating-quality.js",
+          "descr": "Отображение рейтинга качества",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Рейтинг OMDB",
+          "author": "@tvigl",
+          "link": "https://tvigl.github.io/plugins/rating_omdb.js",
+          "descr": "Рейтинг от OMDB",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Рейтинги Maxsm",
+          "author": "@tvigl",
+          "link": "https://tvigl.github.io/plugins/maxsm_ratings.js",
+          "descr": "Дополнительные рейтинги",
+          "version": "1.0.0"
+        },
+        {
+          "name": "КиноПоиск рейтинг",
+          "author": "@and7ey",
+          "link": "https://and7ey.github.io/lampa/kinopoisk_rating.js",
+          "descr": "Рейтинг от КиноПоиск",
+          "version": "1.0.0"
+        },
+        {
+          "name": "В качестве",
+          "author": "@bylampa",
+          "link": "https://bylampa.github.io/in_quality.js",
+          "descr": "Фильмы, которые вышли в высоком качестве",
+          "version": "1.0.0"
+        }
+      ]
+    },
+    {
+      "title": "📺 Онлайн видео",
+      "results": [
+        {
+          "name": "Free Online",
+          "author": "@AndreyURL54",
+          "link": "https://bylampa.github.io/free_onl.js",
+          "descr": "Бесплатный онлайн просмотр фильмов и сериалов",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Online Mod",
+          "author": "@t_anton",
+          "link": "https://bylampa.github.io/online_mod.js",
+          "descr": "Онлайн просмотр с балансерами",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Онлайн Filmix",
+          "author": "@rik",
+          "link": "https://bylampa.github.io/fx.js",
+          "descr": "Онлайн просмотр с источником Filmix",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Онлайн Cinema",
+          "author": "@cinema",
+          "link": "https://bylampa.github.io/cinema.js",
+          "descr": "Онлайн просмотр фильмов и сериалов",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Z01 Онлайн",
+          "author": "@z01support",
+          "link": "http://z01.online/live",
+          "descr": "Фильмы и сериалы в онлайн",
+          "version": "1.0.0"
+        },
+        {
+          "name": "BWA",
+          "author": "@bwa",
+          "link": "http://bwa.ad/rc",
+          "descr": "Фильмы и сериалы в онлайн",
+          "version": "1.0.0"
+        },
+        {
+          "name": "MODS's",
+          "author": "@modss_group",
+          "link": "http://lampa.stream/modss",
+          "descr": "Фильмы и сериалы в онлайн",
+          "version": "1.0.0"
+        },
+        {
+          "name": "NetFix",
+          "author": "@netfix_party",
+          "link": "https://netfix.cc/netfix.js",
+          "descr": "Лучшее кино и сериалы в высоком качестве",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Онлисказ 4к",
+          "author": "@helpiptv",
+          "link": "http://skaz.tv/onlines.js",
+          "descr": "Онлайн фильмы и сериалы 4к",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Amedia",
+          "author": "@byskaz",
+          "link": "https://skaz.tv/amedia/a.js",
+          "descr": "Фильмы и сериалы для Android устройств",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Filmix",
+          "author": "@filmix",
+          "link": "https://lampaplugins.github.io/store/fx.js",
+          "descr": "Фильмы и сериалы в онлайн",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Онлайн Stream",
+          "author": "@arkmv",
+          "link": "http://arkmv.ru/vod",
+          "descr": "Онлайн фильмы и сериалы",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Showy WTCH",
+          "author": "@showy",
+          "link": "http://wtch.ch/m",
+          "descr": "Онлайн просмотр фильмов и сериалов",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Онлайн мод (Surge)",
+          "author": "@nb557",
+          "link": "https://nb557.surge.sh/online_mod.js",
+          "descr": "Онлайн просмотр",
+          "version": "1.0.0"
+        },
+        {
+          "name": "МОДС",
+          "author": "@modss",
+          "link": "https://modss.tv/",
+          "descr": "МОДС онлайн",
+          "version": "1.0.0"
+        }
+      ]
+    },
+    {
+      "title": "🔞 Клубничка (18+)",
+      "results": [
+        {
+          "name": "Клубничка",
+          "author": "@rik",
+          "link": "https://bylampa.github.io/sisi.js",
+          "descr": "Плагин для просмотра контента 18+",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Клубничка Z",
+          "author": "@z01",
+          "link": "http://z01.online/s.js",
+          "descr": "Онлайн просмотр контента для взрослых",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Клубничка BWA",
+          "author": "@bwa",
+          "link": "http://bwa.ad/re",
+          "descr": "Онлайн просмотр контента для взрослых",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Земляника",
+          "author": "@bwa",
+          "link": "https://bwa.ad/f",
+          "descr": "Контент для взрослых",
+          "version": "1.0.0"
+        }
+      ]
+    },
+    {
+      "title": "📡 Торренты",
+      "results": [
+        {
+          "name": "Torrent Styles V2",
+          "author": "@pavelpikta",
+          "link": "https://lampaplugins.github.io/store/torrent_styles_v2.js",
+          "descr": "Улучшенные стили для списка торрентов",
+          "version": "2.0.0"
+        },
+        {
+          "name": "PubTorr",
+          "author": "@lampame",
+          "link": "https://lampame.github.io/main/pubtorr.js",
+          "descr": "Торрент парсер PubTorr",
+          "version": "1.0.0"
+        },
+        {
+          "name": "ETor",
+          "author": "@cub",
+          "link": "https://cub.rip/plugin/etor",
+          "descr": "Торрент плагин",
+          "version": "1.0.0"
+        },
+        {
+          "name": "PubTorr Lobs",
+          "author": "@lobs",
+          "link": "https://plugs.lobs.su/pubtorr.js",
+          "descr": "Торрент парсер",
+          "version": "1.0.0"
+        },
+        {
+          "name": "ETor Lobs",
+          "author": "@lobs",
+          "link": "https://plugs.lobs.su/etor.js",
+          "descr": "Торрент плагин",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Kinozal",
+          "author": "@lobs",
+          "link": "https://plugs.lobs.su/kinozal.js",
+          "descr": "Торрент трекер Kinozal",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Torr Styles",
+          "author": "@ipavlin98",
+          "link": "https://ipavlin98.github.io/lmp-plugins/torr-styles.js",
+          "descr": "Стили для торрентов",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Закачка торрентов",
+          "author": "@feliks",
+          "link": "https://lampame.github.io/main/torrentmanager/torrentmanager.js",
+          "descr": "Загрузка через qBittorent/Transmission",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Настройка торрентов",
+          "author": "@lampa",
+          "link": "https://bylampa.github.io/etor.js",
+          "descr": "Для LG и Tizen TV",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Вторая кнопка Торренты",
+          "author": "@VitalikPVA",
+          "link": "https://github.freebie.tom.ru/torrents.js",
+          "descr": "Добавляет вторую кнопку Торренты",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Free Torrserver",
+          "author": "@scabrum",
+          "link": "https://bylampa.github.io/freetorr.js",
+          "descr": "Автоматическая подстановка Torrserver",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Визуализация загрузки TS",
           "author": "@rootu",
           "link": "https://plugin.rootu.top/ts-preload.js",
-          "descr": "Визуализация предзагрузки торрентов для встроенного клиента TorrServer",
-          "available_lampa": 1
+          "descr": "Визуализация предзагрузки торрентов",
+          "version": "1.0.0"
         },
         {
-          "name": "Оригинальные названия",
-          "author": "@BDV_Burik",
-          "link": "https://bdvburik.github.io/title.js",
-          "descr": "Добавляет оригинальные названия к фильмам, сериалам",
-          "available_lampa": 1
-        },
-        {
-          "name": "Комментарии к фильмам от Rezka",
-          "author": "@BDV_Burik",
-          "link": "https://bdvburik.github.io/rezkacomment.js",
-          "descr": "Комментарии с сайта Rezka в карточках фильмов, сериалов",
-          "available_lampa": 1
-        }
-      ]
-    },
-    {
-      "title": "📺 Телевидение",
-      "results": [
-        {
-          "name": "TV Skaz & Online",
-          "author": "@helpiptv",
-          "link": "http://skaz.tv/tv.js",
-          "descr": "Телевидение и Онлайн 4к. 1700+ каналов, IPTV плейлисты",
-          "available_lampa": 1
-        },
-        {
-          "name": "Kulik",
-          "author": "@SawamuraRen",
-          "link": "http://cdn.kulik.uz/cors",
-          "descr": "Просмотр IPTV каналов, отсортированных по категориям",
-          "available_lampa": 1
-        },
-        {
-          "name": "TV Skaz & Online (резерв для KZ, BY)",
-          "author": "@helpiptv",
-          "link": "http://skaztv.online/tv.js",
-          "descr": "Телевидение и Онлайн 4к. 1700+ каналов, IPTV плейлисты",
-          "available_lampa": 1
-        }
-      ]
-    },
-    {
-      "title": "🎮 Разное",
-      "results": [
-        {
-          "name": "Игры",
-          "author": "@elenatv1",
-          "link": "http://skaz.tv/g.js",
-          "descr": "Тетрис, змейка, пак-ман и прочее",
-          "available_lampa": 1
-        },
-        {
-          "name": "SomaFM",
-          "author": "@tsynik",
-          "link": "https://tsynik.github.io/lampa/soma.js",
-          "descr": "Радио для Lampa",
-          "available_lampa": 1
-        },
-        {
-          "name": "Радио Рекорд",
-          "author": "@helpiptv",
-          "link": "https://lampaplugins.github.io/store/record.js",
-          "descr": "Радио Рекорд",
-          "available_lampa": 1
+          "name": "Переключение парсеров",
+          "author": "@AndreyURL54",
+          "link": "https://bylampa.github.io/jackett.js",
+          "descr": "Переключение между парсерами Jackett",
+          "version": "1.0.0"
         },
         {
           "name": "No Autostart",
           "author": "@pavelpikta",
           "link": "https://lampaplugins.github.io/store/no-autostart.js",
           "descr": "Отключает автоматический запуск воспроизведения торрента",
-          "available_lampa": 1
+          "version": "1.0.0"
         },
         {
-          "name": "No MIC",
-          "author": "@pavelpikta",
-          "link": "https://lampaplugins.github.io/store/no-mic.js",
-          "descr": "Скрывает кнопку микрофона во встроенной клавиатуре",
-          "available_lampa": 1
+          "name": "Поиск локального TorrServera",
+          "author": "@AndreyURL54",
+          "link": "http://193.233.134.21/plugins/checker.js",
+          "descr": "Автоматический поиск TorrServer",
+          "version": "1.0.0"
+        }
+      ]
+    },
+    {
+      "title": "📺 Телевидение и IPTV",
+      "results": [
+        {
+          "name": "Дизель ТВ",
+          "author": "@AndreyURL54",
+          "link": "https://andreyurl54.github.io/diesel5/diesel.js",
+          "descr": "Бесплатный просмотр телеканалов",
+          "version": "1.0.0"
+        },
+        {
+          "name": "TV Skaz",
+          "author": "@helpiptv",
+          "link": "http://skaz.tv/tv.js",
+          "descr": "Телевидение и Онлайн 4к. 1900+ каналов",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Kulik",
+          "author": "@SawamuraRen",
+          "link": "http://cdn.kulik.uz/cors",
+          "descr": "Просмотр IPTV каналов по категориям",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Hack TV",
+          "author": "@scabrum",
+          "link": "https://bylampa.github.io/tv.js",
+          "descr": "IPTV каналы",
+          "version": "1.0.0"
+        },
+        {
+          "name": "IPTV CUB",
+          "author": "@lampa",
+          "link": "http://cub.red/plugin/iptv",
+          "descr": "IPTV с плейлистами",
+          "version": "1.0.0"
+        },
+        {
+          "name": "TV Rootu",
+          "author": "@rootu",
+          "link": "https://plugin.rootu.top/tv.js",
+          "descr": "ТВ плагин",
+          "version": "1.0.0"
+        },
+        {
+          "name": "TV Skaz (резерв)",
+          "author": "@helpiptv",
+          "link": "http://skaztv.online/tv.js",
+          "descr": "Телевидение и Онлайн 4к для KZ, BY",
+          "version": "1.0.0"
+        }
+      ]
+    },
+    {
+      "title": "🎵 Музыка и Радио",
+      "results": [
+        {
+          "name": "Радио Record",
+          "author": "@lampa",
+          "link": "http://cub.red/plugin/radio",
+          "descr": "Радиостанция Radio Record",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Радио Record Mod",
+          "author": "@GwynnBleiidd",
+          "link": "https://lampame.github.io/main/rradio.js",
+          "descr": "Радио Record с единым списком",
+          "version": "1.0.0"
+        },
+        {
+          "name": "SomaFM",
+          "author": "@tsynik",
+          "link": "https://tsynik.github.io/lampa/soma.js",
+          "descr": "Радио для Lampa",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Радио",
+          "author": "@bwa",
+          "link": "https://bwa.ad/r",
+          "descr": "Радио",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Радио Рекорд",
+          "author": "@helpiptv",
+          "link": "https://lampaplugins.github.io/store/record.js",
+          "descr": "Радио Рекорд",
+          "version": "1.0.0"
+        }
+      ]
+    },
+    {
+      "title": "🛠️ Управление и настройки",
+      "results": [
+        {
+          "name": "Смена сервера",
+          "author": "@scabrum",
+          "link": "https://bylampa.github.io/redirect.js",
+          "descr": "Позволяет сменить сервер приложения",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Обход блокировок",
+          "author": "@scabrum",
+          "link": "https://bylampa.github.io/start.js",
+          "descr": "Доступ к заблокированным ресурсам",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Фильтр контента",
+          "author": "@bylampa",
+          "link": "https://bylampa.github.io/filter_content.js",
+          "descr": "Фильтрация выводимого контента",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Источник рейтинга на главной",
+          "author": "@bylampa",
+          "link": "https://bylampa.github.io/rate_on_main.js",
+          "descr": "Смена источника рейтинга на главной",
+          "version": "1.0.0"
+        },
+        {
+          "name": "CUB Sync",
+          "author": "@levende",
+          "link": "https://bylampa.github.io/cub_sync.js",
+          "descr": "Синхронизация с CUB",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Перезагрузка приложения",
+          "author": "@bylampa",
+          "link": "https://bylampa.github.io/reload.js",
+          "descr": "Кнопка перезагрузки приложения",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Speedtest",
+          "author": "@AndreyURL54",
+          "link": "https://bylampa.github.io/speedtest.js",
+          "descr": "Измерение скорости интернета",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Cub Off",
+          "author": "@scabrum",
+          "link": "https://bylampa.github.io/cub_off.js",
+          "descr": "Отключение элементов CUB Premium",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Выход",
+          "author": "@tsynik",
+          "link": "https://tsynik.github.io/lampa/e.js",
+          "descr": "Пункт Выход в главном меню",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Меню выход",
+          "author": "@bylampa",
+          "link": "https://bylampa.github.io/backmenu.js",
+          "descr": "Кастомное меню выхода",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Бинд кнопок",
+          "author": "@Juri_Z",
+          "link": "https://apxubatop.github.io/lmpPlugs/tvbuttontst.js",
+          "descr": "Управление цветными кнопками с пульта",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Тип управления",
+          "author": "@nemiroff",
+          "link": "https://nemiroff.github.io/lampa/select_weapon.js",
+          "descr": "Выбор типа управления",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Горячие кнопки",
+          "author": "@nnmd",
+          "link": "https://nnmdd.github.io/lampa_hotkeys/hotkeys.js",
+          "descr": "Управление плеером с пульта",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Выключение тача",
+          "author": "@t_anton",
+          "link": "https://nb557.github.io/plugins/not_mobile.js",
+          "descr": "Отключение сенсорного управления",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Wsoff",
+          "author": "@rootu",
+          "link": "http://plugin.rootu.top/wsoff.js",
+          "descr": "Отключение ошибки безопасности WebSocket",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Доступ к настройкам",
+          "author": "@AndreyURL54",
+          "link": "http://193.233.134.21/plugins/setprotect",
+          "descr": "Закрытие настроек паролем",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Сортировка главного меню",
+          "author": "@AndreyURL54",
+          "link": "http://193.233.134.21/plugins/menusort",
+          "descr": "Редактирование главного меню",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Sort main menu",
+          "author": "@bylampa",
+          "link": "https://bylampa.github.io/sort_main_menu.js",
+          "descr": "Сортировка главного меню",
+          "version": "1.0.0"
         },
         {
           "name": "LG webOS (виджет)",
           "author": "@pavelpikta",
           "link": "https://lampaplugins.github.io/store/lg.js",
-          "descr": "Для телевизоров LG: режим ТВ-платформы и запись в localStorage списка зеркал",
-          "available_lampa": 1
+          "descr": "Для телевизоров LG",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Добавляет пункт \"Парсер\" в меню",
+          "author": "@lampa",
+          "link": "http://cub.red/plugin/etor",
+          "descr": "Для ТВ из LG Store и Tizen App Store",
+          "version": "1.0.0"
+        }
+      ]
+    },
+    {
+      "title": "🎨 Интерфейс и улучшения",
+      "results": [
+        {
+          "name": "Интерфейс мод",
+          "author": "@bywolf88",
+          "link": "https://bywolf88.github.io/lampa-plugins/interface_mod.js",
+          "descr": "Темы, стили отображения рейтинга",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Стильный интерфейс",
+          "author": "@lampa",
+          "link": "https://bylampa.github.io/interface.js",
+          "descr": "Новый стиль интерфейса",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Cardify",
+          "author": "@lampa",
+          "link": "https://bylampa.github.io/cardify.js",
+          "descr": "Обновленный вид карточек",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Логотипы вместо названий",
+          "author": "@helpiptv",
+          "link": "https://lampaplugins.github.io/store/logo.js",
+          "descr": "Отображает логотипы фильмов вместо названий",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Приятные мелочи",
+          "author": "@AndreyURL54",
+          "link": "https://andreyurl54.github.io/diesel5/tricks.js",
+          "descr": "Скринсейверы, часы в плеере и другое",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Настройка шапки",
+          "author": "@and7ey",
+          "link": "https://and7ey.github.io/lampa/head_filter.js",
+          "descr": "Скрытие элементов в шапке",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Нижняя навигация",
+          "author": "@arst113",
+          "link": "https://arst113.github.io/log/NewPhoneMenu.js",
+          "descr": "Нижняя навигация для мобильных устройств",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Дополнительные категории",
+          "author": "@GwynnBleiidd",
+          "link": "https://lampame.github.io/main/nc/nc.js",
+          "descr": "Категории: Документалки, Концерты, Мультфильмы",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Папки в моих закладках",
+          "author": "@bylampa",
+          "link": "https://bylampa.github.io/my_bookmarks.js",
+          "descr": "Создание папок в закладках",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Состояние сериала",
+          "author": "@bylampa",
+          "link": "https://bylampa.github.io/seas_and_eps.js",
+          "descr": "Отображение статуса сериала",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Старый стиль пунктов",
+          "author": "@VitalikPVA",
+          "link": "http://github.freebie.tom.ru/want.js",
+          "descr": "Старый стиль Закладки/Нравится/Позже",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Сброс настроек субтитров",
+          "author": "@t_anton",
+          "link": "https://nb557.github.io/plugins/reset_subs.js",
+          "descr": "Сбрасывает настройки субтитров по умолчанию",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Фиксированный размер",
+          "author": "@t_anton",
+          "link": "https://nb557.github.io/plugins/fix_size.js",
+          "descr": "Изменение размеров интерфейса",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Статус на старой карточке",
+          "author": "@bylampa",
+          "link": "https://bylampa.github.io/old_card_status.js",
+          "descr": "Статус просмотра на старых карточках",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Снег",
+          "author": "@bylampa",
+          "link": "https://bylampa.github.io/snow.js",
+          "descr": "Анимация падающего снега",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Card elems center",
+          "author": "@bylampa",
+          "link": "https://bylampa.github.io/full_center.js",
+          "descr": "Центрирование элементов в карточке",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Лейбл сериала",
+          "author": "@bylampa",
+          "link": "https://bylampa.github.io/lable_serial.js",
+          "descr": "Замена лейбла TV на Сериал",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Анимированные реакции",
+          "author": "@AndreyURL54",
+          "link": "https://bylampa.github.io/animated_reaction.js",
+          "descr": "Анимация реакций CUB",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Time2end",
+          "author": "@AndreyURL54",
+          "link": "https://bylampa.github.io/time2end.js",
+          "descr": "Время окончания фильма в плеере",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Quality",
+          "author": "@bylampa",
+          "link": "https://bylampa.github.io/quality.js",
+          "descr": "Отметки качества на карточках",
+          "version": "1.0.0"
+        },
+        {
+          "name": "No Shots",
+          "author": "@and7ey",
+          "link": "https://and7ey.github.io/lampa/noshots.js",
+          "descr": "Отключение скриншотов",
+          "version": "1.0.0"
+        }
+      ]
+    },
+    {
+      "title": "📊 Статистика и информация",
+      "results": [
+        {
+          "name": "Статистика",
+          "author": "@alukyanov",
+          "link": "https://and7ey.github.io/lampa/stats.js",
+          "descr": "Статистика просмотров фильмов",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Оригинальное название",
+          "author": "@bylampa",
+          "link": "https://bylampa.github.io/orig_title.js",
+          "descr": "Отображение оригинального названия",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Лого вместо названия",
+          "author": "@bylampa",
+          "link": "https://bylampa.github.io/logo_title.js",
+          "descr": "Замена названия на логотип",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Погода",
+          "author": "@scabrum",
+          "link": "https://bylampa.github.io/weather.js",
+          "descr": "Отображение погоды",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Комментарии Rezka",
+          "author": "@BDV_Burik",
+          "link": "https://BDVBurik.github.io/rezkacomment.js",
+          "descr": "Комментарии с сайта Rezka",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Отзывы и рецензии",
+          "author": "@lampaplugins",
+          "link": "https://lampaplugins.github.io/store/o.js",
+          "descr": "Отзывы от КиноПоиск",
+          "version": "1.0.0"
+        }
+      ]
+    },
+    {
+      "title": "🎬 Трейлеры",
+      "results": [
+        {
+          "name": "Трейлеры Rutube",
+          "author": "@rootu",
+          "link": "https://plugin.rootu.top/rutube.js",
+          "descr": "Трейлеры с RuTube",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Трейлеры iTunes",
+          "author": "@rootu",
+          "link": "https://plugin.rootu.top/trailers.js",
+          "descr": "Трейлеры с iTunes",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Трейлеры",
+          "author": "@myroslav_kuzyshyn",
+          "link": "https://mastermagic98.github.io/l_plugins/upcoming.js",
+          "descr": "Трейлеры на главной странице",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Отключение трейлеров",
+          "author": "@bylampa",
+          "link": "https://bylampa.github.io/trailer_off.js",
+          "descr": "Убирает трейлеры в карточке",
+          "version": "1.0.0"
+        }
+      ]
+    },
+    {
+      "title": "🔄 Дополнительные источники",
+      "results": [
+        {
+          "name": "Источник ByLAMPA",
+          "author": "@bylampa",
+          "link": "https://bylampa.github.io/bylampa_source.js",
+          "descr": "Кастомный источник контента",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Дополнительные источники",
+          "author": "@scabrum",
+          "link": "https://bylampa.github.io/source.js",
+          "descr": "Дополнительные источники информации",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Источник КП",
+          "author": "@bylampa",
+          "link": "https://bylampa.github.io/kp_source.js",
+          "descr": "Добавляет источник КиноПоиск",
+          "version": "1.0.0"
+        },
+        {
+          "name": "КиноПоиск источник",
+          "author": "@and7ey",
+          "link": "https://and7ey.github.io/lampa/kinopoisk.js",
+          "descr": "Список фильмов из папки Буду смотреть",
+          "version": "1.0.0"
+        },
+        {
+          "name": "TMDB Proxy ByLAMPA",
+          "author": "@bylampa",
+          "link": "https://bylampa.github.io/tmdb-proxy.js",
+          "descr": "Проксирование постеров TMDB",
+          "version": "1.0.0"
+        },
+        {
+          "name": "TMDB Proxy CUB",
+          "author": "@cub",
+          "link": "https://cub.rip/plugin/tmdb-proxy",
+          "descr": "Проксирование постеров",
+          "version": "1.0.0"
+        },
+        {
+          "name": "TMDB Proxy Rootu",
+          "author": "@rootu",
+          "link": "http://plugin.rootu.top/tmdb.js",
+          "descr": "Проксирование постеров TMDB",
+          "version": "1.0.0"
+        }
+      ]
+    },
+    {
+      "title": "🎮 Игры и развлечения",
+      "results": [
+        {
+          "name": "Игры",
+          "author": "@elenatv1",
+          "link": "http://skaz.tv/g.js",
+          "descr": "Тетрис, змейка, пак-ман",
+          "version": "1.0.0"
         },
         {
           "name": "Внешняя клавиатура",
           "author": "@glukhovsergey",
           "link": "https://fv.plymo.ru/p/kb.js",
           "descr": "QR код для ввода с телефона",
-          "available_lampa": 1
+          "version": "1.0.0"
+        },
+        {
+          "name": "No MIC",
+          "author": "@pavelpikta",
+          "link": "https://lampaplugins.github.io/store/no-mic.js",
+          "descr": "Скрывает кнопку микрофона в клавиатуре",
+          "version": "1.0.0"
+        },
+        {
+          "name": "Navigation Bar",
+          "author": "@pavelpikta",
+          "link": "https://lampaplugins.github.io/store/navigation_bar.js",
+          "descr": "Кнопки из бокового меню в навигационную панель",
+          "version": "1.0.0"
         }
       ]
     }
