@@ -6,7 +6,7 @@
     // =================================================================
 
     var PLUGIN_NAME = 'interface_mod_full';
-    var PLUGIN_VERSION = '2.6.0';
+    var PLUGIN_VERSION = '2.7.0';
 
     var SETTINGS_COMPONENT = 'interface_mod_full_settings';
     var ENABLED_KEY = 'interface_mod_full_enabled';
@@ -20,6 +20,7 @@
     var SEASONS_MODE_KEY = 'interface_mod_full_seasons_mode';
     var STATUS_POSITION_KEY = 'interface_mod_full_status_position';
     var SEASONS_POSITION_KEY = 'interface_mod_full_seasons_position';
+    var RATINGS_POSITION_KEY = 'interface_mod_full_ratings_position';
     var SEASONS_COLOR_KEY = 'interface_mod_full_seasons_color';
 
     var DEFAULT_SETTINGS = {
@@ -34,6 +35,7 @@
         seasons_mode: 'auto',
         status_position: 'under',
         seasons_position: 'bottom-right',
+        ratings_position: 'top-right',
         seasons_color: '#e74c3c'
     };
 
@@ -92,6 +94,7 @@
         setSetting(SEASONS_MODE_KEY, getProfileSetting(SEASONS_MODE_KEY, DEFAULT_SETTINGS.seasons_mode));
         setSetting(STATUS_POSITION_KEY, getProfileSetting(STATUS_POSITION_KEY, DEFAULT_SETTINGS.status_position));
         setSetting(SEASONS_POSITION_KEY, getProfileSetting(SEASONS_POSITION_KEY, DEFAULT_SETTINGS.seasons_position));
+        setSetting(RATINGS_POSITION_KEY, getProfileSetting(RATINGS_POSITION_KEY, DEFAULT_SETTINGS.ratings_position));
         setSetting(SEASONS_COLOR_KEY, getProfileSetting(SEASONS_COLOR_KEY, DEFAULT_SETTINGS.seasons_color));
     }
 
@@ -128,10 +131,10 @@
         .im-type-label.serial { background: #3498db; color: white; }
         .im-type-label.movie  { background: #2ecc71; color: white; }
 
-        /* Метка качества (рядом с типом, опущена на 0.2em) */
+        /* Метка качества */
         .im-quality-label {
             position: absolute;
-            top: 0.2em;
+            top: 0.7em;
             left: 6.8em;
             padding: 0.2em 0.5em;
             border-radius: 0.3em;
@@ -162,13 +165,13 @@
         .im-status-badge.status-position-under { top: 2.4em; left: 0.6em; }
         .im-status-badge.status-position-bottom-left { bottom: 0.8em; left: 0.8em; }
         
-        .status-airing-full   { color: #4caf50; }      /* Сериал в эфире */
-        .status-ended-full    { color: #9b59b6; }      /* Сериал полностью завершён */
-        .status-season-ended  { color: #3498db; }      /* Только сезон завершён */
+        .status-airing-full   { color: #4caf50; }
+        .status-ended-full    { color: #9b59b6; }
+        .status-season-ended  { color: #3498db; }
         .status-paused        { color: #ffc107; }
         .status-canceled      { color: #f44336; }
 
-        /* Метка сезонов (настраиваемая позиция) */
+        /* Метка сезонов */
         .im-seasons-badge {
             position: absolute;
             padding: 0.2em 0.6em;
@@ -182,7 +185,7 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.2);
         }
         .im-seasons-badge.seasons-position-top-right { top: 0.6em; right: 0.6em; }
-        .im-seasons-badge.seasons-position-bottom-right { bottom: 3.3em; right: 0.6em; }
+        .im-seasons-badge.seasons-position-bottom-right { bottom: 2.2em; right: 0.6em; }
 
         /* Контейнер рейтингов */
         .im-ratings-container {
@@ -193,9 +196,8 @@
             z-index: 10;
             align-items: flex-end;
         }
-        /* Позиция рейтингов при разных настройках сезонов */
         .im-ratings-container.ratings-position-top-right { top: 0.6em; right: 0.6em; }
-        .im-ratings-container.ratings-position-bottom-right { bottom: 3.3em; right: 0.6em; }
+        .im-ratings-container.ratings-position-bottom-right { bottom: 0.6em; right: 0.6em; }
         
         .im-rating-item {
             background: rgba(0, 0, 0, 0.7);
@@ -217,14 +219,18 @@
         .rating-low    { color: #ff9800; }
         .rating-very-low { color: #f44336; }
 
+        /* Стили для постера внутри фильма/сериала */
+        .full-start-new__poster, .full-start__poster {
+            position: relative !important;
+        }
+
         /* Адаптация под мобильные устройства */
         @media (max-width: 768px) {
             .im-type-label { font-size: 0.65em; top: 0.4em; left: 0.4em; }
-            .im-quality-label { font-size: 0.6em; top: 0.1em; left: 6.2em; }
+            .im-quality-label { font-size: 0.6em; top: 0.5em; left: 6.2em; }
             .im-status-badge { font-size: 0.6em; }
             .im-seasons-badge { font-size: 0.6em; }
-            .im-seasons-badge.seasons-position-bottom-right { bottom: 2.8em; }
-            .im-ratings-container.ratings-position-bottom-right { bottom: 2.8em; }
+            .im-seasons-badge.seasons-position-bottom-right { bottom: 1.8em; }
             .im-rating-item { font-size: 0.6em; padding: 0.15em 0.4em; }
         }
     `;
@@ -410,7 +416,7 @@
     }
 
     // =================================================================
-    // СТАТУС СЕРИАЛА (С УЧЁТОМ ЗАВЕРШЁННОСТИ СЕЗОНА)
+    // СТАТУС СЕРИАЛА
     // =================================================================
 
     var seriesStatusCache = {};
@@ -454,7 +460,6 @@
         var seasons = seriesInfo.seasons || [];
         seasons.sort(function(a, b) { return a.season_number - b.season_number; });
         
-        // Ищем текущий сезон (последний вышедший)
         for (var i = seasons.length - 1; i >= 0; i--) {
             var season = seasons[i];
             if (season.season_number === 0) continue;
@@ -463,8 +468,7 @@
                 var airDate = new Date(season.air_date);
                 if (airDate <= currentDate) {
                     currentSeasonNumber = season.season_number;
-                    // Проверяем, завершён ли текущий сезон
-                    if (season.episode_count > 0 && season.episodes) {
+                    if (season.episodes && season.episodes.length > 0) {
                         var airedInSeason = 0;
                         for (var j = 0; j < season.episodes.length; j++) {
                             var ep = season.episodes[j];
@@ -473,7 +477,7 @@
                                 if (epDate <= currentDate) airedInSeason++;
                             }
                         }
-                        isSeasonEnded = (airedInSeason >= season.episode_count);
+                        isSeasonEnded = (airedInSeason >= (season.episode_count || 0));
                     } else {
                         isSeasonEnded = true;
                     }
@@ -490,17 +494,14 @@
         
         var seasonInfo = getSeasonEndedInfo(seriesInfo);
         
-        // Если сериал полностью завершён
         if (seasonInfo.isSeriesEnded) {
             return { text: 'ЗАВЕРШЁН', colorClass: 'status-ended-full' };
         }
         
-        // Если текущий сезон завершён, а сериал продолжается
         if (seasonInfo.isSeasonEnded && seasonInfo.currentSeasonNumber > 0) {
             return { text: seasonInfo.currentSeasonNumber + ' СЕЗОН ЗАВЕРШЁН', colorClass: 'status-season-ended' };
         }
         
-        // Если сериал в эфире
         if (seriesInfo.status === 'Returning Series') {
             return { text: 'В ЭФИРЕ', colorClass: 'status-airing-full' };
         }
@@ -517,21 +518,18 @@
     }
 
     // =================================================================
-    // СЕЗОНЫ И СЕРИИ (АВТОМАТИЧЕСКИЙ РЕЖИМ)
+    // СЕЗОНЫ И СЕРИИ (ИСПРАВЛЕННЫЙ ПАРСИНГ)
     // =================================================================
 
     function getSeasonsInfoAuto(seriesInfo) {
         if (!seriesInfo) return { text: '' };
         
-        var currentDate = new Date();
         var isSeriesEnded = (seriesInfo.status === 'Ended' || seriesInfo.status === 'Canceled');
         
-        // Если сериал завершён — показываем полную информацию
         if (isSeriesEnded) {
             return getSeasonsInfoTotal(seriesInfo);
         }
         
-        // Иначе — показываем актуальную информацию о текущем сезоне
         return getSeasonsInfoAired(seriesInfo);
     }
     
@@ -577,8 +575,8 @@
                     currentSeasonNumber = season.season_number;
                     totalEpisodesInCurrentSeason = season.episode_count || 0;
                     
-                    // Подсчитываем вышедшие серии
-                    if (season.episodes) {
+                    // Подсчитываем вышедшие серии через эпизоды
+                    if (season.episodes && season.episodes.length > 0) {
                         airedEpisodesInCurrentSeason = 0;
                         for (var j = 0; j < season.episodes.length; j++) {
                             var ep = season.episodes[j];
@@ -590,6 +588,7 @@
                             }
                         }
                     } else {
+                        // Если нет данных об эпизодах, считаем все серии вышедшими
                         airedEpisodesInCurrentSeason = totalEpisodesInCurrentSeason;
                     }
                     break;
@@ -680,7 +679,7 @@
             });
         }
 
-        // 3. Статус сериала (без эмодзи, настраиваемая позиция)
+        // 3. Статус сериала
         if (isTV && getSetting(SHOW_STATUS_KEY, DEFAULT_SETTINGS.show_status)) {
             fetchSeriesStatus(data.id).then(function(seriesInfo) {
                 if (seriesInfo && seriesInfo.status) {
@@ -732,15 +731,14 @@
 
         // 5. Контейнер рейтингов
         if (getSetting(SHOW_RATINGS_KEY, DEFAULT_SETTINGS.show_ratings)) {
-            var seasonsPosition = getSetting(SEASONS_POSITION_KEY, DEFAULT_SETTINGS.seasons_position);
+            var ratingsPosition = getSetting(RATINGS_POSITION_KEY, DEFAULT_SETTINGS.ratings_position);
             var ratingsContainer = document.createElement('div');
             ratingsContainer.className = 'im-ratings-container';
             
-            // Устанавливаем позицию рейтингов в зависимости от позиции сезонов
-            if (seasonsPosition === 'bottom-right') {
-                ratingsContainer.classList.add('ratings-position-bottom-right');
-            } else {
+            if (ratingsPosition === 'top-right') {
                 ratingsContainer.classList.add('ratings-position-top-right');
+            } else {
+                ratingsContainer.classList.add('ratings-position-bottom-right');
             }
 
             // TMDB
@@ -771,7 +769,7 @@
             if (getSetting(SHOW_LAMPA_RATING_KEY, DEFAULT_SETTINGS.show_lampa_rating)) {
                 var ratingKey = (isTV ? 'tv_' : 'movie_') + data.id;
                 fetchLampaRating(ratingKey, isTV).then(function(lampaData) {
-                    if (lampaData && lampaData.rating > 0 && cardView.querySelector('.im-lampa-item') === null) {
+                    if (lampaData && lampaData.rating > 0) {
                         var lampaRating = document.createElement('div');
                         lampaRating.className = 'im-rating-item';
                         lampaRating.innerHTML = '<span class="im-rating-value ' + getRatingColor(lampaData.rating) + '">' + (lampaData.icon || '⚡') + ' ' + formatRating(lampaData.rating) + '</span><span class="im-rating-source">Lampa</span>';
@@ -814,7 +812,50 @@
     }
 
     // =================================================================
-    // НАБЛЮДАТЕЛИ
+    // ДЛЯ СТРАНИЦЫ ФИЛЬМА/СЕРИАЛА (full)
+    // =================================================================
+
+    function addLabelsToFullPoster() {
+        Lampa.Listener.follow('full', function(e) {
+            if (e.type === 'complite') {
+                var activity = e.object.activity;
+                var render = activity.render();
+                var poster = render.find('.full-start-new__poster, .full-start__poster');
+                
+                if (poster.length) {
+                    var movie = e.data && e.data.movie;
+                    if (movie && movie.id) {
+                        // Создаём временную карточку для добавления меток
+                        var tempCard = document.createElement('div');
+                        tempCard.classList.add('card');
+                        tempCard.card_data = movie;
+                        
+                        var cardView = document.createElement('div');
+                        cardView.classList.add('card__view');
+                        tempCard.appendChild(cardView);
+                        
+                        // Очищаем старые метки на постере
+                        poster.find('.im-type-label, .im-quality-label, .im-status-badge, .im-seasons-badge, .im-ratings-container').remove();
+                        
+                        // Добавляем метки на временную карточку
+                        addLabelsToCard(tempCard, movie);
+                        
+                        // Переносим метки на реальный постер
+                        var labels = tempCard.querySelectorAll('.im-type-label, .im-quality-label, .im-status-badge, .im-seasons-badge, .im-ratings-container');
+                        for (var i = 0; i < labels.length; i++) {
+                            poster.append(labels[i]);
+                        }
+                        
+                        // Убедимся, что постер имеет relative positioning
+                        poster.css('position', 'relative');
+                    }
+                }
+            }
+        });
+    }
+
+    // =================================================================
+    // НАБЛЮДАТЕЛИ ДЛЯ КАРТОЧЕК
     // =================================================================
 
     function processCard(card) {
@@ -991,6 +1032,22 @@
 
         Lampa.SettingsApi.addParam({
             component: SETTINGS_COMPONENT,
+            param: { name: RATINGS_POSITION_KEY, type: 'select', values: {
+                'top-right': 'Сверху справа',
+                'bottom-right': 'Снизу справа'
+            }, default: DEFAULT_SETTINGS.ratings_position },
+            field: { name: 'Позиция рейтингов', description: 'Где отображать рейтинги' },
+            onChange: function(value) {
+                setProfileSetting(RATINGS_POSITION_KEY, value);
+                setSetting(RATINGS_POSITION_KEY, value);
+                processedCards.length = 0;
+                var cards = document.querySelectorAll('.card');
+                for (var i = 0; i < cards.length; i++) processCard(cards[i]);
+            }
+        });
+
+        Lampa.SettingsApi.addParam({
+            component: SETTINGS_COMPONENT,
             param: { name: SEASONS_COLOR_KEY, type: 'select', values: {
                 '#e74c3c': 'Красный',
                 '#3498db': 'Синий',
@@ -1074,6 +1131,7 @@
         setupSettings();
         moveSettingsAfterInterface();
         setupObservers();
+        addLabelsToFullPoster();
         log('Plugin initialized, version ' + PLUGIN_VERSION);
     }
 
