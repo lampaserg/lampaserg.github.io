@@ -6,7 +6,7 @@
     // =================================================================
 
     var PLUGIN_NAME = 'interface_mod_full';
-    var PLUGIN_VERSION = '2.4.0';
+    var PLUGIN_VERSION = '2.5.0';
 
     var SETTINGS_COMPONENT = 'interface_mod_full_settings';
     var ENABLED_KEY = 'interface_mod_full_enabled';
@@ -18,6 +18,9 @@
     var SHOW_AVERAGE_RATING_KEY = 'interface_mod_full_show_average_rating';
     var SHOW_SEASONS_KEY = 'interface_mod_full_show_seasons';
     var SEASONS_MODE_KEY = 'interface_mod_full_seasons_mode';
+    var STATUS_POSITION_KEY = 'interface_mod_full_status_position';
+    var SEASONS_POSITION_KEY = 'interface_mod_full_seasons_position';
+    var SEASONS_COLOR_KEY = 'interface_mod_full_seasons_color';
 
     var DEFAULT_SETTINGS = {
         enabled: true,
@@ -28,7 +31,10 @@
         show_lampa_rating: true,
         show_average_rating: false,
         show_seasons: true,
-        seasons_mode: 'aired'
+        seasons_mode: 'aired',
+        status_position: 'bottom-left',
+        seasons_position: 'bottom-right',
+        seasons_color: '#e74c3c'
     };
 
     function getSetting(key, defaultValue) {
@@ -84,6 +90,9 @@
         setSetting(SHOW_AVERAGE_RATING_KEY, getProfileSetting(SHOW_AVERAGE_RATING_KEY, DEFAULT_SETTINGS.show_average_rating));
         setSetting(SHOW_SEASONS_KEY, getProfileSetting(SHOW_SEASONS_KEY, DEFAULT_SETTINGS.show_seasons));
         setSetting(SEASONS_MODE_KEY, getProfileSetting(SEASONS_MODE_KEY, DEFAULT_SETTINGS.seasons_mode));
+        setSetting(STATUS_POSITION_KEY, getProfileSetting(STATUS_POSITION_KEY, DEFAULT_SETTINGS.status_position));
+        setSetting(SEASONS_POSITION_KEY, getProfileSetting(SEASONS_POSITION_KEY, DEFAULT_SETTINGS.seasons_position));
+        setSetting(SEASONS_COLOR_KEY, getProfileSetting(SEASONS_COLOR_KEY, DEFAULT_SETTINGS.seasons_color));
     }
 
     function isPluginEnabled() {
@@ -119,11 +128,11 @@
         .im-type-label.serial { background: #3498db; color: white; }
         .im-type-label.movie  { background: #2ecc71; color: white; }
 
-        /* Метка качества (рядом с типом) */
+        /* Метка качества (рядом с типом, опущена на 0.4em) */
         .im-quality-label {
             position: absolute;
-            top: 0.6em;
-            left: 6.6em;
+            top: 1.0em;
+            left: 6.8em;
             padding: 0.2em 0.5em;
             border-radius: 0.3em;
             font-size: 0.7em;
@@ -132,52 +141,49 @@
             text-transform: uppercase;
             letter-spacing: 0.03em;
         }
-        .im-quality-label.quality-4k     { background: #ff9800; color: white; }
-        .im-quality-label.quality-fhd    { background: #4caf50; color: white; }
-        .im-quality-label.quality-hd     { background: #2196f3; color: white; }
-        .im-quality-label.quality-sd     { background: #9e9e9e; color: white; }
-        .im-quality-label.quality-ts     { background: #9e9e9e; color: white; }
-        .im-quality-label.quality-cam    { background: #9e9e9e; color: white; }
-        .im-quality-label.quality-webdl  { background: #00bcd4; color: white; }
-        .im-quality-label.quality-bdrip  { background: #9c27b0; color: white; }
+        .im-quality-label.quality-4k  { background: #ff9800; color: white; }
+        .im-quality-label.quality-fhd { background: #4caf50; color: white; }
+        .im-quality-label.quality-hd  { background: #2196f3; color: white; }
+        .im-quality-label.quality-sd  { background: #9e9e9e; color: white; }
+        .im-quality-label.quality-ts  { background: #9e9e9e; color: white; }
+        .im-quality-label.quality-cam { background: #9e9e9e; color: white; }
 
-        /* Метка статуса сериала (под меткой типа) */
+        /* Метка статуса сериала (настраиваемая позиция) */
         .im-status-badge {
             position: absolute;
-            top: 2.4em;
-            left: 0.6em;
-            padding: 0.15em 0.5em;
-            border-radius: 0.3em;
-            font-size: 0.65em;
-            font-weight: bold;
-            z-index: 10;
-            display: flex;
-            align-items: center;
-            gap: 0.2em;
-        }
-        .status-airing   { background: rgba(76, 175, 80, 0.9); color: white; }
-        .status-ended    { background: rgba(33, 150, 243, 0.9); color: white; }
-        .status-paused   { background: rgba(255, 193, 7, 0.9); color: black; }
-        .status-canceled { background: rgba(244, 67, 54, 0.9); color: white; }
-
-        /* Метка сезонов (правый верхний угол, красный фон) */
-        .im-seasons-badge {
-            position: absolute;
-            top: 0.6em;
-            right: 0.6em;
             padding: 0.2em 0.6em;
             border-radius: 0.3em;
             font-size: 0.7em;
             font-weight: bold;
             z-index: 10;
-            background: #e74c3c;
+            background: rgba(0,0,0,0.7);
+            backdrop-filter: blur(4px);
+        }
+        .im-status-badge.status-position-under { top: 2.4em; left: 0.6em; }
+        .im-status-badge.status-position-bottom-left { bottom: 0.8em; left: 0.8em; }
+        
+        .status-airing   { color: #4caf50; }
+        .status-ended    { color: #2196f3; }
+        .status-paused   { color: #ffc107; }
+        .status-canceled { color: #f44336; }
+
+        /* Метка сезонов (настраиваемая позиция, цвет) */
+        .im-seasons-badge {
+            position: absolute;
+            padding: 0.2em 0.6em;
+            border-radius: 0.3em;
+            font-size: 0.7em;
+            font-weight: bold;
+            z-index: 10;
             color: white;
             text-align: center;
             white-space: nowrap;
             box-shadow: 0 2px 4px rgba(0,0,0,0.2);
         }
+        .im-seasons-badge.seasons-position-top-right { top: 0.6em; right: 0.6em; }
+        .im-seasons-badge.seasons-position-bottom-right { bottom: 0.8em; right: 0.8em; }
 
-        /* Контейнер рейтингов (под сезонами, справа) */
+        /* Контейнер рейтингов */
         .im-ratings-container {
             position: absolute;
             top: 2.4em;
@@ -211,9 +217,9 @@
         /* Адаптация под мобильные устройства */
         @media (max-width: 768px) {
             .im-type-label { font-size: 0.65em; top: 0.4em; left: 0.4em; }
-            .im-quality-label { font-size: 0.6em; top: 0.4em; left: 6.0em; }
-            .im-status-badge { font-size: 0.55em; top: 2.2em; left: 0.4em; }
-            .im-seasons-badge { font-size: 0.6em; top: 0.4em; right: 0.4em; }
+            .im-quality-label { font-size: 0.6em; top: 0.9em; left: 6.2em; }
+            .im-status-badge { font-size: 0.6em; }
+            .im-seasons-badge { font-size: 0.6em; }
             .im-ratings-container { top: 2.2em; right: 0.4em; }
             .im-rating-item { font-size: 0.6em; padding: 0.15em 0.4em; }
         }
@@ -253,7 +259,7 @@
     }
 
     // =================================================================
-    // КАЧЕСТВО ВИДЕО (с определением TS, CAM, WEB-DL, BDRip)
+    // КАЧЕСТВО ВИДЕО
     // =================================================================
 
     var qualityCache = {};
@@ -264,9 +270,7 @@
         '720p': 'HD', 'hd': 'HD',
         '480p': 'SD', 'sd': 'SD',
         'ts': 'TS', 'telesync': 'TS',
-        'cam': 'CAM', 'camrip': 'CAM',
-        'web-dl': 'WEB-DL', 'webdl': 'WEB-DL', 'webrip': 'WEB-DL',
-        'bdrip': 'BDRip', 'brrip': 'BDRip', 'bluray': 'BDRip'
+        'cam': 'CAM', 'camrip': 'CAM'
     };
 
     function detectQuality(title) {
@@ -290,7 +294,6 @@
                 return resolve(qualityCache[cacheKey]);
             }
 
-            // Проверяем release_quality
             if (card.release_quality) {
                 var q = detectQuality(card.release_quality);
                 if (q) {
@@ -299,7 +302,6 @@
                 }
             }
 
-            // Проверяем заголовок
             if (card.title) {
                 var q = detectQuality(card.title);
                 if (q) {
@@ -308,7 +310,6 @@
                 }
             }
 
-            // Фолбэк: по году
             var year = getYearFromCard(card);
             var fallback = getQualityByYear(year);
             qualityCache[cacheKey] = fallback;
@@ -438,84 +439,133 @@
         });
     }
 
-    function getStatusInfo(status) {
+    function getStatusText(status) {
         var statusMap = {
-            'Ended': { text: 'ЗАВЕРШЁН', icon: '🔵', class: 'status-ended' },
-            'Canceled': { text: 'ОТМЕНЁН', icon: '🔴', class: 'status-canceled' },
-            'Returning Series': { text: 'В ЭФИРЕ', icon: '🟢', class: 'status-airing' },
-            'In Production': { text: 'В ПРОИЗВОДСТВЕ', icon: '🔵', class: 'status-airing' },
-            'Planned': { text: 'ЗАПЛАНИРОВАН', icon: '🟡', class: 'status-paused' }
+            'Ended': 'ЗАВЕРШЁН',
+            'Canceled': 'ОТМЕНЁН',
+            'Returning Series': 'В ЭФИРЕ',
+            'In Production': 'В ПРОИЗВОДСТВЕ',
+            'Planned': 'ЗАПЛАНИРОВАН'
         };
-        return statusMap[status] || { text: status || 'НЕИЗВЕСТНО', icon: '⚪', class: 'status-paused' };
+        return statusMap[status] || status || 'НЕИЗВЕСТНО';
+    }
+
+    function getStatusClass(status) {
+        var classMap = {
+            'Ended': 'status-ended',
+            'Canceled': 'status-canceled',
+            'Returning Series': 'status-airing',
+            'In Production': 'status-airing',
+            'Planned': 'status-paused'
+        };
+        return classMap[status] || 'status-paused';
     }
 
     // =================================================================
-    // СЕЗОНЫ И СЕРИИ (как в interface_mod.js)
+    // СЕЗОНЫ И СЕРИИ (исправленный формат)
     // =================================================================
 
     function getSeasonsInfo(seriesInfo) {
-        if (!seriesInfo) return { text: '', airedSeasons: 0, airedEpisodes: 0, totalSeasons: 0, totalEpisodes: 0 };
+        if (!seriesInfo) return { text: '' };
 
         var totalSeasons = seriesInfo.numberOfSeasons;
         var totalEpisodes = seriesInfo.numberOfEpisodes;
-        var airedSeasons = 0;
-        var airedEpisodes = 0;
         var currentDate = new Date();
-
+        
+        // Находим текущий сезон (последний вышедший)
+        var currentSeason = null;
+        var currentSeasonNumber = 0;
+        var airedEpisodesInCurrentSeason = 0;
+        var totalEpisodesInCurrentSeason = 0;
+        
         var seasons = seriesInfo.seasons || [];
+        
+        // Сортируем сезоны по номеру
+        seasons.sort(function(a, b) { return a.season_number - b.season_number; });
+        
         for (var i = 0; i < seasons.length; i++) {
             var season = seasons[i];
             if (season.season_number === 0) continue;
-
+            
             if (season.air_date) {
                 var airDate = new Date(season.air_date);
                 if (airDate <= currentDate) {
-                    airedSeasons++;
-                    airedEpisodes += season.episode_count || 0;
+                    currentSeason = season;
+                    currentSeasonNumber = season.season_number;
+                    totalEpisodesInCurrentSeason = season.episode_count || 0;
+                    
+                    // Подсчитываем вышедшие серии в текущем сезоне
+                    if (season.episodes) {
+                        airedEpisodesInCurrentSeason = 0;
+                        for (var j = 0; j < season.episodes.length; j++) {
+                            var ep = season.episodes[j];
+                            if (ep.air_date) {
+                                var epDate = new Date(ep.air_date);
+                                if (epDate <= currentDate) {
+                                    airedEpisodesInCurrentSeason++;
+                                }
+                            }
+                        }
+                    } else {
+                        // Если нет детальной информации, считаем все серии вышедшими
+                        airedEpisodesInCurrentSeason = totalEpisodesInCurrentSeason;
+                    }
                 }
             }
         }
-
-        if (airedSeasons === 0 && totalSeasons > 0) {
-            airedSeasons = totalSeasons;
+        
+        // Если не нашли текущий сезон, берём последний
+        if (!currentSeason && seasons.length > 0) {
+            for (var k = seasons.length - 1; k >= 0; k--) {
+                if (seasons[k].season_number !== 0) {
+                    currentSeason = seasons[k];
+                    currentSeasonNumber = currentSeason.season_number;
+                    totalEpisodesInCurrentSeason = currentSeason.episode_count || 0;
+                    airedEpisodesInCurrentSeason = totalEpisodesInCurrentSeason;
+                    break;
+                }
+            }
         }
-
-        var seasonsText = '';
-        var episodesText = '';
-
-        function plural(num, one, two, five) {
+        
+        // Формируем текст в формате "4 сезон 7 серий из 10"
+        function pluralSeason(num) {
             var n = Math.abs(num);
-            n %= 100;
-            if (n >= 5 && n <= 20) return five;
-            n %= 10;
-            if (n === 1) return one;
-            if (n >= 2 && n <= 4) return two;
-            return five;
+            if (n % 10 === 1 && n % 100 !== 11) return 'сезон';
+            if (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) return 'сезона';
+            return 'сезонов';
         }
-
+        
+        function pluralEpisode(num) {
+            var n = Math.abs(num);
+            if (n % 10 === 1 && n % 100 !== 11) return 'серия';
+            if (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) return 'серии';
+            return 'серий';
+        }
+        
         var mode = getSetting(SEASONS_MODE_KEY, DEFAULT_SETTINGS.seasons_mode);
         
         if (mode === 'total') {
             // Полное количество
-            seasonsText = totalSeasons + ' ' + plural(totalSeasons, 'сезон', 'сезона', 'сезонов');
-            episodesText = totalEpisodes + ' ' + plural(totalEpisodes, 'серия', 'серии', 'серий');
+            var totalSeasonsText = totalSeasons + ' ' + pluralSeason(totalSeasons);
+            var totalEpisodesText = totalEpisodes + ' ' + pluralEpisode(totalEpisodes);
+            return { text: totalSeasonsText + ' • ' + totalEpisodesText };
         } else {
-            // Актуальная информация (вышедшие)
-            seasonsText = airedSeasons + ' ' + plural(airedSeasons, 'сезон', 'сезона', 'сезонов');
-            if (totalEpisodes > 0 && airedEpisodes < totalEpisodes && airedEpisodes > 0) {
-                episodesText = airedEpisodes + ' ' + plural(airedEpisodes, 'серия', 'серии', 'серий') + ' из ' + totalEpisodes;
-            } else {
-                episodesText = (airedEpisodes || totalEpisodes) + ' ' + plural(airedEpisodes || totalEpisodes, 'серия', 'серии', 'серий');
+            // Актуальная информация: "4 сезон 7 серий из 10"
+            if (currentSeasonNumber > 0) {
+                var seasonText = currentSeasonNumber + ' ' + pluralSeason(currentSeasonNumber);
+                var episodesText = airedEpisodesInCurrentSeason + ' ' + pluralEpisode(airedEpisodesInCurrentSeason);
+                
+                if (totalEpisodesInCurrentSeason > 0 && airedEpisodesInCurrentSeason < totalEpisodesInCurrentSeason) {
+                    return { text: seasonText + ' • ' + episodesText + ' из ' + totalEpisodesInCurrentSeason };
+                } else {
+                    return { text: seasonText + ' • ' + episodesText };
+                }
+            } else if (totalSeasons > 0) {
+                return { text: totalSeasons + ' ' + pluralSeason(totalSeasons) + ' • ' + (totalEpisodes || '?') + ' ' + pluralEpisode(totalEpisodes) };
             }
         }
-
-        return {
-            text: seasonsText + ' • ' + episodesText,
-            airedSeasons: airedSeasons,
-            airedEpisodes: airedEpisodes,
-            totalSeasons: totalSeasons,
-            totalEpisodes: totalEpisodes
-        };
+        
+        return { text: '' };
     }
 
     // =================================================================
@@ -547,7 +597,7 @@
         var stdVote = cardView.querySelector('.card__vote');
         if (stdVote) stdVote.style.display = 'none';
 
-        // 1. Метка типа контента (левый верхний угол)
+        // 1. Метка типа контента
         if (getSetting(SHOW_TYPE_KEY, DEFAULT_SETTINGS.show_type)) {
             var typeLabel = document.createElement('div');
             typeLabel.className = 'im-type-label ' + (isTV ? 'serial' : 'movie');
@@ -555,7 +605,7 @@
             cardView.appendChild(typeLabel);
         }
 
-        // 2. Метка качества (рядом с типом)
+        // 2. Метка качества
         if (getSetting(SHOW_QUALITY_KEY, DEFAULT_SETTINGS.show_quality)) {
             getQualityFromData(data).then(function(quality) {
                 if (quality && cardView.querySelector('.im-quality-label') === null) {
@@ -568,14 +618,23 @@
             });
         }
 
-        // 3. Статус сериала (под меткой типа, только для сериалов)
+        // 3. Статус сериала (без эмодзи, настраиваемая позиция)
         if (isTV && getSetting(SHOW_STATUS_KEY, DEFAULT_SETTINGS.show_status)) {
             fetchSeriesStatus(data.id).then(function(seriesInfo) {
                 if (seriesInfo && seriesInfo.status) {
-                    var statusInfo = getStatusInfo(seriesInfo.status);
+                    var statusText = getStatusText(seriesInfo.status);
+                    var statusClass = getStatusClass(seriesInfo.status);
+                    var statusPosition = getSetting(STATUS_POSITION_KEY, DEFAULT_SETTINGS.status_position);
+                    
                     var statusBadge = document.createElement('div');
-                    statusBadge.className = 'im-status-badge ' + statusInfo.class;
-                    statusBadge.innerHTML = '<span>' + statusInfo.icon + '</span><span>' + statusInfo.text + '</span>';
+                    statusBadge.className = 'im-status-badge ' + statusClass;
+                    if (statusPosition === 'under') {
+                        statusBadge.classList.add('status-position-under');
+                    } else {
+                        statusBadge.classList.add('status-position-bottom-left');
+                    }
+                    statusBadge.textContent = statusText;
+                    
                     if (cardView.querySelector('.im-status-badge') === null) {
                         cardView.appendChild(statusBadge);
                     }
@@ -583,15 +642,25 @@
             });
         }
 
-        // 4. Метка сезонов (правый верхний угол, красный фон)
+        // 4. Метка сезонов (настраиваемая позиция, цвет)
         if (isTV && getSetting(SHOW_SEASONS_KEY, DEFAULT_SETTINGS.show_seasons)) {
             fetchSeriesStatus(data.id).then(function(seriesInfo) {
                 if (seriesInfo) {
                     var seasonsInfo = getSeasonsInfo(seriesInfo);
                     if (seasonsInfo.text) {
+                        var seasonsPosition = getSetting(SEASONS_POSITION_KEY, DEFAULT_SETTINGS.seasons_position);
+                        var seasonsColor = getSetting(SEASONS_COLOR_KEY, DEFAULT_SETTINGS.seasons_color);
+                        
                         var seasonsBadge = document.createElement('div');
                         seasonsBadge.className = 'im-seasons-badge';
+                        if (seasonsPosition === 'top-right') {
+                            seasonsBadge.classList.add('seasons-position-top-right');
+                        } else {
+                            seasonsBadge.classList.add('seasons-position-bottom-right');
+                        }
+                        seasonsBadge.style.background = seasonsColor;
                         seasonsBadge.textContent = seasonsInfo.text;
+                        
                         if (cardView.querySelector('.im-seasons-badge') === null) {
                             cardView.appendChild(seasonsBadge);
                         }
@@ -600,7 +669,7 @@
             });
         }
 
-        // 5. Контейнер рейтингов (под сезонами, справа)
+        // 5. Контейнер рейтингов
         if (getSetting(SHOW_RATINGS_KEY, DEFAULT_SETTINGS.show_ratings)) {
             var ratingsContainer = document.createElement('div');
             ratingsContainer.className = 'im-ratings-container';
@@ -629,7 +698,7 @@
                 ratingsContainer.appendChild(kpRating);
             }
 
-            // Lampa рейтинг (CUB)
+            // Lampa рейтинг
             if (getSetting(SHOW_LAMPA_RATING_KEY, DEFAULT_SETTINGS.show_lampa_rating)) {
                 var ratingKey = (isTV ? 'tv_' : 'movie_') + data.id;
                 fetchLampaRating(ratingKey, isTV).then(function(lampaData) {
@@ -642,7 +711,7 @@
                 });
             }
 
-            // Общий (средний) рейтинг (отдельно, по умолчанию отключён)
+            // Общий рейтинг
             if (getSetting(SHOW_AVERAGE_RATING_KEY, DEFAULT_SETTINGS.show_average_rating)) {
                 var tmdb = data.vote_average || 0;
                 var imdb = data.imdb_rating || 0;
@@ -731,8 +800,10 @@
             onChange: function(value) {
                 setProfileSetting(ENABLED_KEY, value);
                 setSetting(ENABLED_KEY, value);
-                if (!value) {
-                    document.querySelectorAll('.im-type-label, .im-quality-label, .im-status-badge, .im-seasons-badge, .im-ratings-container').forEach(function(el) { el.remove(); });
+                if (value === false || value === 'false') {
+                    document.querySelectorAll('.im-type-label, .im-quality-label, .im-status-badge, .im-seasons-badge, .im-ratings-container').forEach(function(el) { 
+                        if (el && el.remove) el.remove(); 
+                    });
                     processedCards.length = 0;
                 } else {
                     processedCards.length = 0;
@@ -764,7 +835,7 @@
         Lampa.SettingsApi.addParam({
             component: SETTINGS_COMPONENT,
             param: { name: SHOW_QUALITY_KEY, type: 'trigger', default: DEFAULT_SETTINGS.show_quality },
-            field: { name: 'Метка качества', description: 'Показывать качество видео (4K/FHD/HD/SD/TS/CAM/WEB-DL/BDRip)' },
+            field: { name: 'Метка качества', description: 'Показывать качество видео (4K/FHD/HD/SD/TS/CAM)' },
             onChange: function(value) {
                 setProfileSetting(SHOW_QUALITY_KEY, value);
                 setSetting(SHOW_QUALITY_KEY, value);
@@ -777,7 +848,7 @@
         Lampa.SettingsApi.addParam({
             component: SETTINGS_COMPONENT,
             param: { name: SHOW_STATUS_KEY, type: 'trigger', default: DEFAULT_SETTINGS.show_status },
-            field: { name: 'Статус сериала', description: 'Показывать статус (в эфире/завершён) под меткой типа' },
+            field: { name: 'Статус сериала', description: 'Показывать статус (в эфире/завершён)' },
             onChange: function(value) {
                 setProfileSetting(SHOW_STATUS_KEY, value);
                 setSetting(SHOW_STATUS_KEY, value);
@@ -789,8 +860,24 @@
 
         Lampa.SettingsApi.addParam({
             component: SETTINGS_COMPONENT,
+            param: { name: STATUS_POSITION_KEY, type: 'select', values: {
+                'under': 'Под меткой "Сериал"',
+                'bottom-left': 'Снизу слева'
+            }, default: DEFAULT_SETTINGS.status_position },
+            field: { name: 'Позиция статуса', description: 'Где отображать статус сериала' },
+            onChange: function(value) {
+                setProfileSetting(STATUS_POSITION_KEY, value);
+                setSetting(STATUS_POSITION_KEY, value);
+                processedCards.length = 0;
+                var cards = document.querySelectorAll('.card');
+                for (var i = 0; i < cards.length; i++) processCard(cards[i]);
+            }
+        });
+
+        Lampa.SettingsApi.addParam({
+            component: SETTINGS_COMPONENT,
             param: { name: SHOW_SEASONS_KEY, type: 'trigger', default: DEFAULT_SETTINGS.show_seasons },
-            field: { name: 'Сезоны и серии', description: 'Показывать информацию о сезонах и сериях (красный фон, правый верхний угол)' },
+            field: { name: 'Сезоны и серии', description: 'Показывать информацию о сезонах и сериях' },
             onChange: function(value) {
                 setProfileSetting(SHOW_SEASONS_KEY, value);
                 setSetting(SHOW_SEASONS_KEY, value);
@@ -803,7 +890,7 @@
         Lampa.SettingsApi.addParam({
             component: SETTINGS_COMPONENT,
             param: { name: SEASONS_MODE_KEY, type: 'select', values: {
-                'aired': 'Актуальная информация (вышедшие)',
+                'aired': 'Актуальная информация (текущий сезон)',
                 'total': 'Полное количество'
             }, default: DEFAULT_SETTINGS.seasons_mode },
             field: { name: 'Режим отображения сезонов', description: 'Как отображать информацию о сезонах и сериях' },
@@ -818,8 +905,44 @@
 
         Lampa.SettingsApi.addParam({
             component: SETTINGS_COMPONENT,
+            param: { name: SEASONS_POSITION_KEY, type: 'select', values: {
+                'top-right': 'Сверху справа',
+                'bottom-right': 'Снизу справа'
+            }, default: DEFAULT_SETTINGS.seasons_position },
+            field: { name: 'Позиция сезонов', description: 'Где отображать информацию о сезонах' },
+            onChange: function(value) {
+                setProfileSetting(SEASONS_POSITION_KEY, value);
+                setSetting(SEASONS_POSITION_KEY, value);
+                processedCards.length = 0;
+                var cards = document.querySelectorAll('.card');
+                for (var i = 0; i < cards.length; i++) processCard(cards[i]);
+            }
+        });
+
+        Lampa.SettingsApi.addParam({
+            component: SETTINGS_COMPONENT,
+            param: { name: SEASONS_COLOR_KEY, type: 'select', values: {
+                '#e74c3c': 'Красный',
+                '#3498db': 'Синий',
+                '#2ecc71': 'Зелёный',
+                '#f39c12': 'Оранжевый',
+                '#9b59b6': 'Фиолетовый',
+                '#1abc9c': 'Бирюзовый'
+            }, default: DEFAULT_SETTINGS.seasons_color },
+            field: { name: 'Цвет фона сезонов', description: 'Выберите цвет для метки сезонов' },
+            onChange: function(value) {
+                setProfileSetting(SEASONS_COLOR_KEY, value);
+                setSetting(SEASONS_COLOR_KEY, value);
+                processedCards.length = 0;
+                var cards = document.querySelectorAll('.card');
+                for (var i = 0; i < cards.length; i++) processCard(cards[i]);
+            }
+        });
+
+        Lampa.SettingsApi.addParam({
+            component: SETTINGS_COMPONENT,
             param: { name: SHOW_RATINGS_KEY, type: 'trigger', default: DEFAULT_SETTINGS.show_ratings },
-            field: { name: 'Рейтинги (TMDB/IMDB/КП)', description: 'Показывать рейтинги в правой части' },
+            field: { name: 'Рейтинги (TMDB/IMDB/КП)', description: 'Показывать рейтинги' },
             onChange: function(value) {
                 setProfileSetting(SHOW_RATINGS_KEY, value);
                 setSetting(SHOW_RATINGS_KEY, value);
