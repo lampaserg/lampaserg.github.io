@@ -6,10 +6,12 @@
     // =================================================================
 
     var PLUGIN_NAME = 'interface_mod_full';
-    var PLUGIN_VERSION = '2.7.0';
+    var PLUGIN_VERSION = '2.8.0';
 
     var SETTINGS_COMPONENT = 'interface_mod_full_settings';
     var ENABLED_KEY = 'interface_mod_full_enabled';
+    var ENABLED_ON_MAIN_KEY = 'interface_mod_full_enabled_main';
+    var ENABLED_ON_FULL_KEY = 'interface_mod_full_enabled_full';
     var SHOW_TYPE_KEY = 'interface_mod_full_show_type';
     var SHOW_QUALITY_KEY = 'interface_mod_full_show_quality';
     var SHOW_STATUS_KEY = 'interface_mod_full_show_status';
@@ -25,6 +27,8 @@
 
     var DEFAULT_SETTINGS = {
         enabled: true,
+        enabled_on_main: true,
+        enabled_on_full: true,
         show_type: true,
         show_quality: true,
         show_status: true,
@@ -32,7 +36,7 @@
         show_lampa_rating: true,
         show_average_rating: false,
         show_seasons: true,
-        seasons_mode: 'auto',
+        seasons_mode: 'aired',
         status_position: 'under',
         seasons_position: 'bottom-right',
         ratings_position: 'top-right',
@@ -84,6 +88,8 @@
 
     function loadProfileSettings() {
         setSetting(ENABLED_KEY, getProfileSetting(ENABLED_KEY, DEFAULT_SETTINGS.enabled));
+        setSetting(ENABLED_ON_MAIN_KEY, getProfileSetting(ENABLED_ON_MAIN_KEY, DEFAULT_SETTINGS.enabled_on_main));
+        setSetting(ENABLED_ON_FULL_KEY, getProfileSetting(ENABLED_ON_FULL_KEY, DEFAULT_SETTINGS.enabled_on_full));
         setSetting(SHOW_TYPE_KEY, getProfileSetting(SHOW_TYPE_KEY, DEFAULT_SETTINGS.show_type));
         setSetting(SHOW_QUALITY_KEY, getProfileSetting(SHOW_QUALITY_KEY, DEFAULT_SETTINGS.show_quality));
         setSetting(SHOW_STATUS_KEY, getProfileSetting(SHOW_STATUS_KEY, DEFAULT_SETTINGS.show_status));
@@ -100,6 +106,14 @@
 
     function isPluginEnabled() {
         return getSetting(ENABLED_KEY, DEFAULT_SETTINGS.enabled);
+    }
+
+    function isEnabledOnMain() {
+        return isPluginEnabled() && getSetting(ENABLED_ON_MAIN_KEY, DEFAULT_SETTINGS.enabled_on_main);
+    }
+
+    function isEnabledOnFull() {
+        return isPluginEnabled() && getSetting(ENABLED_ON_FULL_KEY, DEFAULT_SETTINGS.enabled_on_full);
     }
 
     // =================================================================
@@ -416,7 +430,7 @@
     }
 
     // =================================================================
-    // СТАТУС СЕРИАЛА
+    // СТАТУС СЕРИАЛА (ОРИГИНАЛЬНАЯ ЛОГИКА ИЗ INTERFACE_MOD)
     // =================================================================
 
     var seriesStatusCache = {};
@@ -449,96 +463,85 @@
         });
     }
 
-    function getSeasonEndedInfo(seriesInfo) {
-        if (!seriesInfo) return { isSeriesEnded: false, isSeasonEnded: false, currentSeasonNumber: 0 };
-        
-        var currentDate = new Date();
-        var isSeriesEnded = (seriesInfo.status === 'Ended' || seriesInfo.status === 'Canceled');
-        var isSeasonEnded = false;
-        var currentSeasonNumber = 0;
-        
-        var seasons = seriesInfo.seasons || [];
-        seasons.sort(function(a, b) { return a.season_number - b.season_number; });
-        
-        for (var i = seasons.length - 1; i >= 0; i--) {
-            var season = seasons[i];
-            if (season.season_number === 0) continue;
-            
-            if (season.air_date) {
-                var airDate = new Date(season.air_date);
-                if (airDate <= currentDate) {
-                    currentSeasonNumber = season.season_number;
-                    if (season.episodes && season.episodes.length > 0) {
-                        var airedInSeason = 0;
-                        for (var j = 0; j < season.episodes.length; j++) {
-                            var ep = season.episodes[j];
-                            if (ep.air_date) {
-                                var epDate = new Date(ep.air_date);
-                                if (epDate <= currentDate) airedInSeason++;
-                            }
-                        }
-                        isSeasonEnded = (airedInSeason >= (season.episode_count || 0));
-                    } else {
-                        isSeasonEnded = true;
-                    }
-                    break;
-                }
-            }
-        }
-        
-        return { isSeriesEnded: isSeriesEnded, isSeasonEnded: isSeasonEnded, currentSeasonNumber: currentSeasonNumber };
-    }
-
     function getStatusTextAndColor(seriesInfo) {
         if (!seriesInfo) return { text: 'НЕИЗВЕСТНО', colorClass: 'status-paused' };
         
-        var seasonInfo = getSeasonEndedInfo(seriesInfo);
+        var status = seriesInfo.status;
         
-        if (seasonInfo.isSeriesEnded) {
+        if (status === 'Ended') {
             return { text: 'ЗАВЕРШЁН', colorClass: 'status-ended-full' };
         }
-        
-        if (seasonInfo.isSeasonEnded && seasonInfo.currentSeasonNumber > 0) {
-            return { text: seasonInfo.currentSeasonNumber + ' СЕЗОН ЗАВЕРШЁН', colorClass: 'status-season-ended' };
+        if (status === 'Canceled') {
+            return { text: 'ОТМЕНЁН', colorClass: 'status-canceled' };
         }
-        
-        if (seriesInfo.status === 'Returning Series') {
+        if (status === 'Returning Series') {
             return { text: 'В ЭФИРЕ', colorClass: 'status-airing-full' };
         }
-        
-        if (seriesInfo.status === 'In Production') {
+        if (status === 'In Production') {
             return { text: 'В ПРОИЗВОДСТВЕ', colorClass: 'status-airing-full' };
         }
-        
-        if (seriesInfo.status === 'Planned') {
+        if (status === 'Planned') {
             return { text: 'ЗАПЛАНИРОВАН', colorClass: 'status-paused' };
         }
         
-        return { text: seriesInfo.status || 'НЕИЗВЕСТНО', colorClass: 'status-paused' };
+        return { text: status || 'НЕИЗВЕСТНО', colorClass: 'status-paused' };
     }
 
     // =================================================================
-    // СЕЗОНЫ И СЕРИИ (ИСПРАВЛЕННЫЙ ПАРСИНГ)
+    // СЕЗОНЫ И СЕРИИ (ОРИГИНАЛЬНАЯ ЛОГИКА ИЗ INTERFACE_MOD)
     // =================================================================
 
-    function getSeasonsInfoAuto(seriesInfo) {
+    function getSeasonsInfo(seriesInfo) {
         if (!seriesInfo) return { text: '' };
         
-        var isSeriesEnded = (seriesInfo.status === 'Ended' || seriesInfo.status === 'Canceled');
+        var mode = getSetting(SEASONS_MODE_KEY, DEFAULT_SETTINGS.seasons_mode);
+        if (mode === 'none') return { text: '' };
         
-        if (isSeriesEnded) {
-            return getSeasonsInfoTotal(seriesInfo);
+        var totalSeasons = seriesInfo.numberOfSeasons || 0;
+        var totalEpisodes = seriesInfo.numberOfEpisodes || 0;
+        
+        var airedSeasons = 0;
+        var airedEpisodes = 0;
+        var currentDate = new Date();
+        
+        // Оригинальная логика из interface_mod.js
+        if (seriesInfo.seasons) {
+            seriesInfo.seasons.forEach(function(season) {
+                if (season.season_number === 0) return;
+                
+                var seasonAired = false;
+                var seasonEpisodes = 0;
+                
+                if (season.air_date) {
+                    var airDate = new Date(season.air_date);
+                    if (airDate <= currentDate) {
+                        seasonAired = true;
+                        airedSeasons++;
+                    }
+                }
+                
+                if (season.episodes) {
+                    season.episodes.forEach(function(episode) {
+                        if (episode.air_date) {
+                            var epAirDate = new Date(episode.air_date);
+                            if (epAirDate <= currentDate) {
+                                seasonEpisodes++;
+                                airedEpisodes++;
+                            }
+                        }
+                    });
+                } else if (seasonAired && season.episode_count) {
+                    seasonEpisodes = season.episode_count;
+                    airedEpisodes += seasonEpisodes;
+                }
+            });
         }
         
-        return getSeasonsInfoAired(seriesInfo);
-    }
-    
-    function getSeasonsInfoTotal(seriesInfo) {
-        var totalSeasons = seriesInfo.numberOfSeasons;
-        var totalEpisodes = seriesInfo.numberOfEpisodes;
+        if (airedSeasons === 0) airedSeasons = totalSeasons;
+        if (airedEpisodes === 0) airedEpisodes = totalEpisodes;
         
-        function plural(num, one, two, five) {
-            var n = Math.abs(num);
+        function plural(number, one, two, five) {
+            var n = Math.abs(number);
             n %= 100;
             if (n >= 5 && n <= 20) return five;
             n %= 10;
@@ -547,85 +550,24 @@
             return five;
         }
         
-        var seasonsText = totalSeasons + ' ' + plural(totalSeasons, 'сезон', 'сезона', 'сезонов');
-        var episodesText = totalEpisodes + ' ' + plural(totalEpisodes, 'серия', 'серии', 'серий');
-        
-        return { text: seasonsText + ' • ' + episodesText };
-    }
-    
-    function getSeasonsInfoAired(seriesInfo) {
-        var currentDate = new Date();
-        var currentSeason = null;
-        var currentSeasonNumber = 0;
-        var airedEpisodesInCurrentSeason = 0;
-        var totalEpisodesInCurrentSeason = 0;
-        
-        var seasons = seriesInfo.seasons || [];
-        seasons.sort(function(a, b) { return a.season_number - b.season_number; });
-        
-        // Находим текущий сезон (последний вышедший)
-        for (var i = seasons.length - 1; i >= 0; i--) {
-            var season = seasons[i];
-            if (season.season_number === 0) continue;
-            
-            if (season.air_date) {
-                var airDate = new Date(season.air_date);
-                if (airDate <= currentDate) {
-                    currentSeason = season;
-                    currentSeasonNumber = season.season_number;
-                    totalEpisodesInCurrentSeason = season.episode_count || 0;
-                    
-                    // Подсчитываем вышедшие серии через эпизоды
-                    if (season.episodes && season.episodes.length > 0) {
-                        airedEpisodesInCurrentSeason = 0;
-                        for (var j = 0; j < season.episodes.length; j++) {
-                            var ep = season.episodes[j];
-                            if (ep.air_date) {
-                                var epDate = new Date(ep.air_date);
-                                if (epDate <= currentDate) {
-                                    airedEpisodesInCurrentSeason++;
-                                }
-                            }
-                        }
-                    } else {
-                        // Если нет данных об эпизодах, считаем все серии вышедшими
-                        airedEpisodesInCurrentSeason = totalEpisodesInCurrentSeason;
-                    }
-                    break;
-                }
-            }
-        }
-        
-        if (currentSeasonNumber === 0) {
-            return getSeasonsInfoTotal(seriesInfo);
-        }
-        
-        function pluralEpisode(num) {
-            var n = Math.abs(num);
-            if (n % 10 === 1 && n % 100 !== 11) return 'серия';
-            if (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) return 'серии';
-            return 'серий';
-        }
-        
-        var seasonText = currentSeasonNumber + ' сезон';
-        var episodesText = airedEpisodesInCurrentSeason + ' ' + pluralEpisode(airedEpisodesInCurrentSeason);
-        
-        if (totalEpisodesInCurrentSeason > 0 && airedEpisodesInCurrentSeason < totalEpisodesInCurrentSeason) {
-            return { text: seasonText + ' • ' + episodesText + ' из ' + totalEpisodesInCurrentSeason };
-        } else {
-            return { text: seasonText + ' • ' + episodesText };
-        }
-    }
-
-    function getSeasonsInfo(seriesInfo) {
-        var mode = getSetting(SEASONS_MODE_KEY, DEFAULT_SETTINGS.seasons_mode);
+        var seasonsText = '';
+        var episodesText = '';
         
         if (mode === 'total') {
-            return getSeasonsInfoTotal(seriesInfo);
-        } else if (mode === 'auto') {
-            return getSeasonsInfoAuto(seriesInfo);
+            seasonsText = totalSeasons + ' ' + plural(totalSeasons, 'сезон', 'сезона', 'сезонов');
+            episodesText = totalEpisodes + ' ' + plural(totalEpisodes, 'серия', 'серии', 'серий');
+            return { text: seasonsText + ' • ' + episodesText };
         } else {
-            return getSeasonsInfoAired(seriesInfo);
+            // Режим 'aired' — актуальная информация
+            seasonsText = airedSeasons + ' ' + plural(airedSeasons, 'сезон', 'сезона', 'сезонов');
+            
+            if (totalEpisodes > 0 && airedEpisodes < totalEpisodes && airedEpisodes > 0) {
+                episodesText = airedEpisodes + ' ' + plural(airedEpisodes, 'серия', 'серии', 'серий') + ' из ' + totalEpisodes;
+            } else {
+                episodesText = (airedEpisodes || totalEpisodes) + ' ' + plural(airedEpisodes || totalEpisodes, 'серия', 'серии', 'серий');
+            }
+            
+            return { text: seasonsText + ' • ' + episodesText };
         }
     }
 
@@ -636,7 +578,7 @@
     var processedCards = [];
 
     function addLabelsToCard(cardElement, movieData) {
-        if (!isPluginEnabled()) return;
+        if (!isEnabledOnMain()) return;
         if (processedCards.indexOf(cardElement) !== -1) return;
 
         var cardView = cardElement.querySelector('.card__view');
@@ -812,12 +754,12 @@
     }
 
     // =================================================================
-    // ДЛЯ СТРАНИЦЫ ФИЛЬМА/СЕРИАЛА (full)
+    // ДЛЯ СТРАНИЦЫ ФИЛЬМА/СЕРИАЛА (full) — ВСЯ ИНФОРМАЦИЯ
     // =================================================================
 
     function addLabelsToFullPoster() {
         Lampa.Listener.follow('full', function(e) {
-            if (e.type === 'complite') {
+            if (e.type === 'complite' && isEnabledOnFull()) {
                 var activity = e.object.activity;
                 var render = activity.render();
                 var poster = render.find('.full-start-new__poster, .full-start__poster');
@@ -838,7 +780,10 @@
                         poster.find('.im-type-label, .im-quality-label, .im-status-badge, .im-seasons-badge, .im-ratings-container').remove();
                         
                         // Добавляем метки на временную карточку
+                        var tempProcessedCards = processedCards;
+                        processedCards = [];
                         addLabelsToCard(tempCard, movie);
+                        processedCards = tempProcessedCards;
                         
                         // Переносим метки на реальный постер
                         var labels = tempCard.querySelectorAll('.im-type-label, .im-quality-label, .im-status-badge, .im-seasons-badge, .im-ratings-container');
@@ -903,10 +848,17 @@
             icon: '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 5C4 4.44772 4.44772 4 5 4H19C19.5523 4 20 4.44772 20 5V7C20 7.55228 19.5523 8 19 8H5C4.44772 8 4 7.55228 4 7V5Z" fill="currentColor"/><path d="M4 11C4 10.4477 4.44772 10 5 10H19C19.5523 10 20 10.4477 20 11V13C20 13.5523 19.5523 14 19 14H5C4.44772 14 4 13.5523 4 13V11Z" fill="currentColor"/><path d="M4 17C4 16.4477 4.44772 16 5 16H19C19.5523 16 20 16.4477 20 17V19C20 19.5523 19.5523 20 19 20H5C4.44772 20 4 19.5523 4 19V17Z" fill="currentColor"/></svg>'
         });
 
+        // Основные настройки включения
+        Lampa.SettingsApi.addParam({
+            component: SETTINGS_COMPONENT,
+            param: { type: 'title' },
+            field: { name: 'Включение плагина' }
+        });
+
         Lampa.SettingsApi.addParam({
             component: SETTINGS_COMPONENT,
             param: { name: ENABLED_KEY, type: 'trigger', default: DEFAULT_SETTINGS.enabled },
-            field: { name: 'Включить плагин', description: 'Включить отображение всех меток' },
+            field: { name: 'Включить плагин', description: 'Глобальное включение/отключение всех функций' },
             onChange: function(value) {
                 setProfileSetting(ENABLED_KEY, value);
                 setSetting(ENABLED_KEY, value);
@@ -920,6 +872,36 @@
                     var cards = document.querySelectorAll('.card');
                     for (var i = 0; i < cards.length; i++) processCard(cards[i]);
                 }
+            }
+        });
+
+        Lampa.SettingsApi.addParam({
+            component: SETTINGS_COMPONENT,
+            param: { name: ENABLED_ON_MAIN_KEY, type: 'trigger', default: DEFAULT_SETTINGS.enabled_on_main },
+            field: { name: 'Показывать на постерах на главной странице', description: 'Отображать метки на карточках в списках и на главной' },
+            onChange: function(value) {
+                setProfileSetting(ENABLED_ON_MAIN_KEY, value);
+                setSetting(ENABLED_ON_MAIN_KEY, value);
+                if (value === false || value === 'false') {
+                    document.querySelectorAll('.card .im-type-label, .card .im-quality-label, .card .im-status-badge, .card .im-seasons-badge, .card .im-ratings-container').forEach(function(el) { 
+                        if (el && el.remove) el.remove(); 
+                    });
+                    processedCards.length = 0;
+                } else {
+                    processedCards.length = 0;
+                    var cards = document.querySelectorAll('.card');
+                    for (var i = 0; i < cards.length; i++) processCard(cards[i]);
+                }
+            }
+        });
+
+        Lampa.SettingsApi.addParam({
+            component: SETTINGS_COMPONENT,
+            param: { name: ENABLED_ON_FULL_KEY, type: 'trigger', default: DEFAULT_SETTINGS.enabled_on_full },
+            field: { name: 'Показывать на постере внутри фильма/сериала', description: 'Отображать метки на постере при открытии карточки фильма или сериала' },
+            onChange: function(value) {
+                setProfileSetting(ENABLED_ON_FULL_KEY, value);
+                setSetting(ENABLED_ON_FULL_KEY, value);
             }
         });
 
@@ -958,7 +940,7 @@
         Lampa.SettingsApi.addParam({
             component: SETTINGS_COMPONENT,
             param: { name: SHOW_STATUS_KEY, type: 'trigger', default: DEFAULT_SETTINGS.show_status },
-            field: { name: 'Статус сериала', description: 'Показывать статус (в эфире/завершён/сезон завершён)' },
+            field: { name: 'Статус сериала', description: 'Показывать статус (в эфире/завершён)' },
             onChange: function(value) {
                 setProfileSetting(SHOW_STATUS_KEY, value);
                 setSetting(SHOW_STATUS_KEY, value);
@@ -1000,8 +982,7 @@
         Lampa.SettingsApi.addParam({
             component: SETTINGS_COMPONENT,
             param: { name: SEASONS_MODE_KEY, type: 'select', values: {
-                'auto': 'Автоматический (актуально для идущих, полное для завершённых)',
-                'aired': 'Актуальная информация (текущий сезон)',
+                'aired': 'Актуальная информация',
                 'total': 'Полное количество'
             }, default: DEFAULT_SETTINGS.seasons_mode },
             field: { name: 'Режим отображения сезонов', description: 'Как отображать информацию о сезонах и сериях' },
