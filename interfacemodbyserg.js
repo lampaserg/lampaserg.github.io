@@ -6,7 +6,7 @@
     // =================================================================
 
     var PLUGIN_NAME = 'interface_mod_full';
-    var PLUGIN_VERSION = '3.0.0';
+    var PLUGIN_VERSION = '3.1.0';
 
     var SETTINGS_COMPONENT = 'interface_mod_full_settings';
     var ENABLED_KEY = 'interface_mod_full_enabled';
@@ -172,7 +172,7 @@
     var style = document.createElement('style');
     style.id = 'interface_mod_full_styles';
     style.textContent = `
-        /* Скрываем стандартные метки Lampa */
+        /* Скрываем стандартные метки Lampa (только визуально, не удаляем) */
         .card__type, .card__vote {
             display: none !important;
         }
@@ -345,12 +345,9 @@
     function applyTheme(theme) {
         var oldStyle = document.getElementById('interface_mod_theme');
         if (oldStyle) oldStyle.remove();
-        
         if (!theme || theme === 'default') return;
-        
         var themeCss = themes[theme];
         if (!themeCss) return;
-        
         var styleEl = document.createElement('style');
         styleEl.id = 'interface_mod_theme';
         styleEl.textContent = themeCss;
@@ -525,8 +522,14 @@
             });
         }
         
-        if (!airedSeasons) airedSeasons = totalSeasons;
-        if (!airedEpisodes) airedEpisodes = totalEpisodes;
+        // Fallback через last_episode_to_air
+        if (airedEpisodes === 0 && seriesInfo.numberOfEpisodes > 0) {
+            airedEpisodes = seriesInfo.numberOfEpisodes;
+        }
+        if (airedSeasons === 0 && totalSeasons > 0) {
+            airedSeasons = totalSeasons;
+        }
+        
         if (totalEpisodes > 0 && airedEpisodes > totalEpisodes) airedEpisodes = totalEpisodes;
         
         function plural(n, one, two, five) {
@@ -692,7 +695,7 @@
     }
 
     // =================================================================
-    // ЦВЕТНЫЕ СТАТУСЫ И ВОЗРАСТНЫЕ ОГРАНИЧЕНИЯ (ОРИГИНАЛЬНАЯ ЛОГИКА)
+    // ЦВЕТНЫЕ СТАТУСЫ И ВОЗРАСТНЫЕ ОГРАНИЧЕНИЯ
     // =================================================================
 
     function colorizeSeriesStatus() {
@@ -770,8 +773,6 @@
     // МЕТКА ТИПА КОНТЕНТА
     // =================================================================
 
-    var typeLabelsAdded = [];
-
     function addTypeLabel(card) {
         if (!getSetting(SHOW_TYPE_KEY, DEFAULT_SETTINGS.show_type)) return;
         if ($(card).closest('.explorer, .layer--online, .select-box').length) return;
@@ -792,7 +793,6 @@
         
         var lbl = $('<div class="im-type-label ' + (isTV ? 'serial' : 'movie') + '">' + (isTV ? 'СЕРИАЛ' : 'ФИЛЬМ') + '</div>');
         view.append(lbl);
-        typeLabelsAdded.push(card);
     }
 
     function processTypeLabels() {
@@ -831,11 +831,12 @@
         var isTV = isTVSeries(data);
         if (cardView.style.position !== 'relative') cardView.style.position = 'relative';
 
+        // Очищаем только наши метки
         var oldLabels = cardView.querySelectorAll('.im-type-label, .im-quality-label, .im-status-badge, .im-seasons-badge, .im-ratings-container');
         for (var i = 0; i < oldLabels.length; i++) oldLabels[i].remove();
 
-        // Метка типа (уже добавлена через setupTypeLabels, но добавим на всякий случай)
-        if (getSetting(SHOW_TYPE_KEY, DEFAULT_SETTINGS.show_type) && !cardView.querySelector('.im-type-label')) {
+        // Метка типа контента
+        if (getSetting(SHOW_TYPE_KEY, DEFAULT_SETTINGS.show_type)) {
             var typeLabel = document.createElement('div');
             typeLabel.className = 'im-type-label ' + (isTV ? 'serial' : 'movie');
             typeLabel.textContent = isTV ? 'СЕРИАЛ' : 'ФИЛЬМ';
@@ -858,14 +859,18 @@
         // Статус сериала
         if (isTV && getSetting(SHOW_STATUS_KEY, DEFAULT_SETTINGS.show_status)) {
             fetchSeriesData(data.id).then(function(seriesInfo) {
-                if (seriesInfo && seriesInfo.status) {
+                if (seriesInfo && seriesInfo.status && !cardView.querySelector('.im-status-badge')) {
                     var statusInfo = getStatusTextAndColor(seriesInfo);
                     var statusPos = getSetting(STATUS_POSITION_KEY, DEFAULT_SETTINGS.status_position);
                     var statusBadge = document.createElement('div');
                     statusBadge.className = 'im-status-badge ' + statusInfo.colorClass;
-                    statusBadge.classList.add(statusPos === 'under' ? 'status-position-under' : 'status-position-bottom-left');
+                    if (statusPos === 'under') {
+                        statusBadge.classList.add('status-position-under');
+                    } else {
+                        statusBadge.classList.add('status-position-bottom-left');
+                    }
                     statusBadge.textContent = statusInfo.text;
-                    if (!cardView.querySelector('.im-status-badge')) cardView.appendChild(statusBadge);
+                    cardView.appendChild(statusBadge);
                 }
             });
         }
@@ -873,17 +878,21 @@
         // Сезоны и серии
         if (isTV && getSetting(SHOW_SEASONS_KEY, DEFAULT_SETTINGS.show_seasons)) {
             fetchSeriesData(data.id).then(function(seriesInfo) {
-                if (seriesInfo) {
+                if (seriesInfo && !cardView.querySelector('.im-seasons-badge')) {
                     var seasonsInfo = getSeasonsInfo(seriesInfo);
                     if (seasonsInfo.text) {
                         var seasonsPos = getSetting(SEASONS_POSITION_KEY, DEFAULT_SETTINGS.seasons_position);
                         var seasonsColor = getSetting(SEASONS_COLOR_KEY, DEFAULT_SETTINGS.seasons_color);
                         var seasonsBadge = document.createElement('div');
                         seasonsBadge.className = 'im-seasons-badge';
-                        seasonsBadge.classList.add(seasonsPos === 'top-right' ? 'seasons-position-top-right' : 'seasons-position-bottom-right');
+                        if (seasonsPos === 'top-right') {
+                            seasonsBadge.classList.add('seasons-position-top-right');
+                        } else {
+                            seasonsBadge.classList.add('seasons-position-bottom-right');
+                        }
                         seasonsBadge.style.background = seasonsColor;
                         seasonsBadge.textContent = seasonsInfo.text;
-                        if (!cardView.querySelector('.im-seasons-badge')) cardView.appendChild(seasonsBadge);
+                        cardView.appendChild(seasonsBadge);
                     }
                 }
             });
@@ -896,24 +905,28 @@
             ratingsContainer.className = 'im-ratings-container';
             ratingsContainer.classList.add(ratingsPos === 'top-right' ? 'ratings-position-top-right' : 'ratings-position-bottom-right');
 
+            // TMDB
             if (data.vote_average && data.vote_average > 0) {
                 var tmdbRating = document.createElement('div');
                 tmdbRating.className = 'im-rating-item';
                 tmdbRating.innerHTML = '<span class="im-rating-value ' + getRatingColor(data.vote_average) + '">★ ' + formatRating(data.vote_average) + '</span><span class="im-rating-source">TMDB</span>';
                 ratingsContainer.appendChild(tmdbRating);
             }
+            // IMDB
             if (data.imdb_rating && data.imdb_rating > 0) {
                 var imdbRating = document.createElement('div');
                 imdbRating.className = 'im-rating-item';
                 imdbRating.innerHTML = '<span class="im-rating-value ' + getRatingColor(data.imdb_rating) + '">★ ' + formatRating(data.imdb_rating) + '</span><span class="im-rating-source">IMDB</span>';
                 ratingsContainer.appendChild(imdbRating);
             }
+            // Кинопоиск
             if (data.kp_rating && data.kp_rating > 0) {
                 var kpRating = document.createElement('div');
                 kpRating.className = 'im-rating-item';
                 kpRating.innerHTML = '<span class="im-rating-value ' + getRatingColor(data.kp_rating) + '">★ ' + formatRating(data.kp_rating) + '</span><span class="im-rating-source">КП</span>';
                 ratingsContainer.appendChild(kpRating);
             }
+            // Lampa рейтинг
             if (getSetting(SHOW_LAMPA_RATING_KEY, DEFAULT_SETTINGS.show_lampa_rating)) {
                 var ratingKey = (isTV ? 'tv_' : 'movie_') + data.id;
                 fetchLampaRating(ratingKey, isTV).then(function(lampaData) {
@@ -925,6 +938,7 @@
                     }
                 });
             }
+            // Общий рейтинг
             if (getSetting(SHOW_AVERAGE_RATING_KEY, DEFAULT_SETTINGS.show_average_rating)) {
                 var tmdb = data.vote_average || 0, imdb = data.imdb_rating || 0, kp = data.kp_rating || 0;
                 if (tmdb > 0 || imdb > 0 || kp > 0) {
@@ -941,14 +955,16 @@
                     ratingsContainer.appendChild(avgRatingEl);
                 }
             }
-            if (ratingsContainer.children.length > 0) cardView.appendChild(ratingsContainer);
+            if (ratingsContainer.children.length > 0) {
+                cardView.appendChild(ratingsContainer);
+            }
         }
 
         processedCards.push(cardElement);
     }
 
     // =================================================================
-    // ДЛЯ СТРАНИЦЫ ФИЛЬМА/СЕРИАЛА (full)
+    // ДЛЯ СТРАНИЦЫ ФИЛЬМА/СЕРИАЛА (full) — КОПИРУЕМ ВСЕ МЕТКИ
     // =================================================================
 
     function addLabelsToFullPoster() {
@@ -964,9 +980,11 @@
             var movie = e.data && e.data.movie;
             if (!movie || !movie.id) return;
             
+            // Очищаем только наши метки на постере
             poster.find('.im-type-label, .im-quality-label, .im-status-badge, .im-seasons-badge, .im-ratings-container').remove();
             poster.css('position', 'relative');
             
+            // Создаём временную карточку и добавляем на неё все метки
             var tempCard = document.createElement('div');
             tempCard.classList.add('card');
             tempCard.card_data = movie;
@@ -979,9 +997,13 @@
             addAllLabelsToCard(tempCard, movie);
             processedCards = savedProcessed;
             
+            // Копируем все метки на реальный постер
             var labels = tempCard.querySelectorAll('.im-type-label, .im-quality-label, .im-status-badge, .im-seasons-badge, .im-ratings-container');
-            for (var i = 0; i < labels.length; i++) poster.append(labels[i]);
+            for (var i = 0; i < labels.length; i++) {
+                poster.append(labels[i]);
+            }
             
+            // Повторная попытка для рейтингов (могут грузиться асинхронно)
             setTimeout(function() {
                 if (!poster.find('.im-ratings-container').length) {
                     var retryCard = document.createElement('div');
@@ -993,15 +1015,34 @@
                     addAllLabelsToCard(retryCard, movie);
                     var retryLabels = retryCard.querySelectorAll('.im-ratings-container');
                     for (var j = 0; j < retryLabels.length; j++) {
-                        if (!poster.find('.im-ratings-container').length) poster.append(retryLabels[j]);
+                        if (!poster.find('.im-ratings-container').length) {
+                            poster.append(retryLabels[j]);
+                        }
                     }
                 }
             }, 500);
+            
+            // Ещё одна попытка для сезонов (могут грузиться дольше)
+            setTimeout(function() {
+                if (!poster.find('.im-seasons-badge').length && !poster.find('.im-status-badge').length) {
+                    var finalCard = document.createElement('div');
+                    finalCard.classList.add('card');
+                    finalCard.card_data = movie;
+                    var finalView = document.createElement('div');
+                    finalView.classList.add('card__view');
+                    finalCard.appendChild(finalView);
+                    addAllLabelsToCard(finalCard, movie);
+                    var finalLabels = finalCard.querySelectorAll('.im-seasons-badge, .im-status-badge');
+                    for (var k = 0; k < finalLabels.length; k++) {
+                        poster.append(finalLabels[k]);
+                    }
+                }
+            }, 1500);
         });
     }
 
     // =================================================================
-    // НАБЛЮДАТЕЛИ
+    // НАБЛЮДАТЕЛИ ДЛЯ КАРТОЧЕК
     // =================================================================
 
     function processCard(card) {
@@ -1024,6 +1065,7 @@
             }
         });
         observer.observe(document.body, { childList: true, subtree: true });
+        
         var existingCards = document.querySelectorAll('.card');
         for (var i = 0; i < existingCards.length; i++) processCard(existingCards[i]);
     }
@@ -1270,12 +1312,29 @@
     }
 
     // =================================================================
+    // ПЕРЕМЕЩЕНИЕ НАСТРОЕК
+    // =================================================================
+
+    function moveSettingsAfterInterface() {
+        Lampa.Settings.listener.follow('open', function() {
+            setTimeout(function() {
+                var ourComponent = document.querySelector('.settings-folder[data-component="' + SETTINGS_COMPONENT + '"]');
+                var interfaceComponent = document.querySelector('.settings-folder[data-component="interface"]');
+                if (ourComponent && interfaceComponent && ourComponent.nextSibling !== interfaceComponent.nextSibling) {
+                    interfaceComponent.insertAdjacentElement('afterend', ourComponent);
+                }
+            }, 100);
+        });
+    }
+
+    // =================================================================
     // ИНИЦИАЛИЗАЦИЯ
     // =================================================================
 
     function init() {
         loadProfileSettings();
         setupSettings();
+        moveSettingsAfterInterface();
         setupTypeLabels();
         setupVoteColors();
         colorizeSeriesStatus();
