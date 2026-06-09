@@ -6,7 +6,7 @@
     // =================================================================
 
     var PLUGIN_NAME = 'interface_mod_full';
-    var PLUGIN_VERSION = '3.3.0';
+    var PLUGIN_VERSION = '3.4.0';
 
     var SETTINGS_COMPONENT = 'interface_mod_full_settings';
     var ENABLED_KEY = 'interface_mod_full_enabled';
@@ -441,7 +441,7 @@
     }
 
     // =================================================================
-    // CUB РЕЙТИНГ (С ЭМОДЗИ)
+    // CUB РЕЙТИНГ
     // =================================================================
 
     var cubRatingCache = {};
@@ -482,7 +482,6 @@
                             var cub_rating = ((avg_rating * m + sum) / (m + cnt));
                             var rating = parseFloat(cub_rating.toFixed(1));
                             
-                            // Поиск медианной эмоции
                             var medianReaction = '';
                             var medianIndex = Math.floor(cnt / 2);
                             var reactionOrder = Object.entries(reactionCoef)
@@ -520,7 +519,7 @@
     }
 
     // =================================================================
-    // СЕЗОНЫ И ЭПИЗОДЫ (ОРИГИНАЛЬНАЯ ЛОГИКА)
+    // СЕЗОНЫ И ЭПИЗОДЫ (ОРИГИНАЛЬНАЯ ЛОГИКА ИЗ interface_mod.js)
     // =================================================================
 
     var seriesDataCache = {};
@@ -548,25 +547,42 @@
     function getSeasonsInfo(seriesInfo) {
         if (!seriesInfo) return { text: '' };
         var mode = getSetting(SEASONS_MODE_KEY, DEFAULT_SETTINGS.seasons_mode);
+        if (mode === 'none') return { text: '' };
         
         var totalSeasons = seriesInfo.numberOfSeasons || 0;
         var totalEpisodes = seriesInfo.numberOfEpisodes || 0;
         var airedSeasons = 0, airedEpisodes = 0;
         var now = new Date();
         
+        // ОРИГИНАЛЬНАЯ ЛОГИКА ИЗ interface_mod.js
         if (seriesInfo.seasons) {
             seriesInfo.seasons.forEach(function(season) {
                 if (season.season_number === 0) return;
-                var seasonAired = season.air_date && new Date(season.air_date) <= now;
-                if (seasonAired) airedSeasons++;
+                
+                var seasonAired = false;
+                var seasonEpisodes = 0;
+                
+                if (season.air_date) {
+                    var airDate = new Date(season.air_date);
+                    if (airDate <= now) {
+                        seasonAired = true;
+                        airedSeasons++;
+                    }
+                }
+                
                 if (season.episodes) {
                     season.episodes.forEach(function(ep) {
-                        if (ep.air_date && new Date(ep.air_date) <= now) {
-                            airedEpisodes++;
+                        if (ep.air_date) {
+                            var epAirDate = new Date(ep.air_date);
+                            if (epAirDate <= now) {
+                                seasonEpisodes++;
+                                airedEpisodes++;
+                            }
                         }
                     });
                 } else if (seasonAired && season.episode_count) {
-                    airedEpisodes += season.episode_count;
+                    seasonEpisodes = season.episode_count;
+                    airedEpisodes += seasonEpisodes;
                 }
             });
         }
@@ -584,19 +600,20 @@
             return five;
         }
         
+        var seasonsText, episodesText;
         if (mode === 'total') {
-            var sText = totalSeasons + ' ' + plural(totalSeasons, 'сезон', 'сезона', 'сезонов');
-            var eText = totalEpisodes + ' ' + plural(totalEpisodes, 'серия', 'серии', 'серий');
-            return { text: sText + ' • ' + eText };
+            seasonsText = totalSeasons + ' ' + plural(totalSeasons, 'сезон', 'сезона', 'сезонов');
+            episodesText = totalEpisodes + ' ' + plural(totalEpisodes, 'серия', 'серии', 'серий');
+            return { text: seasonsText + ' • ' + episodesText };
         } else {
-            var sText = airedSeasons + ' ' + plural(airedSeasons, 'сезон', 'сезона', 'сезонов');
-            var eText;
+            // Актуальная информация: "3 сезона 8 серий из 12"
+            seasonsText = airedSeasons + ' ' + plural(airedSeasons, 'сезон', 'сезона', 'сезонов');
             if (totalEpisodes > 0 && airedEpisodes < totalEpisodes && airedEpisodes > 0) {
-                eText = airedEpisodes + ' ' + plural(airedEpisodes, 'серия', 'серии', 'серий') + ' из ' + totalEpisodes;
+                episodesText = airedEpisodes + ' ' + plural(airedEpisodes, 'серия', 'серии', 'серий') + ' из ' + totalEpisodes;
             } else {
-                eText = (airedEpisodes || totalEpisodes) + ' ' + plural(airedEpisodes || totalEpisodes, 'серия', 'серии', 'серий');
+                episodesText = (airedEpisodes || totalEpisodes) + ' ' + plural(airedEpisodes || totalEpisodes, 'серия', 'серии', 'серий');
             }
-            return { text: sText + ' • ' + eText };
+            return { text: seasonsText + ' • ' + episodesText };
         }
     }
 
@@ -736,6 +753,7 @@
     }
 
     function processTypeLabels() {
+        if (!getSetting(SHOW_TYPE_KEY, DEFAULT_SETTINGS.show_type)) return;
         $('.card').each(function() { addTypeLabel(this); });
     }
 
@@ -920,11 +938,9 @@
             var movie = e.data && e.data.movie;
             if (!movie || !movie.id) return;
             
-            // Очищаем старые метки
             poster.find('.im-type-label, .im-quality-label, .im-status-badge, .im-seasons-badge, .im-ratings-container, .im-cub-rating').remove();
             poster.css('position', 'relative');
             
-            // Создаём временную карточку
             var tempCard = document.createElement('div');
             tempCard.classList.add('card');
             tempCard.card_data = movie;
@@ -937,7 +953,6 @@
             addAllLabelsToCard(tempCard, movie);
             processedCards = savedProcessed;
             
-            // Копируем ВСЕ метки на реальный постер
             var labels = tempCard.querySelectorAll('.im-type-label, .im-quality-label, .im-status-badge, .im-seasons-badge, .im-ratings-container, .im-cub-rating');
             for (var i = 0; i < labels.length; i++) {
                 poster.append(labels[i]);
@@ -953,7 +968,7 @@
                     retryView.classList.add('card__view');
                     retryCard.appendChild(retryView);
                     addAllLabelsToCard(retryCard, movie);
-                    var retryLabels = retryCard.querySelectorAll('.im-seasons-badge, .im-cub-rating, .im-status-badge');
+                    var retryLabels = retryCard.querySelectorAll('.im-seasons-badge, .im-cub-rating');
                     for (var j = 0; j < retryLabels.length; j++) {
                         poster.append(retryLabels[j]);
                     }
@@ -1054,9 +1069,14 @@
             onChange: function(v) {
                 setProfileSetting(ENABLED_KEY, v);
                 setSetting(ENABLED_KEY, v);
-                if (!v) document.querySelectorAll('.im-type-label, .im-quality-label, .im-status-badge, .im-seasons-badge, .im-ratings-container, .im-cub-rating').forEach(function(el) { el && el.remove(); });
+                if (!v) {
+                    document.querySelectorAll('.im-type-label, .im-quality-label, .im-status-badge, .im-seasons-badge, .im-ratings-container, .im-cub-rating').forEach(function(el) { el && el.remove(); });
+                }
                 processedCards = [];
-                if (v) $('.card').each(function() { processCard(this); });
+                if (v) {
+                    $('.card').each(function() { processCard(this); });
+                    processTypeLabels();
+                }
             }
         });
 
@@ -1067,9 +1087,13 @@
             onChange: function(v) {
                 setProfileSetting(ENABLED_ON_MAIN_KEY, v);
                 setSetting(ENABLED_ON_MAIN_KEY, v);
-                if (!v) document.querySelectorAll('.card .im-type-label, .card .im-quality-label, .card .im-status-badge, .card .im-seasons-badge, .card .im-ratings-container, .card .im-cub-rating').forEach(function(el) { el && el.remove(); });
+                if (!v) {
+                    document.querySelectorAll('.card .im-type-label, .card .im-quality-label, .card .im-status-badge, .card .im-seasons-badge, .card .im-ratings-container, .card .im-cub-rating').forEach(function(el) { el && el.remove(); });
+                }
                 processedCards = [];
-                if (v) $('.card').each(function() { processCard(this); });
+                if (v) {
+                    $('.card').each(function() { processCard(this); });
+                }
             }
         });
 
@@ -1096,8 +1120,11 @@
             onChange: function(v) {
                 setProfileSetting(SHOW_TYPE_KEY, v);
                 setSetting(SHOW_TYPE_KEY, v);
-                if (v) processTypeLabels();
-                else $('.im-type-label').remove();
+                if (v) {
+                    processTypeLabels();
+                } else {
+                    $('.im-type-label').remove();
+                }
             }
         });
 
@@ -1109,8 +1136,11 @@
                 setProfileSetting(SHOW_QUALITY_KEY, v);
                 setSetting(SHOW_QUALITY_KEY, v);
                 processedCards = [];
-                if (v) $('.card').each(function() { processCard(this); });
-                else $('.im-quality-label').remove();
+                if (v) {
+                    $('.card').each(function() { processCard(this); });
+                } else {
+                    $('.im-quality-label').remove();
+                }
             }
         });
 
@@ -1122,8 +1152,11 @@
                 setProfileSetting(SHOW_STATUS_KEY, v);
                 setSetting(SHOW_STATUS_KEY, v);
                 processedCards = [];
-                if (v) $('.card').each(function() { processCard(this); });
-                else $('.im-status-badge').remove();
+                if (v) {
+                    $('.card').each(function() { processCard(this); });
+                } else {
+                    $('.im-status-badge').remove();
+                }
             }
         });
 
@@ -1135,8 +1168,11 @@
                 setProfileSetting(SHOW_SEASONS_KEY, v);
                 setSetting(SHOW_SEASONS_KEY, v);
                 processedCards = [];
-                if (v) $('.card').each(function() { processCard(this); });
-                else $('.im-seasons-badge').remove();
+                if (v) {
+                    $('.card').each(function() { processCard(this); });
+                } else {
+                    $('.im-seasons-badge').remove();
+                }
             }
         });
 
@@ -1172,8 +1208,11 @@
                 setProfileSetting(SHOW_RATINGS_KEY, v);
                 setSetting(SHOW_RATINGS_KEY, v);
                 processedCards = [];
-                if (v) $('.card').each(function() { processCard(this); });
-                else $('.im-ratings-container').remove();
+                if (v) {
+                    $('.card').each(function() { processCard(this); });
+                } else {
+                    $('.im-ratings-container').remove();
+                }
                 setupVoteColors();
             }
         });
@@ -1186,7 +1225,11 @@
                 setProfileSetting(SHOW_CUB_RATING_KEY, v);
                 setSetting(SHOW_CUB_RATING_KEY, v);
                 processedCards = [];
-                $('.card').each(function() { processCard(this); });
+                if (v) {
+                    $('.card').each(function() { processCard(this); });
+                } else {
+                    $('.im-cub-rating').remove();
+                }
             }
         });
 
