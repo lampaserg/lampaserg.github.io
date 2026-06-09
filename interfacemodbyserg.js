@@ -6,7 +6,7 @@
     // =================================================================
 
     var PLUGIN_NAME = 'interface_mod_full';
-    var PLUGIN_VERSION = '2.5.0';
+    var PLUGIN_VERSION = '2.6.0';
 
     var SETTINGS_COMPONENT = 'interface_mod_full_settings';
     var ENABLED_KEY = 'interface_mod_full_enabled';
@@ -31,8 +31,8 @@
         show_lampa_rating: true,
         show_average_rating: false,
         show_seasons: true,
-        seasons_mode: 'aired',
-        status_position: 'bottom-left',
+        seasons_mode: 'auto',
+        status_position: 'under',
         seasons_position: 'bottom-right',
         seasons_color: '#e74c3c'
     };
@@ -128,10 +128,10 @@
         .im-type-label.serial { background: #3498db; color: white; }
         .im-type-label.movie  { background: #2ecc71; color: white; }
 
-        /* Метка качества (рядом с типом, опущена на 0.4em) */
+        /* Метка качества (рядом с типом, опущена на 0.2em) */
         .im-quality-label {
             position: absolute;
-            top: 1.0em;
+            top: 0.2em;
             left: 6.8em;
             padding: 0.2em 0.5em;
             border-radius: 0.3em;
@@ -148,7 +148,7 @@
         .im-quality-label.quality-ts  { background: #9e9e9e; color: white; }
         .im-quality-label.quality-cam { background: #9e9e9e; color: white; }
 
-        /* Метка статуса сериала (настраиваемая позиция) */
+        /* Метка статуса сериала */
         .im-status-badge {
             position: absolute;
             padding: 0.2em 0.6em;
@@ -162,12 +162,13 @@
         .im-status-badge.status-position-under { top: 2.4em; left: 0.6em; }
         .im-status-badge.status-position-bottom-left { bottom: 0.8em; left: 0.8em; }
         
-        .status-airing   { color: #4caf50; }
-        .status-ended    { color: #2196f3; }
-        .status-paused   { color: #ffc107; }
-        .status-canceled { color: #f44336; }
+        .status-airing-full   { color: #4caf50; }      /* Сериал в эфире */
+        .status-ended-full    { color: #9b59b6; }      /* Сериал полностью завершён */
+        .status-season-ended  { color: #3498db; }      /* Только сезон завершён */
+        .status-paused        { color: #ffc107; }
+        .status-canceled      { color: #f44336; }
 
-        /* Метка сезонов (настраиваемая позиция, цвет) */
+        /* Метка сезонов (настраиваемая позиция) */
         .im-seasons-badge {
             position: absolute;
             padding: 0.2em 0.6em;
@@ -181,19 +182,21 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.2);
         }
         .im-seasons-badge.seasons-position-top-right { top: 0.6em; right: 0.6em; }
-        .im-seasons-badge.seasons-position-bottom-right { bottom: 0.8em; right: 0.8em; }
+        .im-seasons-badge.seasons-position-bottom-right { bottom: 3.3em; right: 0.6em; }
 
         /* Контейнер рейтингов */
         .im-ratings-container {
             position: absolute;
-            top: 2.4em;
-            right: 0.6em;
             display: flex;
             flex-direction: column;
             gap: 0.2em;
             z-index: 10;
             align-items: flex-end;
         }
+        /* Позиция рейтингов при разных настройках сезонов */
+        .im-ratings-container.ratings-position-top-right { top: 0.6em; right: 0.6em; }
+        .im-ratings-container.ratings-position-bottom-right { bottom: 3.3em; right: 0.6em; }
+        
         .im-rating-item {
             background: rgba(0, 0, 0, 0.7);
             padding: 0.2em 0.5em;
@@ -217,10 +220,11 @@
         /* Адаптация под мобильные устройства */
         @media (max-width: 768px) {
             .im-type-label { font-size: 0.65em; top: 0.4em; left: 0.4em; }
-            .im-quality-label { font-size: 0.6em; top: 0.9em; left: 6.2em; }
+            .im-quality-label { font-size: 0.6em; top: 0.1em; left: 6.2em; }
             .im-status-badge { font-size: 0.6em; }
             .im-seasons-badge { font-size: 0.6em; }
-            .im-ratings-container { top: 2.2em; right: 0.4em; }
+            .im-seasons-badge.seasons-position-bottom-right { bottom: 2.8em; }
+            .im-ratings-container.ratings-position-bottom-right { bottom: 2.8em; }
             .im-rating-item { font-size: 0.6em; padding: 0.15em 0.4em; }
         }
     `;
@@ -406,7 +410,7 @@
     }
 
     // =================================================================
-    // СТАТУС СЕРИАЛА
+    // СТАТУС СЕРИАЛА (С УЧЁТОМ ЗАВЕРШЁННОСТИ СЕЗОНА)
     // =================================================================
 
     var seriesStatusCache = {};
@@ -439,51 +443,130 @@
         });
     }
 
-    function getStatusText(status) {
-        var statusMap = {
-            'Ended': 'ЗАВЕРШЁН',
-            'Canceled': 'ОТМЕНЁН',
-            'Returning Series': 'В ЭФИРЕ',
-            'In Production': 'В ПРОИЗВОДСТВЕ',
-            'Planned': 'ЗАПЛАНИРОВАН'
-        };
-        return statusMap[status] || status || 'НЕИЗВЕСТНО';
+    function getSeasonEndedInfo(seriesInfo) {
+        if (!seriesInfo) return { isSeriesEnded: false, isSeasonEnded: false, currentSeasonNumber: 0 };
+        
+        var currentDate = new Date();
+        var isSeriesEnded = (seriesInfo.status === 'Ended' || seriesInfo.status === 'Canceled');
+        var isSeasonEnded = false;
+        var currentSeasonNumber = 0;
+        
+        var seasons = seriesInfo.seasons || [];
+        seasons.sort(function(a, b) { return a.season_number - b.season_number; });
+        
+        // Ищем текущий сезон (последний вышедший)
+        for (var i = seasons.length - 1; i >= 0; i--) {
+            var season = seasons[i];
+            if (season.season_number === 0) continue;
+            
+            if (season.air_date) {
+                var airDate = new Date(season.air_date);
+                if (airDate <= currentDate) {
+                    currentSeasonNumber = season.season_number;
+                    // Проверяем, завершён ли текущий сезон
+                    if (season.episode_count > 0 && season.episodes) {
+                        var airedInSeason = 0;
+                        for (var j = 0; j < season.episodes.length; j++) {
+                            var ep = season.episodes[j];
+                            if (ep.air_date) {
+                                var epDate = new Date(ep.air_date);
+                                if (epDate <= currentDate) airedInSeason++;
+                            }
+                        }
+                        isSeasonEnded = (airedInSeason >= season.episode_count);
+                    } else {
+                        isSeasonEnded = true;
+                    }
+                    break;
+                }
+            }
+        }
+        
+        return { isSeriesEnded: isSeriesEnded, isSeasonEnded: isSeasonEnded, currentSeasonNumber: currentSeasonNumber };
     }
 
-    function getStatusClass(status) {
-        var classMap = {
-            'Ended': 'status-ended',
-            'Canceled': 'status-canceled',
-            'Returning Series': 'status-airing',
-            'In Production': 'status-airing',
-            'Planned': 'status-paused'
-        };
-        return classMap[status] || 'status-paused';
+    function getStatusTextAndColor(seriesInfo) {
+        if (!seriesInfo) return { text: 'НЕИЗВЕСТНО', colorClass: 'status-paused' };
+        
+        var seasonInfo = getSeasonEndedInfo(seriesInfo);
+        
+        // Если сериал полностью завершён
+        if (seasonInfo.isSeriesEnded) {
+            return { text: 'ЗАВЕРШЁН', colorClass: 'status-ended-full' };
+        }
+        
+        // Если текущий сезон завершён, а сериал продолжается
+        if (seasonInfo.isSeasonEnded && seasonInfo.currentSeasonNumber > 0) {
+            return { text: seasonInfo.currentSeasonNumber + ' СЕЗОН ЗАВЕРШЁН', colorClass: 'status-season-ended' };
+        }
+        
+        // Если сериал в эфире
+        if (seriesInfo.status === 'Returning Series') {
+            return { text: 'В ЭФИРЕ', colorClass: 'status-airing-full' };
+        }
+        
+        if (seriesInfo.status === 'In Production') {
+            return { text: 'В ПРОИЗВОДСТВЕ', colorClass: 'status-airing-full' };
+        }
+        
+        if (seriesInfo.status === 'Planned') {
+            return { text: 'ЗАПЛАНИРОВАН', colorClass: 'status-paused' };
+        }
+        
+        return { text: seriesInfo.status || 'НЕИЗВЕСТНО', colorClass: 'status-paused' };
     }
 
     // =================================================================
-    // СЕЗОНЫ И СЕРИИ (исправленный формат)
+    // СЕЗОНЫ И СЕРИИ (АВТОМАТИЧЕСКИЙ РЕЖИМ)
     // =================================================================
 
-    function getSeasonsInfo(seriesInfo) {
+    function getSeasonsInfoAuto(seriesInfo) {
         if (!seriesInfo) return { text: '' };
-
+        
+        var currentDate = new Date();
+        var isSeriesEnded = (seriesInfo.status === 'Ended' || seriesInfo.status === 'Canceled');
+        
+        // Если сериал завершён — показываем полную информацию
+        if (isSeriesEnded) {
+            return getSeasonsInfoTotal(seriesInfo);
+        }
+        
+        // Иначе — показываем актуальную информацию о текущем сезоне
+        return getSeasonsInfoAired(seriesInfo);
+    }
+    
+    function getSeasonsInfoTotal(seriesInfo) {
         var totalSeasons = seriesInfo.numberOfSeasons;
         var totalEpisodes = seriesInfo.numberOfEpisodes;
-        var currentDate = new Date();
         
-        // Находим текущий сезон (последний вышедший)
+        function plural(num, one, two, five) {
+            var n = Math.abs(num);
+            n %= 100;
+            if (n >= 5 && n <= 20) return five;
+            n %= 10;
+            if (n === 1) return one;
+            if (n >= 2 && n <= 4) return two;
+            return five;
+        }
+        
+        var seasonsText = totalSeasons + ' ' + plural(totalSeasons, 'сезон', 'сезона', 'сезонов');
+        var episodesText = totalEpisodes + ' ' + plural(totalEpisodes, 'серия', 'серии', 'серий');
+        
+        return { text: seasonsText + ' • ' + episodesText };
+    }
+    
+    function getSeasonsInfoAired(seriesInfo) {
+        var currentDate = new Date();
         var currentSeason = null;
         var currentSeasonNumber = 0;
         var airedEpisodesInCurrentSeason = 0;
         var totalEpisodesInCurrentSeason = 0;
         
         var seasons = seriesInfo.seasons || [];
-        
-        // Сортируем сезоны по номеру
         seasons.sort(function(a, b) { return a.season_number - b.season_number; });
         
-        for (var i = 0; i < seasons.length; i++) {
+        // Находим текущий сезон (последний вышедший)
+        for (var i = seasons.length - 1; i >= 0; i--) {
             var season = seasons[i];
             if (season.season_number === 0) continue;
             
@@ -494,7 +577,7 @@
                     currentSeasonNumber = season.season_number;
                     totalEpisodesInCurrentSeason = season.episode_count || 0;
                     
-                    // Подсчитываем вышедшие серии в текущем сезоне
+                    // Подсчитываем вышедшие серии
                     if (season.episodes) {
                         airedEpisodesInCurrentSeason = 0;
                         for (var j = 0; j < season.episodes.length; j++) {
@@ -507,32 +590,15 @@
                             }
                         }
                     } else {
-                        // Если нет детальной информации, считаем все серии вышедшими
                         airedEpisodesInCurrentSeason = totalEpisodesInCurrentSeason;
                     }
-                }
-            }
-        }
-        
-        // Если не нашли текущий сезон, берём последний
-        if (!currentSeason && seasons.length > 0) {
-            for (var k = seasons.length - 1; k >= 0; k--) {
-                if (seasons[k].season_number !== 0) {
-                    currentSeason = seasons[k];
-                    currentSeasonNumber = currentSeason.season_number;
-                    totalEpisodesInCurrentSeason = currentSeason.episode_count || 0;
-                    airedEpisodesInCurrentSeason = totalEpisodesInCurrentSeason;
                     break;
                 }
             }
         }
         
-        // Формируем текст в формате "4 сезон 7 серий из 10"
-        function pluralSeason(num) {
-            var n = Math.abs(num);
-            if (n % 10 === 1 && n % 100 !== 11) return 'сезон';
-            if (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) return 'сезона';
-            return 'сезонов';
+        if (currentSeasonNumber === 0) {
+            return getSeasonsInfoTotal(seriesInfo);
         }
         
         function pluralEpisode(num) {
@@ -542,30 +608,26 @@
             return 'серий';
         }
         
+        var seasonText = currentSeasonNumber + ' сезон';
+        var episodesText = airedEpisodesInCurrentSeason + ' ' + pluralEpisode(airedEpisodesInCurrentSeason);
+        
+        if (totalEpisodesInCurrentSeason > 0 && airedEpisodesInCurrentSeason < totalEpisodesInCurrentSeason) {
+            return { text: seasonText + ' • ' + episodesText + ' из ' + totalEpisodesInCurrentSeason };
+        } else {
+            return { text: seasonText + ' • ' + episodesText };
+        }
+    }
+
+    function getSeasonsInfo(seriesInfo) {
         var mode = getSetting(SEASONS_MODE_KEY, DEFAULT_SETTINGS.seasons_mode);
         
         if (mode === 'total') {
-            // Полное количество
-            var totalSeasonsText = totalSeasons + ' ' + pluralSeason(totalSeasons);
-            var totalEpisodesText = totalEpisodes + ' ' + pluralEpisode(totalEpisodes);
-            return { text: totalSeasonsText + ' • ' + totalEpisodesText };
+            return getSeasonsInfoTotal(seriesInfo);
+        } else if (mode === 'auto') {
+            return getSeasonsInfoAuto(seriesInfo);
         } else {
-            // Актуальная информация: "4 сезон 7 серий из 10"
-            if (currentSeasonNumber > 0) {
-                var seasonText = currentSeasonNumber + ' ' + pluralSeason(currentSeasonNumber);
-                var episodesText = airedEpisodesInCurrentSeason + ' ' + pluralEpisode(airedEpisodesInCurrentSeason);
-                
-                if (totalEpisodesInCurrentSeason > 0 && airedEpisodesInCurrentSeason < totalEpisodesInCurrentSeason) {
-                    return { text: seasonText + ' • ' + episodesText + ' из ' + totalEpisodesInCurrentSeason };
-                } else {
-                    return { text: seasonText + ' • ' + episodesText };
-                }
-            } else if (totalSeasons > 0) {
-                return { text: totalSeasons + ' ' + pluralSeason(totalSeasons) + ' • ' + (totalEpisodes || '?') + ' ' + pluralEpisode(totalEpisodes) };
-            }
+            return getSeasonsInfoAired(seriesInfo);
         }
-        
-        return { text: '' };
     }
 
     // =================================================================
@@ -622,18 +684,17 @@
         if (isTV && getSetting(SHOW_STATUS_KEY, DEFAULT_SETTINGS.show_status)) {
             fetchSeriesStatus(data.id).then(function(seriesInfo) {
                 if (seriesInfo && seriesInfo.status) {
-                    var statusText = getStatusText(seriesInfo.status);
-                    var statusClass = getStatusClass(seriesInfo.status);
+                    var statusInfo = getStatusTextAndColor(seriesInfo);
                     var statusPosition = getSetting(STATUS_POSITION_KEY, DEFAULT_SETTINGS.status_position);
                     
                     var statusBadge = document.createElement('div');
-                    statusBadge.className = 'im-status-badge ' + statusClass;
+                    statusBadge.className = 'im-status-badge ' + statusInfo.colorClass;
                     if (statusPosition === 'under') {
                         statusBadge.classList.add('status-position-under');
                     } else {
                         statusBadge.classList.add('status-position-bottom-left');
                     }
-                    statusBadge.textContent = statusText;
+                    statusBadge.textContent = statusInfo.text;
                     
                     if (cardView.querySelector('.im-status-badge') === null) {
                         cardView.appendChild(statusBadge);
@@ -642,7 +703,7 @@
             });
         }
 
-        // 4. Метка сезонов (настраиваемая позиция, цвет)
+        // 4. Метка сезонов
         if (isTV && getSetting(SHOW_SEASONS_KEY, DEFAULT_SETTINGS.show_seasons)) {
             fetchSeriesStatus(data.id).then(function(seriesInfo) {
                 if (seriesInfo) {
@@ -671,8 +732,16 @@
 
         // 5. Контейнер рейтингов
         if (getSetting(SHOW_RATINGS_KEY, DEFAULT_SETTINGS.show_ratings)) {
+            var seasonsPosition = getSetting(SEASONS_POSITION_KEY, DEFAULT_SETTINGS.seasons_position);
             var ratingsContainer = document.createElement('div');
             ratingsContainer.className = 'im-ratings-container';
+            
+            // Устанавливаем позицию рейтингов в зависимости от позиции сезонов
+            if (seasonsPosition === 'bottom-right') {
+                ratingsContainer.classList.add('ratings-position-bottom-right');
+            } else {
+                ratingsContainer.classList.add('ratings-position-top-right');
+            }
 
             // TMDB
             if (data.vote_average && data.vote_average > 0) {
@@ -848,7 +917,7 @@
         Lampa.SettingsApi.addParam({
             component: SETTINGS_COMPONENT,
             param: { name: SHOW_STATUS_KEY, type: 'trigger', default: DEFAULT_SETTINGS.show_status },
-            field: { name: 'Статус сериала', description: 'Показывать статус (в эфире/завершён)' },
+            field: { name: 'Статус сериала', description: 'Показывать статус (в эфире/завершён/сезон завершён)' },
             onChange: function(value) {
                 setProfileSetting(SHOW_STATUS_KEY, value);
                 setSetting(SHOW_STATUS_KEY, value);
@@ -890,6 +959,7 @@
         Lampa.SettingsApi.addParam({
             component: SETTINGS_COMPONENT,
             param: { name: SEASONS_MODE_KEY, type: 'select', values: {
+                'auto': 'Автоматический (актуально для идущих, полное для завершённых)',
                 'aired': 'Актуальная информация (текущий сезон)',
                 'total': 'Полное количество'
             }, default: DEFAULT_SETTINGS.seasons_mode },
