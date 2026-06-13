@@ -2,7 +2,7 @@
   'use strict';
 
   // ========================================================================
-  // УДАЛЁН GUEST_UID - используем стандартный lampac_unic_id
+  // ПОЛНОСТЬЮ УБРАНА АУТЕНТИФИКАЦИЯ
   // ========================================================================
   
   var Defined = {
@@ -13,15 +13,9 @@
 
   var balansers_with_search;
   
-  // Функция для получения UID (стандартная, как в других плагинах)
-  function getUnicId() {
-    var uid = Lampa.Storage.get('lampac_unic_id', '');
-    if (!uid) {
-      uid = Lampa.Utils.uid(8).toLowerCase();
-      Lampa.Storage.set('lampac_unic_id', uid);
-    }
-    return uid;
-  }
+  // Гостевой UID (фиксированный, без аутентификации)
+  var GUEST_UID = 'guest';
+  var unic_id = GUEST_UID;
 
   function hasUrlComponent(url, name) {
     return new RegExp('([?&])' + name + '=', 'i').test(url + '');
@@ -279,18 +273,17 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
   }
 
   // ========================================================================
-  // ИСПРАВЛЕНА ФУНКЦИЯ account - убран GUEST_UID, используется getUnicId()
+  // ФУНКЦИЯ account - ПОЛНОСТЬЮ УБРАНА АУТЕНТИФИКАЦИЯ
   // ========================================================================
   function account(url) {
     url = url + '';
-    // Используем динамический UID вместо GUEST_UID
-    url = setUrlComponent(url, 'uid', getUnicId());
+    // Используем гостевой UID без аутентификации
+    url = setUrlComponent(url, 'uid', GUEST_UID);
+    // Удаляем все параметры аутентификации
     url = removeUrlComponent(url, 'account_email');
     url = removeUrlComponent(url, 'cub_id');
-    if (!hasUrlComponent(url, 'token')) {
-      var token = '';
-      if (token != '') url = addUrlComponentSafe(url, 'token=');
-    }
+    url = removeUrlComponent(url, 'token');
+    // Добавляем nws_id только если есть
     if (!hasUrlComponent(url, 'nws_id')) {
       var nws_id = Lampa.Storage.get('lampac_nws_id', '');
       if (nws_id) url = addUrlComponentSafe(url, 'nws_id=' + encodeURIComponent(nws_id));
@@ -299,8 +292,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
   }
 
   function addHeaders() {
-    var kit_aesgcmkey = Lampa.Storage.get('kit_aesgcmkey', '');
-    if (kit_aesgcmkey) return { 'X-Kit-AesGcm': Lampa.Storage.get('kit_aesgcmkey', '') };
+    // Убираем заголовки аутентификации
     return {};
   }
 
