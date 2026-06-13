@@ -14,6 +14,7 @@
         var heroEl = null;
         var overlayObserver = null;
         var currentTheme = 'dark';
+        var styleObserver = null;
 
         // ---- Темы оформления ----
         var themes = {
@@ -24,7 +25,9 @@
                 accent: '#0071eb',
                 cardScale: 1.08,
                 cardRadius: '8px',
-                glowIntensity: '0 0 20px rgba(0,0,0,0.5)'
+                glowIntensity: '0 0 20px rgba(0,0,0,0.5)',
+                textColor: '#ffffff',
+                secondaryText: '#b3b3b3'
             },
             blue: {
                 name: 'Blue Ocean',
@@ -33,7 +36,9 @@
                 accent: '#00b4d8',
                 cardScale: 1.08,
                 cardRadius: '12px',
-                glowIntensity: '0 0 20px rgba(0,123,255,0.4)'
+                glowIntensity: '0 0 20px rgba(0,123,255,0.4)',
+                textColor: '#ffffff',
+                secondaryText: '#ade8f4'
             },
             red: {
                 name: 'Red Passion',
@@ -42,11 +47,13 @@
                 accent: '#ef233c',
                 cardScale: 1.08,
                 cardRadius: '8px',
-                glowIntensity: '0 0 20px rgba(217,4,41,0.4)'
+                glowIntensity: '0 0 20px rgba(217,4,41,0.4)',
+                textColor: '#ffffff',
+                secondaryText: '#ffb3b3'
             }
         };
 
-        // ---- Загрузка текущей темы ----
+        // ---- Загрузка/сохранение темы ----
         function loadTheme() {
             var saved = Lampa.Storage.get('netflix_theme_selected', 'dark');
             if (themes[saved]) {
@@ -60,16 +67,25 @@
         function saveTheme(themeKey) {
             currentTheme = themeKey;
             Lampa.Storage.set('netflix_theme_selected', themeKey);
-            injectCSS();
             applyThemeStyles();
+            // Принудительно обновляем CSS после смены темы
+            setTimeout(function() {
+                injectCSS();
+                applyThemeStyles();
+                // Обновляем hero если есть
+                var focusedCard = document.querySelector('.card.focus');
+                if (focusedCard && Lampa.Storage.get('netflix_hero', true)) {
+                    updateHero(focusedCard);
+                }
+            }, 50);
         }
 
+        // ---- Применение стилей темы (глобально) ----
         function applyThemeStyles() {
             var theme = themes[currentTheme];
             if (!theme) return;
             
-            document.body.style.backgroundColor = theme.secondary;
-            
+            // Создаём или обновляем динамический стиль
             var style = document.getElementById('netflix-theme-dynamic');
             if (!style) {
                 style = document.createElement('style');
@@ -78,48 +94,93 @@
             }
             
             style.textContent = `
+                /* Основные цвета темы */
+                body {
+                    background-color: ${theme.secondary} !important;
+                    color: ${theme.textColor} !important;
+                }
+                
+                /* Фокус на меню и кнопках */
                 .menu__item.focus,
                 .settings-param.focus,
                 .selectbox-item.focus,
-                .full-start__button.focus {
+                .full-start__button.focus,
+                .head__action.focus,
+                .simple-button.focus {
                     background: ${theme.primary} !important;
                     color: white !important;
                 }
-                .full-start__button.focus {
-                    transform: scale(1.05);
-                }
+                
+                /* Карточки при фокусе */
                 .card.focus {
-                    transform: scale(${theme.cardScale});
-                    z-index: 10;
+                    transform: scale(${theme.cardScale}) !important;
+                    z-index: 10 !important;
                 }
+                
                 .card.focus .card__view {
-                    box-shadow: ${theme.glowIntensity};
+                    box-shadow: ${theme.glowIntensity} !important;
                 }
+                
                 .card .card__view {
-                    border-radius: ${theme.cardRadius};
-                    overflow: hidden;
+                    border-radius: ${theme.cardRadius} !important;
+                    overflow: hidden !important;
+                }
+                
+                /* Скроллбар */
+                ::-webkit-scrollbar-track {
+                    background: ${theme.secondary} !important;
                 }
                 ::-webkit-scrollbar-thumb {
-                    background: ${theme.primary};
+                    background: ${theme.primary} !important;
+                    border-radius: 3px !important;
                 }
+                
+                /* Hero баннер */
                 .nf-hero__vote::before {
-                    color: ${theme.primary};
+                    color: ${theme.primary} !important;
+                }
+                
+                .nf-hero__gradient {
+                    background: linear-gradient(to top, ${theme.secondary} 0%, transparent 100%) !important;
+                }
+                
+                /* Заголовки строк */
+                .items-line__title {
+                    color: ${theme.textColor} !important;
+                }
+                
+                /* Текст на карточках */
+                .card__title,
+                .card__age,
+                .card__vote {
+                    color: ${theme.textColor} !important;
+                }
+                
+                /* Настройки */
+                .settings-folder,
+                .settings-param__name,
+                .settings-param__value,
+                .settings-param__descr {
+                    color: ${theme.textColor} !important;
+                }
+                
+                /* Полоска прогресса */
+                .timeline__bar {
+                    background: ${theme.primary} !important;
+                }
+                
+                /* Кнопка воспроизведения */
+                .full-start__button.focus .full-start__button__title {
+                    color: white !important;
                 }
             `;
         }
 
-        // ---- CSS Injection ----
+        // ---- CSS Injection (основные стили) ----
         function injectCSS() {
-            if (document.getElementById('netflix-theme-css')) return;
+            var existing = document.getElementById('netflix-theme-css');
+            if (existing) existing.remove();
 
-            var style = document.createElement('style');
-            style.id = 'netflix-theme-css';
-            style.type = 'text/css';
-            style.textContent = getThemeCSS();
-            document.head.appendChild(style);
-        }
-
-        function getThemeCSS() {
             var heroEnabled = Lampa.Storage.get('netflix_hero', true);
             var overlaysEnabled = Lampa.Storage.get('netflix_overlays', true);
             var animationsEnabled = Lampa.Storage.get('netflix_animations', true);
@@ -170,6 +231,7 @@
                     visibility: hidden;
                     transition: opacity 0.5s ease, visibility 0.5s ease;
                     overflow: hidden;
+                    pointer-events: none;
                 }
                 .nf-hero.visible {
                     opacity: 1;
@@ -189,7 +251,6 @@
                     left: 0;
                     right: 0;
                     height: 60%;
-                    background: linear-gradient(to top, ${theme.secondary} 0%, transparent 100%);
                 }
                 .nf-hero__info {
                     position: absolute;
@@ -241,31 +302,27 @@
                 }
             ` : '';
             
-            return `
-                <style id="netflix-theme-css">
-                    /* Netflix Theme Styles */
-                    ${heroStyles}
-                    ${overlayStyles}
-                    ${animationStyles}
-                    
-                    .card .card__view {
-                        transition: box-shadow 0.3s ease;
-                    }
-                    .items-line {
-                        margin-bottom: 0;
-                    }
-                    ::-webkit-scrollbar {
-                        width: 6px;
-                        height: 6px;
-                    }
-                    ::-webkit-scrollbar-track {
-                        background: ${theme.secondary};
-                    }
-                    ::-webkit-scrollbar-thumb {
-                        border-radius: 3px;
-                    }
-                </style>
+            var style = document.createElement('style');
+            style.id = 'netflix-theme-css';
+            style.type = 'text/css';
+            style.textContent = `
+                /* Netflix Theme Styles */
+                ${heroStyles}
+                ${overlayStyles}
+                ${animationStyles}
+                
+                .card .card__view {
+                    transition: box-shadow 0.3s ease;
+                }
+                .items-line {
+                    margin-bottom: 0;
+                }
+                ::-webkit-scrollbar {
+                    width: 6px;
+                    height: 6px;
+                }
             `;
+            document.head.appendChild(style);
         }
 
         // ---- Hero Billboard ----
@@ -291,7 +348,7 @@
             if (wrap) {
                 wrap.parentNode.insertBefore(heroEl, wrap);
             } else {
-                document.body.appendChild(heroEl);
+                document.body.insertBefore(heroEl, document.body.firstChild);
             }
 
             return heroEl;
@@ -495,6 +552,12 @@
                 attributeFilter: ['class'],
                 subtree: true
             });
+            
+            // Наблюдаем за появлением новых страниц (full)
+            var pageObserver = new MutationObserver(function() {
+                applyThemeStyles();
+            });
+            pageObserver.observe(target, { childList: true, subtree: true });
         }
 
         // ---- Utility ----
@@ -510,61 +573,45 @@
 
             Lampa.Lang.add({
                 netflix_theme_name: {
-                    en: 'Netflix Theme',
                     ru: 'Netflix Тема',
-                    uk: 'Netflix Тема',
-                    be: 'Netflix Тэма'
+                    en: 'Netflix Theme'
                 },
                 netflix_theme_select: {
-                    en: 'Select Theme',
                     ru: 'Выбрать тему',
-                    uk: 'Вибрати тему',
-                    be: 'Абраць тэму'
+                    en: 'Select Theme'
                 },
                 netflix_theme_dark: {
-                    en: 'Dark Netflix',
                     ru: 'Тёмная Netflix',
-                    uk: 'Темна Netflix',
-                    be: 'Цёмная Netflix'
+                    en: 'Dark Netflix'
                 },
                 netflix_theme_blue: {
-                    en: 'Blue Ocean',
                     ru: 'Синий океан',
-                    uk: 'Синій океан',
-                    be: 'Сіні акіян'
+                    en: 'Blue Ocean'
                 },
                 netflix_theme_red: {
-                    en: 'Red Passion',
                     ru: 'Красная страсть',
-                    uk: 'Червона пристрасть',
-                    be: 'Чырвоная запал'
+                    en: 'Red Passion'
                 },
                 netflix_theme_hero: {
-                    en: 'Cinematic Hero',
                     ru: 'Кинематографичный баннер',
-                    uk: 'Кінематографічний банер',
-                    be: 'Кінематаграфічны банер'
+                    en: 'Cinematic Hero'
                 },
                 netflix_theme_overlays: {
-                    en: 'Card Focus Details',
                     ru: 'Детали при фокусе',
-                    uk: 'Деталі при фокусі',
-                    be: 'Дэталі пры фокусе'
+                    en: 'Card Focus Details'
                 },
                 netflix_theme_animations: {
-                    en: 'Row Motion',
                     ru: 'Анимация строк',
-                    uk: 'Анімація рядків',
-                    be: 'Анімацыя радкоў'
+                    en: 'Row Motion'
                 }
             });
         }
 
-        // ---- Настройки (отдельная папка) ----
+        // ---- Настройки (отдельная папка наверху) ----
         function addSettings() {
             if (!Lampa.SettingsApi) return;
 
-            // Добавляем компонент Netflix Theme
+            // Добавляем компонент Netflix Theme в корень настроек (рядом с Интерфейсом)
             Lampa.SettingsApi.addComponent({
                 component: 'netflix_theme',
                 name: Lampa.Lang.translate('netflix_theme_name') || 'Netflix Theme',
@@ -659,6 +706,26 @@
                     injectCSS();
                 }
             });
+            
+            // Перемещаем папку с настройками наверх (рядом с Интерфейсом)
+            setTimeout(function() {
+                var netflixFolder = $('.settings-folder[data-component="netflix_theme"]');
+                var interfaceFolder = $('.settings-folder[data-component="interface"]');
+                if (netflixFolder.length && interfaceFolder.length) {
+                    netflixFolder.insertAfter(interfaceFolder);
+                }
+            }, 100);
+        }
+
+        // ---- Переопределение для сохранения темы на странице фильма ----
+        function patchFullCard() {
+            Lampa.Listener.follow('full', function(e) {
+                if (e.type === 'complite') {
+                    setTimeout(function() {
+                        applyThemeStyles();
+                    }, 50);
+                }
+            });
         }
 
         // ---- Main Init ----
@@ -668,6 +735,7 @@
             addSettings();
             injectCSS();
             applyThemeStyles();
+            patchFullCard();
 
             setTimeout(function () {
                 var overlaysEnabled = Lampa.Storage.get('netflix_overlays', true);
@@ -680,6 +748,7 @@
                 Lampa.Listener.follow('activity', function (e) {
                     if (e.type === 'start' || e.type === 'archive') {
                         setTimeout(function () {
+                            applyThemeStyles();
                             if (Lampa.Storage.get('netflix_overlays', true)) processCards();
                             if (Lampa.Storage.get('netflix_animations', true)) animateRows();
                         }, 100);
@@ -688,6 +757,9 @@
 
                 Lampa.Listener.follow('full', function (e) {
                     if (e.type === 'start') hideHero();
+                    if (e.type === 'complite') {
+                        setTimeout(applyThemeStyles, 50);
+                    }
                 });
 
                 Lampa.Listener.follow('player', function (e) {
