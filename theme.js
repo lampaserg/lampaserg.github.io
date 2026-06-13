@@ -16,8 +16,38 @@
     var THEME_A_BASE_URL = 'https://cdn.jsdelivr.net/gh/syvyj/studio_2@main/';
     var THEME_A_LANG = 'ru';
 
-    function tr(key) {
-        return key;
+    // =================================================================
+    // TRANSLATIONS (только русский)
+    // =================================================================
+    if (Lampa.Lang && Lampa.Lang.add) {
+        Lampa.Lang.add({
+            maxsm_ratings: { ru: 'Рейтинг и качество' },
+            maxsm_ratings_cc: { ru: 'Очистить локальный кеш' },
+            maxsm_ratings_critic: { ru: 'Оценки критиков' },
+            maxsm_ratings_mode: { ru: 'Средний рейтинг' },
+            maxsm_ratings_mode_normal: { ru: 'Показывать средний рейтинг' },
+            maxsm_ratings_mode_simple: { ru: 'Только средний рейтинг' },
+            maxsm_ratings_mode_noavg: { ru: 'Без среднего рейтинга' },
+            maxsm_ratings_icons: { ru: 'Значки' },
+            maxsm_ratings_colors: { ru: 'Цвета' },
+            maxsm_ratings_avg: { ru: 'ИТОГ' },
+            maxsm_ratings_avg_simple: { ru: 'Оценка' },
+            maxsm_ratings_loading: { ru: 'Загрузка' },
+            maxsm_ratings_oscars: { ru: 'Оскар' },
+            maxsm_ratings_emmy: { ru: 'Эмми' },
+            maxsm_ratings_awards: { ru: 'Награды' },
+            maxsm_ratings_show_total: { ru: 'Итог' },
+            maxsm_ratings_show_oscars: { ru: 'Оскар' },
+            maxsm_ratings_show_awards: { ru: 'Награды' },
+            maxsm_ratings_show_tmdb: { ru: 'TMDB' },
+            maxsm_ratings_show_imdb: { ru: 'IMDB' },
+            maxsm_ratings_show_kp: { ru: 'Кинопоиск' },
+            maxsm_ratings_show_rt: { ru: 'Tomatoes' },
+            maxsm_ratings_show_mc: { ru: 'Metacritic' },
+            maxsm_ratings_quality: { ru: 'Качество внутри карточек' },
+            maxsm_ratings_quality_inlist: { ru: 'Качество на карточках' },
+            maxsm_ratings_quality_tv: { ru: 'Качество для сериалов' }
+        });
     }
 
     var SERVICE_CONFIGS = {
@@ -368,7 +398,7 @@
         'https://corsproxy.io/?url='
     ];
 
-    function fetchWithProxy(url, callback) {
+    function fetchWithProxy(url, cardId, callback) {
         try {
             var network = new Lampa.Reguest();
             network.timeout(10000);
@@ -377,14 +407,14 @@
                 workingProxy = 'direct';
                 callback(null, text);
             }, function () {
-                tryProxies(url, callback);
+                tryProxies(url, cardId, callback);
             });
         } catch (e) {
-            tryProxies(url, callback);
+            tryProxies(url, cardId, callback);
         }
     }
 
-    function tryProxies(url, callback) {
+    function tryProxies(url, cardId, callback) {
         var proxyList = (workingProxy && workingProxy !== 'direct') ? [workingProxy] : proxies;
 
         function tryProxy(index) {
@@ -450,7 +480,7 @@
 
         var apiUrl = 'https://jr.maxvol.pro/api/v1.0/torrents?search=' + encodeURIComponent(title) + '&year=' + year;
 
-        fetchWithProxy(apiUrl, function (err, data) {
+        fetchWithProxy(apiUrl, card.id, function (err, data) {
             if (err || !data) {
                 callback(null);
                 return;
@@ -600,7 +630,6 @@
     function updateQualityElement(text, render) {
         if (!render) return;
         
-        // Ищем или создаем контейнер для качества
         var qualityContainer = render.find('.theme-a-quality-container');
         if (!qualityContainer.length) {
             var infoBlock = render.find('.applecation__info');
@@ -696,34 +725,76 @@
         });
     }
 
-    function updateHiddenElements(ratings, render) {
-        if (!render) return;
+    function showRatingsModal(render) {
+        if (!render || !Lampa.Modal) return;
+        var rateLine = $('.full-start-new__rate-line', render);
+        if (!rateLine.length) return;
         
-        var imdbEl = $('.rate--imdb', render);
-        var kpEl = $('.rate--kp', render);
-        var tmdbEl = $('.rate--tmdb', render);
+        var modalContent = $('<div class="maxsm-modal-ratings"></div>');
         
-        if (ratings.imdb && !isNaN(ratings.imdb) && ratings.imdb > 0) {
-            imdbEl.removeClass('hide').find('> div').eq(0).text(parseFloat(ratings.imdb).toFixed(1));
+        function isNumericText(txt) {
+            if (!txt) return false;
+            var cleaned = String(txt).trim().replace(',', '.');
+            var n = parseFloat(cleaned);
+            return !isNaN(n) && isFinite(n);
         }
-        if (ratings.kp && !isNaN(ratings.kp) && ratings.kp > 0) {
-            kpEl.removeClass('hide').find('> div').eq(0).text(parseFloat(ratings.kp).toFixed(1));
+        
+        function extractValue(element) {
+            if (!element || !element.length) return '';
+            var divs = element.children('div');
+            for (var i = 0; i < divs.length; i++) {
+                var t = divs.eq(i).text().trim();
+                if (isNumericText(t)) return t;
+            }
+            var fallback = element.children().eq(0).text();
+            return (fallback || '').trim();
         }
-        if (ratings.tmdb && !isNaN(ratings.tmdb) && ratings.tmdb > 0) {
-            tmdbEl.find('> div').eq(0).text(parseFloat(ratings.tmdb).toFixed(1));
+        
+        var ratingOrder = [
+            'rate--tmdb',
+            'rate--imdb',
+            'rate--kp'
+        ];
+        
+        for (var i = 0; i < ratingOrder.length; i++) {
+            var className = ratingOrder[i];
+            var element = $('.' + className, rateLine);
+            if (!element.length) continue;
+            if (element.hasClass('hide') || !element.is(':visible')) continue;
+            
+            var value = extractValue(element);
+            if (!value) continue;
+            
+            var numericValue = parseFloat(String(value).replace(',', '.'));
+            var label = '';
+            
+            switch (className) {
+                case 'rate--tmdb':
+                    label = 'TMDB';
+                    break;
+                case 'rate--imdb':
+                    label = 'IMDb';
+                    break;
+                case 'rate--kp':
+                    label = 'Кинопоиск';
+                    break;
+            }
+            
+            var item = $('<div class="maxsm-modal-rating-line"></div>');
+            item.text(value + ' - ' + label);
+            modalContent.append(item);
         }
-    }
-
-    function insertRatings(rtRating, mcRating, oscars, awards, emmy, render) {
-        // Not needed for now
-    }
-
-    function calculateAverageRating(render) {
-        // Not needed for now
-    }
-
-    function insertIcons(render) {
-        // Not needed for now
+        
+        Lampa.Modal.open({
+            title: 'Оценка',
+            html: modalContent,
+            width: 600,
+            onBack: function () {
+                Lampa.Modal.close();
+                if (Lampa.Controller) Lampa.Controller.toggle('content');
+                return true;
+            }
+        });
     }
 
     function fetchAdditionalRatings(card, render) {
@@ -774,6 +845,13 @@
         
         // Загружаем качество
         syncQualityFromJacred(card, render);
+        
+        // Добавляем клик для открытия модального окна с рейтингами
+        rateLine.off('click.ratings-modal').on('click.ratings-modal', function(e) {
+            e.stopPropagation();
+            showRatingsModal(render);
+        });
+        rateLine.css('cursor', 'pointer');
         
         // Перемещаем реакции под рейтинги и делаем все видимыми
         setTimeout(function() {
@@ -904,7 +982,6 @@
                     line-height: 1;
                     vertical-align: middle;
                 }
-                /* Студии */
                 .applecation__studios {
                     display: flex;
                     flex-wrap: wrap;
@@ -993,7 +1070,6 @@
                     flex-shrink: 0;
                     position: relative;
                 }
-                /* Реакции под рейтингами, все видимы */
                 .applecation .full-start-new__reactions {
                     display: flex !important;
                     flex-direction: row !important;
@@ -1013,7 +1089,6 @@
                     width: 2.2em !important;
                     height: 2.2em !important;
                 }
-                /* Качество фона - адаптивное */
                 .full-start__background {
                     height: calc(100% + 6em);
                     left: 0 !important;
@@ -1043,6 +1118,30 @@
                     font-size: 0.85em;
                     font-weight: 600;
                     margin-left: 0.5em;
+                }
+                .full-start-new__rate-line {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 0.5em;
+                    margin-bottom: 0.5em;
+                    cursor: pointer;
+                }
+                .full-start__rate {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 0.3em;
+                }
+                .maxsm-modal-ratings {
+                    padding: 1.25em;
+                    font-size: 1.4em;
+                    line-height: 1.6;
+                }
+                .maxsm-modal-rating-line {
+                    padding: 0.5em 0;
+                    border-bottom: 0.0625em solid rgba(255, 255, 255, 0.1);
+                }
+                .maxsm-modal-rating-line:last-child {
+                    border-bottom: none;
                 }
             </style>`;
             $('body').append(css);
@@ -1399,6 +1498,30 @@
             param: { name: 'theme_a_quality_tv', type: 'trigger', default: true },
             field: { name: 'Качество для сериалов', description: 'Показывать качество для сериалов' }
         });
+        
+        Lampa.SettingsApi.addParam({
+            component: 'theme_a',
+            param: { name: 'theme_a_clear_cache', type: 'button' },
+            field: { name: 'Очистить кеш рейтингов и качества' },
+            onChange: function() {
+                _jacredCache = {};
+                try {
+                    var keys = ['jacred_v4_', 'maxsm_ratings_omdb_cache', 'maxsm_ratings_kp_cache', 'maxsm_ratings_id_mapping_cache'];
+                    keys.forEach(function(key) {
+                        var items = Lampa.Storage.get(key, {});
+                        if (items && typeof items === 'object') {
+                            for (var k in items) {
+                                if (items.hasOwnProperty(k)) delete items[k];
+                            }
+                            Lampa.Storage.set(key, items);
+                        }
+                    });
+                    Lampa.Noty.show('Кеш очищен');
+                } catch(e) {
+                    Lampa.Noty.show('Ошибка очистки кеша');
+                }
+            }
+        });
     }
 
     // =================================================================
@@ -1516,6 +1639,7 @@
                     var badges = document.querySelectorAll('.click-quality, .click-quality-full');
                     for (var i = 0; i < badges.length; i++) badges[i].remove();
                 }, 200);
+                fetchAdditionalRatings(movie, render);
             }
         });
 
