@@ -14,7 +14,6 @@
         var heroEl = null;
         var overlayObserver = null;
         var currentTheme = 'dark';
-        var styleObserver = null;
 
         // ---- Темы оформления ----
         var themes = {
@@ -23,9 +22,9 @@
                 primary: '#e50914',
                 secondary: '#141414',
                 accent: '#0071eb',
-                cardScale: 1.08,
+                cardScale: 1.04,  // Уменьшен вылет (было 1.08)
                 cardRadius: '8px',
-                glowIntensity: '0 0 20px rgba(0,0,0,0.5)',
+                glowIntensity: '0 0 15px rgba(0,0,0,0.4)',
                 textColor: '#ffffff',
                 secondaryText: '#b3b3b3'
             },
@@ -34,9 +33,9 @@
                 primary: '#0077b6',
                 secondary: '#023e8a',
                 accent: '#00b4d8',
-                cardScale: 1.08,
+                cardScale: 1.04,  // Уменьшен вылет
                 cardRadius: '12px',
-                glowIntensity: '0 0 20px rgba(0,123,255,0.4)',
+                glowIntensity: '0 0 15px rgba(0,123,255,0.3)',
                 textColor: '#ffffff',
                 secondaryText: '#ade8f4'
             },
@@ -45,9 +44,9 @@
                 primary: '#d90429',
                 secondary: '#2b2d42',
                 accent: '#ef233c',
-                cardScale: 1.08,
+                cardScale: 1.04,  // Уменьшен вылет
                 cardRadius: '8px',
-                glowIntensity: '0 0 20px rgba(217,4,41,0.4)',
+                glowIntensity: '0 0 15px rgba(217,4,41,0.3)',
                 textColor: '#ffffff',
                 secondaryText: '#ffb3b3'
             }
@@ -68,16 +67,24 @@
             currentTheme = themeKey;
             Lampa.Storage.set('netflix_theme_selected', themeKey);
             applyThemeStyles();
-            // Принудительно обновляем CSS после смены темы
+            injectCSS();
+            // Принудительно обновляем стили на всех страницах
             setTimeout(function() {
-                injectCSS();
                 applyThemeStyles();
-                // Обновляем hero если есть
-                var focusedCard = document.querySelector('.card.focus');
-                if (focusedCard && Lampa.Storage.get('netflix_hero', true)) {
-                    updateHero(focusedCard);
+                var active = Lampa.Activity.active();
+                if (active && active.activity && active.activity.render) {
+                    var render = active.activity.render();
+                    if (render) applyStylesToElement(render);
                 }
-            }, 50);
+            }, 100);
+        }
+
+        function applyStylesToElement(element) {
+            if (!element) return;
+            var theme = themes[currentTheme];
+            if (!theme) return;
+            $(element).find('.card').css('transform', '');
+            $(element).find('.card__view').css('border-radius', theme.cardRadius);
         }
 
         // ---- Применение стилей темы (глобально) ----
@@ -85,7 +92,6 @@
             var theme = themes[currentTheme];
             if (!theme) return;
             
-            // Создаём или обновляем динамический стиль
             var style = document.getElementById('netflix-theme-dynamic');
             if (!style) {
                 style = document.createElement('style');
@@ -111,10 +117,11 @@
                     color: white !important;
                 }
                 
-                /* Карточки при фокусе */
+                /* Карточки при фокусе - уменьшенный вылет */
                 .card.focus {
                     transform: scale(${theme.cardScale}) !important;
                     z-index: 10 !important;
+                    transition: transform 0.2s ease-out !important;
                 }
                 
                 .card.focus .card__view {
@@ -124,6 +131,7 @@
                 .card .card__view {
                     border-radius: ${theme.cardRadius} !important;
                     overflow: hidden !important;
+                    transition: box-shadow 0.2s ease-out !important;
                 }
                 
                 /* Скроллбар */
@@ -169,9 +177,21 @@
                     background: ${theme.primary} !important;
                 }
                 
-                /* Кнопка воспроизведения */
+                /* full-start кнопки */
                 .full-start__button.focus .full-start__button__title {
                     color: white !important;
+                }
+                
+                /* Стили для карточки фильма */
+                .full-start {
+                    background-color: ${theme.secondary} !important;
+                }
+                .full-start__background {
+                    opacity: 0.3 !important;
+                }
+                .full-start__title,
+                .full-start__title-original {
+                    color: ${theme.textColor} !important;
                 }
             `;
         }
@@ -192,28 +212,28 @@
                     bottom: 0;
                     left: 0;
                     right: 0;
-                    padding: 15px 10px;
+                    padding: 12px 8px;
                     background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0) 100%);
                     transform: translateY(100%);
-                    transition: transform 0.3s ease;
+                    transition: transform 0.25s ease;
                     z-index: 3;
                 }
                 .card.focus .nf-card-overlay {
                     transform: translateY(0);
                 }
                 .nf-card-overlay__title {
-                    font-size: 0.85em;
+                    font-size: 0.8em;
                     font-weight: 600;
                     color: white;
-                    margin-bottom: 4px;
+                    margin-bottom: 3px;
                     white-space: nowrap;
                     overflow: hidden;
                     text-overflow: ellipsis;
                 }
                 .nf-card-overlay__meta {
                     display: flex;
-                    gap: 8px;
-                    font-size: 0.7em;
+                    gap: 6px;
+                    font-size: 0.65em;
                     color: rgba(255,255,255,0.7);
                 }
             ` : '.nf-card-overlay { display: none !important; }';
@@ -224,8 +244,8 @@
                     top: 0;
                     left: 0;
                     right: 0;
-                    height: 75vh;
-                    min-height: 500px;
+                    height: 70vh;
+                    min-height: 450px;
                     z-index: 5;
                     opacity: 0;
                     visibility: hidden;
@@ -261,7 +281,7 @@
                     animation: nf-fade-up 0.6s ease;
                 }
                 .nf-hero__title {
-                    font-size: 3.5em;
+                    font-size: 3em;
                     font-weight: 700;
                     color: white;
                     margin-bottom: 0.3em;
@@ -270,17 +290,17 @@
                 .nf-hero__meta {
                     display: flex;
                     gap: 1em;
-                    font-size: 1.1em;
+                    font-size: 1em;
                     color: rgba(255,255,255,0.9);
-                    margin-bottom: 1em;
+                    margin-bottom: 0.8em;
                 }
                 .nf-hero__vote::before {
                     content: "★";
                     margin-right: 0.3em;
                 }
                 .nf-hero__overview {
-                    font-size: 1em;
-                    line-height: 1.5;
+                    font-size: 0.9em;
+                    line-height: 1.4;
                     color: rgba(255,255,255,0.85);
                     display: -webkit-box;
                     -webkit-line-clamp: 3;
@@ -291,14 +311,14 @@
             
             var animationStyles = animationsEnabled ? `
                 @keyframes nf-fade-up {
-                    from { opacity: 0; transform: translateY(30px); }
+                    from { opacity: 0; transform: translateY(20px); }
                     to { opacity: 1; transform: translateY(0); }
                 }
                 .nf-row-animated .items-line__body {
-                    animation: nf-fade-up 0.5s ease forwards;
+                    animation: nf-fade-up 0.4s ease forwards;
                 }
                 .card {
-                    transition: transform 0.3s cubic-bezier(0.2, 0, 0, 1);
+                    transition: transform 0.2s ease-out !important;
                 }
             ` : '';
             
@@ -311,15 +331,12 @@
                 ${overlayStyles}
                 ${animationStyles}
                 
-                .card .card__view {
-                    transition: box-shadow 0.3s ease;
-                }
                 .items-line {
                     margin-bottom: 0;
                 }
                 ::-webkit-scrollbar {
-                    width: 6px;
-                    height: 6px;
+                    width: 5px;
+                    height: 5px;
                 }
             `;
             document.head.appendChild(style);
@@ -552,12 +569,6 @@
                 attributeFilter: ['class'],
                 subtree: true
             });
-            
-            // Наблюдаем за появлением новых страниц (full)
-            var pageObserver = new MutationObserver(function() {
-                applyThemeStyles();
-            });
-            pageObserver.observe(target, { childList: true, subtree: true });
         }
 
         // ---- Utility ----
@@ -607,11 +618,57 @@
             });
         }
 
+        // ---- ПОДНЯТИЕ ПАПКИ НАВЕРХ (как у "Интерфейс Мод") ----
+        function moveFolderToTop() {
+            setTimeout(function() {
+                var netflixFolder = $('.settings-folder[data-component="netflix_theme"]');
+                var interfaceFolder = $('.settings-folder[data-component="interface"]');
+                
+                if (netflixFolder.length && interfaceFolder.length) {
+                    // Вставляем после папки "Интерфейс" (как в плагине "Интерфейс Мод")
+                    netflixFolder.insertAfter(interfaceFolder);
+                } else if (netflixFolder.length) {
+                    // Если нет папки "Интерфейс", просто ищем первый элемент
+                    var firstFolder = $('.settings-folder').first();
+                    if (firstFolder.length) {
+                        netflixFolder.insertAfter(firstFolder);
+                    }
+                }
+                
+                // Стилизуем папку
+                netflixFolder.css({
+                    'border-top': '1px solid rgba(255,255,255,0.1)',
+                    'margin-top': '0.5em',
+                    'padding-top': '0.5em'
+                });
+            }, 200);
+        }
+
+        // ---- Фикс слетания темы в карточке фильма ----
+        function fixThemeOnFullCard() {
+            Lampa.Listener.follow('full', function(e) {
+                if (e.type === 'complite') {
+                    setTimeout(function() {
+                        applyThemeStyles();
+                        // Применяем стили к рендеру карточки
+                        if (e.object && e.object.activity && e.object.activity.render) {
+                            var render = e.object.activity.render();
+                            if (render) {
+                                $(render).find('.full-start').css('backgroundColor', themes[currentTheme].secondary);
+                                $(render).find('.full-start__title, .full-start__title-original')
+                                    .css('color', themes[currentTheme].textColor);
+                            }
+                        }
+                    }, 100);
+                }
+            });
+        }
+
         // ---- Настройки (отдельная папка наверху) ----
         function addSettings() {
             if (!Lampa.SettingsApi) return;
 
-            // Добавляем компонент Netflix Theme в корень настроек (рядом с Интерфейсом)
+            // Добавляем компонент Netflix Theme
             Lampa.SettingsApi.addComponent({
                 component: 'netflix_theme',
                 name: Lampa.Lang.translate('netflix_theme_name') || 'Netflix Theme',
@@ -707,25 +764,8 @@
                 }
             });
             
-            // Перемещаем папку с настройками наверх (рядом с Интерфейсом)
-            setTimeout(function() {
-                var netflixFolder = $('.settings-folder[data-component="netflix_theme"]');
-                var interfaceFolder = $('.settings-folder[data-component="interface"]');
-                if (netflixFolder.length && interfaceFolder.length) {
-                    netflixFolder.insertAfter(interfaceFolder);
-                }
-            }, 100);
-        }
-
-        // ---- Переопределение для сохранения темы на странице фильма ----
-        function patchFullCard() {
-            Lampa.Listener.follow('full', function(e) {
-                if (e.type === 'complite') {
-                    setTimeout(function() {
-                        applyThemeStyles();
-                    }, 50);
-                }
-            });
+            // Поднимаем папку наверх
+            moveFolderToTop();
         }
 
         // ---- Main Init ----
@@ -735,7 +775,7 @@
             addSettings();
             injectCSS();
             applyThemeStyles();
-            patchFullCard();
+            fixThemeOnFullCard();
 
             setTimeout(function () {
                 var overlaysEnabled = Lampa.Storage.get('netflix_overlays', true);
@@ -757,9 +797,6 @@
 
                 Lampa.Listener.follow('full', function (e) {
                     if (e.type === 'start') hideHero();
-                    if (e.type === 'complite') {
-                        setTimeout(applyThemeStyles, 50);
-                    }
                 });
 
                 Lampa.Listener.follow('player', function (e) {
