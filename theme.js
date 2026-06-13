@@ -358,124 +358,7 @@
     }
 
     // =================================================================
-    // STUDIO SUBSCRIPTION
-    // =================================================================
-    var ThemeAStudioSubscription = (function () {
-        var storageKey = 'theme_a_subscription_studios';
-
-        function getParams() {
-            var raw = Lampa.Storage.get(storageKey, '[]');
-            return typeof raw === 'string' ? (function () { try { return JSON.parse(raw); } catch (e) { return []; } })() : (Array.isArray(raw) ? raw : []);
-        }
-
-        function setParams(params) {
-            Lampa.Storage.set(storageKey, params);
-        }
-
-        function add(company) {
-            var c = { id: company.id, name: company.name || '', logo_path: company.logo_path || '' };
-            var studios = getParams();
-            if (!studios.find(function (s) { return String(s.id) === String(c.id); })) {
-                studios.push(c);
-                setParams(studios);
-                Lampa.Noty.show('Добавлено в подписки');
-            }
-        }
-
-        function remove(company) {
-            var studios = getParams();
-            var idx = studios.findIndex(function (c) { return c.id === company.id; });
-            if (idx !== -1) {
-                studios.splice(idx, 1);
-                setParams(studios);
-                Lampa.Noty.show('Удалено из подписок');
-            }
-        }
-
-        function isSubscribed(company) {
-            return !!getParams().find(function (c) { return c.id === company.id; });
-        }
-
-        function injectButton(object) {
-            var attempts = 0;
-            var interval = setInterval(function () {
-                var nameEl = $('.company-start__name');
-                var company = object.company;
-                if (!nameEl.length || !company || !company.id) {
-                    attempts++;
-                    if (attempts > 25) clearInterval(interval);
-                    return;
-                }
-                clearInterval(interval);
-                if (nameEl.find('.studio-subscription-btn').length) return;
-
-                var btn = $('<div class="studio-subscription-btn selector"></div>');
-
-                function updateState() {
-                    var sub = isSubscribed(company);
-                    btn.text(sub ? 'Отписаться' : 'Подписаться');
-                    btn.removeClass('studio-subscription-btn--sub studio-subscription-btn--unsub').addClass(sub ? 'studio-subscription-btn--unsub' : 'studio-subscription-btn--sub');
-                }
-
-                function doToggle() {
-                    if (isSubscribed(company)) remove(company);
-                    else add({ id: company.id, name: company.name || '', logo_path: company.logo_path || '' });
-                    updateState();
-                }
-
-                btn.on('click', function (e) {
-                    e.stopPropagation();
-                    e.preventDefault();
-                    doToggle();
-                });
-                btn.on('hover:enter', doToggle);
-
-                updateState();
-                nameEl.append(btn);
-
-                setTimeout(function () {
-                    try {
-                        if (Lampa.Controller && Lampa.Controller.collectionFocus) {
-                            Lampa.Controller.collectionFocus(btn[0]);
-                        }
-                    } catch (e) { }
-                }, 300);
-            }, 200);
-        }
-
-        return {
-            init: function () {
-                var existing = Lampa.Storage.get(storageKey, '[]');
-                var fromOld = Lampa.Storage.get('subscription_studios', '[]');
-                if ((!existing || existing === '[]' || (Array.isArray(existing) && !existing.length)) && fromOld && fromOld !== '[]') {
-                    try {
-                        var arr = typeof fromOld === 'string' ? JSON.parse(fromOld) : fromOld;
-                        if (Array.isArray(arr) && arr.length) setParams(arr);
-                    } catch (e) { }
-                }
-            }
-        };
-    })();
-
-    // =================================================================
-    // REMOVE SHOTS SECTION
-    // =================================================================
-    function removeShotsSection() {
-        function doRemove() {
-            $('.items-line').each(function () {
-                var title = $(this).find('.items-line__title').text().trim();
-                if (title === 'Shots' || title === 'shots') {
-                    $(this).remove();
-                }
-            });
-        }
-        setTimeout(doRemove, 1000);
-        setTimeout(doRemove, 3000);
-        setTimeout(doRemove, 6000);
-    }
-
-    // =================================================================
-    // JACRED QUALITY MARKS
+    // JACRED QUALITY MARKS (ONLY FOR DETAIL PAGE)
     // =================================================================
     var _jacredCache = {};
     var workingProxy = null;
@@ -668,80 +551,12 @@
         });
     }
 
-    // =================================================================
-    // BADGES ON CARDS
-    // =================================================================
     function getCardType(card) {
         var type = card.media_type || card.type;
         if (type === 'movie' || type === 'tv') return type;
         return (card.name || card.original_name) ? 'tv' : 'movie';
     }
 
-    function createBadge(cssClass, label) {
-        var badge = document.createElement('div');
-        badge.classList.add('card__mark');
-        badge.classList.add('card__mark--' + cssClass);
-        badge.textContent = label;
-        return badge;
-    }
-
-    var cardsObserver = null;
-
-    function renderBadges(container, data, movie) {
-        container.empty();
-        if (data.rus && Lampa.Storage.get('theme_a_badge_ru', true)) container.append(createBadge('ru', 'RU'));
-        if (data.ukr && Lampa.Storage.get('theme_a_badge_ua', true)) container.append(createBadge('ua', 'UA'));
-        if (data.eng && Lampa.Storage.get('theme_a_badge_en', true)) container.append(createBadge('en', 'EN'));
-        if (data.resolution && data.resolution !== 'SD') {
-            if (data.resolution === '4K' && Lampa.Storage.get('theme_a_badge_4k', true)) container.append(createBadge('4k', '4K'));
-            else if (data.resolution === 'FHD' && Lampa.Storage.get('theme_a_badge_fhd', true)) container.append(createBadge('fhd', 'FHD'));
-            else if (data.resolution === 'HD' && Lampa.Storage.get('theme_a_badge_fhd', true)) container.append(createBadge('hd', 'HD'));
-            else if (Lampa.Storage.get('theme_a_badge_fhd', true)) container.append(createBadge('hd', data.resolution));
-        }
-        if (data.hdr && Lampa.Storage.get('theme_a_badge_hdr', true)) container.append(createBadge('hdr', 'HDR'));
-        if (movie) {
-            var rating = parseFloat(movie.imdb_rating || movie.kp_rating || movie.vote_average || 0);
-            if (rating > 0) {
-                var rBadge = document.createElement('div');
-                rBadge.classList.add('card__mark', 'card__mark--rating');
-                rBadge.innerHTML = '<span class="mark-star">★</span>' + rating.toFixed(1);
-                container.append(rBadge);
-            }
-        }
-    }
-
-    function processCards() {
-        $('.card:not(.jacred-mark-processed-v2)').each(function () {
-            var card = $(this);
-            card.addClass('jacred-mark-processed-v2');
-
-            var movie = card[0].heroMovieData || card.data('item') || (card[0] && (card[0].card_data || card[0].item)) || null;
-            if (movie && movie.id && !movie.size) {
-                var marksContainer = card.find('.card-marks');
-                if (!marksContainer.length) {
-                    marksContainer = $('<div class="card-marks"></div>');
-                    card.find('.card__view').append(marksContainer);
-                }
-                getBestJacred(movie, function (data) {
-                    if (!data) data = { empty: true };
-                    renderBadges(marksContainer, data, movie);
-                });
-            }
-        });
-    }
-
-    function observeCardRows() {
-        if (cardsObserver) cardsObserver.disconnect();
-        cardsObserver = new MutationObserver(function () {
-            processCards();
-        });
-        cardsObserver.observe(document.body, { childList: true, subtree: true });
-        processCards();
-    }
-
-    // =================================================================
-    // FULL CARD RATINGS AND REACTIONS
-    // =================================================================
     function studiosEstimateFallbackQuality(normalized, originalData) {
         var year = 0;
         if (normalized && normalized.release_date && normalized.release_date.length >= 4) {
@@ -1088,41 +903,6 @@
                     font-size: 0.85em;
                     font-weight: 600;
                 }
-                /* Card marks styles */
-                .card-marks {
-                    position: absolute;
-                    top: 2.2em;
-                    left: -0.2em;
-                    display: flex;
-                    flex-direction: column;
-                    gap: 0.15em;
-                    z-index: 10;
-                    pointer-events: none;
-                }
-                .card__mark {
-                    padding: 0.35em 0.45em;
-                    font-size: 0.8em;
-                    font-weight: 800;
-                    line-height: 1;
-                    letter-spacing: 0.03em;
-                    border-radius: 0.3em;
-                    display: inline-flex;
-                    align-items: center;
-                    justify-content: center;
-                    align-self: flex-start;
-                    opacity: 0;
-                    animation: mark-fade-in 0.35s ease-out forwards;
-                    border: 1px solid rgba(255,255,255,0.15);
-                }
-                .card__mark--ru { background: linear-gradient(135deg, #8e24aa, #ce93d8); color: #fff; }
-                .card__mark--ua { background: linear-gradient(135deg, #1565c0, #42a5f5); color: #fff; }
-                .card__mark--4k { background: linear-gradient(135deg, #e65100, #ff9800); color: #fff; }
-                .card__mark--fhd { background: linear-gradient(135deg, #4a148c, #ab47bc); color: #fff; }
-                .card__mark--hd { background: linear-gradient(135deg, #1b5e20, #66bb6a); color: #fff; }
-                .card__mark--en { background: linear-gradient(135deg, #37474f, #78909c); color: #fff; }
-                .card__mark--hdr { background: linear-gradient(135deg, #f57f17, #ffeb3b); color: #000; }
-                .card__mark--rating { background: linear-gradient(135deg, #1a1a2e, #16213e); color: #ffd700; }
-                @keyframes mark-fade-in { to { opacity: 1; } }
             </style>`;
             $('body').append(css);
         }
@@ -1188,7 +968,7 @@
                 var filePath = (data && data.logos && data.logos[0] && data.logos[0].file_path) ? data.logos[0].file_path : null;
 
                 if (filePath) {
-                    var imgUrl = Lampa.TMDB.image('/t/p/w500' + filePath);
+                    var imgUrl = Lampa.TMDB.image('/t/p/original' + filePath);
                     var img = new Image();
                     img.onload = function () {
                         if (done) return;
@@ -1289,6 +1069,17 @@
                     parts = parts.concat(g);
                 }
                 metaText.html(parts.join(' · '));
+            }
+
+            var networkNode = render.find('.applecation__network');
+            if (networkNode.length) {
+                if (movie.networks && movie.networks.length && movie.networks[0].logo_path) {
+                    networkNode.html('<img src="' + Lampa.Api.img(movie.networks[0].logo_path, 'w200') + '" alt="' + movie.networks[0].name + '">');
+                } else if (movie.production_companies && movie.production_companies.length && movie.production_companies[0].logo_path) {
+                    networkNode.html('<img src="' + Lampa.Api.img(movie.production_companies[0].logo_path, 'w200') + '" alt="' + movie.production_companies[0].name + '">');
+                } else {
+                    networkNode.remove();
+                }
             }
         }
 
@@ -1392,48 +1183,6 @@
         Lampa.SettingsApi.addParam({
             component: 'theme_a',
             param: { type: 'title' },
-            field: { name: 'Бейджи на карточках' }
-        });
-
-        Lampa.SettingsApi.addParam({
-            component: 'theme_a',
-            param: { name: 'theme_a_badge_ru', type: 'trigger', default: true },
-            field: { name: 'Русская озвучка (RU)', description: 'Показывать метку наличия русского дубляжа' }
-        });
-
-        Lampa.SettingsApi.addParam({
-            component: 'theme_a',
-            param: { name: 'theme_a_badge_ua', type: 'trigger', default: true },
-            field: { name: 'Украинская озвучка (UA)', description: 'Показывать метку наличия украинского дубляжа' }
-        });
-
-        Lampa.SettingsApi.addParam({
-            component: 'theme_a',
-            param: { name: 'theme_a_badge_en', type: 'trigger', default: true },
-            field: { name: 'Английская озвучка (EN)', description: 'Показывать метку наличия английской дорожки' }
-        });
-
-        Lampa.SettingsApi.addParam({
-            component: 'theme_a',
-            param: { name: 'theme_a_badge_4k', type: 'trigger', default: true },
-            field: { name: 'Качество 4K', description: 'Показывать метку наличия 4K разрешения' }
-        });
-
-        Lampa.SettingsApi.addParam({
-            component: 'theme_a',
-            param: { name: 'theme_a_badge_fhd', type: 'trigger', default: true },
-            field: { name: 'Качество FHD/HD', description: 'Показывать метку наличия FHD/HD' }
-        });
-
-        Lampa.SettingsApi.addParam({
-            component: 'theme_a',
-            param: { name: 'theme_a_badge_hdr', type: 'trigger', default: true },
-            field: { name: 'HDR / Dolby Vision', description: 'Показывать метку наличия HDR или Dolby Vision' }
-        });
-
-        Lampa.SettingsApi.addParam({
-            component: 'theme_a',
-            param: { type: 'title' },
             field: { name: 'Качество' }
         });
 
@@ -1445,39 +1194,95 @@
     }
 
     // =================================================================
-    // MENU BUTTONS
+    // MENU BUTTONS - один пункт "Стриминги" как "Зарубежное"
     // =================================================================
-    function addMenuButtons() {
-        var services = ['netflix', 'apple', 'hbo', 'amazon', 'disney', 'paramount', 'sky_showtime', 'hulu', 'syfy', 'educational_and_reality'];
-        var serviceTitles = {
-            'netflix': 'Netflix',
-            'apple': 'Apple TV+',
-            'hbo': 'HBO / Max',
-            'amazon': 'Prime Video',
-            'disney': 'Disney+',
-            'paramount': 'Paramount+',
-            'sky_showtime': 'Sky Showtime',
-            'hulu': 'Hulu',
-            'syfy': 'Syfy',
-            'educational_and_reality': 'Познавательное'
-        };
+    function addMenuButton() {
+        var menuIconSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="1.2em" height="1.2em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16v2H4V6zm0 5h16v2H4v-2zm0 5h16v2H4v-2z"/><circle cx="12" cy="12" r="2" fill="currentColor"/></svg>';
+        
+        var menuItem = $(
+            '<li class="menu__item selector">' +
+                '<div class="menu__ico">' + menuIconSvg + '</div>' +
+                '<div class="menu__text">Стриминги</div>' +
+            '</li>'
+        );
 
-        services.forEach(function (id) {
-            var config = SERVICE_CONFIGS[id];
-            if (!config) return;
-
-            var btn = $('<li class="menu__item selector" data-action="' + id + '"><div class="menu__ico">' + config.icon + '</div><div class="menu__text">' + serviceTitles[id] + '</div></li>');
-            btn.on('hover:enter', function () {
-                Lampa.Activity.push({
-                    url: '',
-                    title: serviceTitles[id],
-                    component: 'studios_main',
-                    service_id: id,
-                    page: 1
+        menuItem.on('hover:enter', function() {
+            var items = [];
+            var services = ['netflix', 'apple', 'hbo', 'amazon', 'disney', 'paramount', 'sky_showtime', 'hulu', 'syfy', 'educational_and_reality'];
+            var serviceTitles = {
+                'netflix': 'Netflix',
+                'apple': 'Apple TV+',
+                'hbo': 'HBO / Max',
+                'amazon': 'Prime Video',
+                'disney': 'Disney+',
+                'paramount': 'Paramount+',
+                'sky_showtime': 'Sky Showtime',
+                'hulu': 'Hulu',
+                'syfy': 'Syfy',
+                'educational_and_reality': 'Познавательное'
+            };
+            var serviceIcons = {
+                'netflix': '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M16.5 2L16.5 22" stroke="#E50914" stroke-width="3"/><path d="M7.5 2L7.5 22" stroke="#E50914" stroke-width="3"/><path d="M7.5 2L16.5 22" stroke="#E50914" stroke-width="3"/></svg>',
+                'apple': '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>',
+                'hbo': '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M7.042 16.896H4.414v-3.754H2.708v3.754H.01L0 7.22h2.708v3.6h1.706v-3.6h2.628zm12.043.046C21.795 16.94 24 14.689 24 11.978a4.89 4.89 0 0 0-4.915-4.92c-2.707-.002-4.09 1.991-4.432 2.795.003-1.207-1.187-2.632-2.58-2.634H7.59v9.674l4.181.001c1.686 0 2.886-1.46 2.888-2.713.385.788 1.72 2.762 4.427 2.76z"/></svg>',
+                'amazon': '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 15c2.4 1.7 5.1 2.6 8 2.6 2.9 0 5.6-.9 8-2.6" stroke="currentColor" stroke-width="1.4"/><path d="M15.5 14.4L18 16.8 15.5 19.2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
+                'disney': '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M5 10c2.2-2.5 5-3.7 8-3.7 2.2 0 4.1.7 5.8 1.8" stroke="currentColor" stroke-width="1.4"/><path d="M12 13v4M10 15h4" stroke="currentColor" stroke-width="1.4"/></svg>',
+                'paramount': '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M12 2L2 22H22L12 2ZM12 6.5L18.5 19.5H5.5L12 6.5Z"/></svg>',
+                'sky_showtime': '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M9 9.5c1-.8 2.2-1.2 3.5-1.2 2 0 3.7 1 4.7 2.6" stroke="currentColor" stroke-width="1.2"/></svg>',
+                'hulu': '<svg viewBox="0 0 24 24" width="24" height="24" fill="#3DBB3D"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14.5v-9l6 4.5-6 4.5z"/></svg>',
+                'syfy': '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M12 2L4.5 20.29L5.21 21L12 18L18.79 21L19.5 20.29L12 2Z"/></svg>',
+                'educational_and_reality': '<svg viewBox="0 0 24 24" width="24" height="24" fill="#FF9800"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/></svg>'
+            };
+            
+            services.forEach(function(id) {
+                items.push({
+                    title: '<div class="settings-folder" style="padding:0!important"><div style="width:2.2em;height:1.7em;padding-right:.5em">' + serviceIcons[id] + '</div><div style="font-size:1.3em">' + serviceTitles[id] + '</div></div>'
                 });
             });
-            $('.menu .menu__list').eq(0).append(btn);
+            
+            Lampa.Select.show({
+                title: 'Стриминги',
+                items: items,
+                onSelect: function(selected) {
+                    var index = items.indexOf(selected);
+                    if (index >= 0) {
+                        var id = services[index];
+                        var config = SERVICE_CONFIGS[id];
+                        if (config) {
+                            Lampa.Activity.push({
+                                url: '',
+                                title: config.title,
+                                component: 'studios_main',
+                                service_id: id,
+                                page: 1
+                            });
+                        }
+                    }
+                },
+                onBack: function() {
+                    Lampa.Controller.toggle('menu');
+                }
+            });
         });
+
+        $('.menu .menu__list').eq(0).append(menuItem);
+    }
+
+    // =================================================================
+    // REMOVE SHOTS SECTION
+    // =================================================================
+    function removeShotsSection() {
+        function doRemove() {
+            $('.items-line').each(function () {
+                var title = $(this).find('.items-line__title').text().trim();
+                if (title === 'Shots' || title === 'shots') {
+                    $(this).remove();
+                }
+            });
+        }
+        setTimeout(doRemove, 1000);
+        setTimeout(doRemove, 3000);
+        setTimeout(doRemove, 6000);
     }
 
     // =================================================================
@@ -1487,13 +1292,11 @@
         setupSettings();
         Lampa.Component.add('studios_main', StudiosMain);
         Lampa.Component.add('studios_view', StudiosView);
-        ThemeAStudioSubscription.init();
         removeShotsSection();
-        addMenuButtons();
+        addMenuButton();
         initAppleTvFullCard();
         initAppleTvFullCardLogoRuntime();
         initAppleTvFullCardInfoRuntime();
-        observeCardRows();
 
         Lampa.Listener.follow('full', function (e) {
             if (e.type !== 'complite') return;
