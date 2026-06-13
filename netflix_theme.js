@@ -7,7 +7,7 @@
         window.plugin_netflix_theme_ready = true;
 
         // ============================================
-        // Netflix Theme for Lampa TV v2.0
+        // Netflix Theme for Lampa TV
         // ============================================
 
         var heroTimer = null;
@@ -15,249 +15,23 @@
         var overlayObserver = null;
         var rowObserver = null;
 
-        // ---- Настройки по умолчанию ----
-        var defaultSettings = {
-            theme: 'dark',
-            primaryColor: '#e50914',
-            secondaryColor: '#221f1f',
-            accentColor: '#0071eb',
-            heroEnabled: true,
-            overlaysEnabled: true,
-            animationsEnabled: true,
-            cardScale: 1.08,
-            cardBorderRadius: 0,
-            glowIntensity: 'medium',
-            heroBlur: 0,
-            fontFamily: 'default'
-        };
+        // ---- CSS Injection ----
+        function injectCSS() {
+            if (document.getElementById('netflix-theme-css')) return;
 
-        var currentSettings = {};
-
-        // ---- Загрузка/сохранение настроек ----
-        function loadSettings() {
-            for (var key in defaultSettings) {
-                var saved = Lampa.Storage.get('netflix_theme_' + key);
-                if (saved !== undefined && saved !== null) {
-                    currentSettings[key] = saved;
-                } else {
-                    currentSettings[key] = defaultSettings[key];
-                }
-            }
+            var style = document.createElement('style');
+            style.id = 'netflix-theme-css';
+            style.type = 'text/css';
+            style.textContent = getThemeCSS();
+            document.head.appendChild(style);
         }
 
-        function saveSetting(key, value) {
-            currentSettings[key] = value;
-            Lampa.Storage.set('netflix_theme_' + key, value);
-            applyTheme();
-        }
-
-        // ---- Цветовые темы ----
-        var themes = {
-            netflix: {
-                name: 'Netflix Classic',
-                primaryColor: '#e50914',
-                secondaryColor: '#141414',
-                accentColor: '#0071eb',
-                gradientStart: '#e50914',
-                gradientEnd: '#b20710'
-            },
-            dark: {
-                name: 'Dark Night',
-                primaryColor: '#2c3e50',
-                secondaryColor: '#1a1a2e',
-                accentColor: '#3498db',
-                gradientStart: '#2c3e50',
-                gradientEnd: '#1a1a2e'
-            },
-            blue: {
-                name: 'Blue Ocean',
-                primaryColor: '#0077b6',
-                secondaryColor: '#023e8a',
-                accentColor: '#00b4d8',
-                gradientStart: '#0077b6',
-                gradientEnd: '#023e8a'
-            },
-            cyan: {
-                name: 'Cyan Dream',
-                primaryColor: '#00b4d8',
-                secondaryColor: '#03045e',
-                accentColor: '#90e0ef',
-                gradientStart: '#00b4d8',
-                gradientEnd: '#03045e'
-            },
-            red: {
-                name: 'Red Passion',
-                primaryColor: '#d90429',
-                secondaryColor: '#2b2d42',
-                accentColor: '#ef233c',
-                gradientStart: '#d90429',
-                gradientEnd: '#8d0801'
-            },
-            green: {
-                name: 'Green Forest',
-                primaryColor: '#2d6a4f',
-                secondaryColor: '#1b4332',
-                accentColor: '#52b788',
-                gradientStart: '#2d6a4f',
-                gradientEnd: '#1b4332'
-            },
-            purple: {
-                name: 'Purple Galaxy',
-                primaryColor: '#7209b7',
-                secondaryColor: '#3f37c9',
-                accentColor: '#b5179e',
-                gradientStart: '#7209b7',
-                gradientEnd: '#3f37c9'
-            },
-            orange: {
-                name: 'Orange Sunset',
-                primaryColor: '#f4a261',
-                secondaryColor: '#e76f51',
-                accentColor: '#e9c46a',
-                gradientStart: '#f4a261',
-                gradientEnd: '#e76f51'
-            },
-            gold: {
-                name: 'Gold Royal',
-                primaryColor: '#ffd700',
-                secondaryColor: '#1a1a1a',
-                accentColor: '#ffaa00',
-                gradientStart: '#ffd700',
-                gradientEnd: '#ff8c00'
-            }
-        };
-
-        // ---- Генерация CSS ----
-        function generateCSS() {
-            var primary = currentSettings.primaryColor;
-            var secondary = currentSettings.secondaryColor;
-            var accent = currentSettings.accentColor;
-            var glowIntensity = currentSettings.glowIntensity;
-            var cardScale = currentSettings.cardScale;
-            var cardRadius = currentSettings.cardBorderRadius;
-            var heroBlur = currentSettings.heroBlur;
-            var fontFamily = currentSettings.fontFamily === 'modern' ? "'Inter', 'Segoe UI', sans-serif" : "'Roboto', 'Open Sans', sans-serif";
+        function getThemeCSS() {
+            var heroEnabled = Lampa.Storage.get('netflix_hero', true);
+            var overlaysEnabled = Lampa.Storage.get('netflix_overlays', true);
+            var animationsEnabled = Lampa.Storage.get('netflix_animations', true);
             
-            var glowMap = {
-                low: '0 0 10px rgba(0,0,0,0.3)',
-                medium: '0 0 20px rgba(0,0,0,0.5)',
-                high: '0 0 35px rgba(0,0,0,0.7)'
-            };
-            
-            var glow = glowMap[glowIntensity] || glowMap.medium;
-            
-            return `
-                <style id="netflix-theme-css">
-                    /* Основные переменные */
-                    :root {
-                        --nf-primary: ${primary};
-                        --nf-secondary: ${secondary};
-                        --nf-accent: ${accent};
-                        --nf-card-scale: ${cardScale};
-                        --nf-card-radius: ${cardRadius}px;
-                        --nf-hero-blur: ${heroBlur}px;
-                        --nf-glow: ${glow};
-                        --nf-font-family: ${fontFamily};
-                    }
-
-                    /* Глобальные стили */
-                    body {
-                        font-family: var(--nf-font-family);
-                        background: var(--nf-secondary);
-                    }
-
-                    /* Hero Billboard */
-                    .nf-hero {
-                        position: fixed;
-                        top: 0;
-                        left: 0;
-                        right: 0;
-                        height: 75vh;
-                        min-height: 500px;
-                        z-index: 5;
-                        opacity: 0;
-                        visibility: hidden;
-                        transition: opacity 0.5s ease, visibility 0.5s ease;
-                        overflow: hidden;
-                    }
-
-                    .nf-hero.visible {
-                        opacity: 1;
-                        visibility: visible;
-                    }
-
-                    .nf-hero__image {
-                        position: absolute;
-                        top: 0;
-                        left: 0;
-                        width: 100%;
-                        height: 100%;
-                        object-fit: cover;
-                        filter: blur(var(--nf-hero-blur));
-                        transform: scale(1.02);
-                    }
-
-                    .nf-hero__gradient {
-                        position: absolute;
-                        bottom: 0;
-                        left: 0;
-                        right: 0;
-                        height: 60%;
-                        background: linear-gradient(to top, var(--nf-secondary) 0%, transparent 100%);
-                    }
-
-                    .nf-hero__info {
-                        position: absolute;
-                        bottom: 20%;
-                        left: 5%;
-                        max-width: 45%;
-                        z-index: 2;
-                        animation: nf-fade-up 0.6s ease;
-                    }
-
-                    .nf-hero__title {
-                        font-size: 3.5em;
-                        font-weight: 700;
-                        color: white;
-                        margin-bottom: 0.3em;
-                        text-shadow: 2px 2px 8px rgba(0,0,0,0.5);
-                    }
-
-                    .nf-hero__meta {
-                        display: flex;
-                    gap: 1em;
-                    font-size: 1.1em;
-                    color: rgba(255,255,255,0.9);
-                    margin-bottom: 1em;
-                }
-
-                .nf-hero__year, .nf-hero__vote {
-                    display: inline-flex;
-                    align-items: center;
-                }
-
-                .nf-hero__vote::before {
-                    content: "★";
-                    color: gold;
-                    margin-right: 0.3em;
-                }
-
-                .nf-hero__genres {
-                    color: rgba(255,255,255,0.7);
-                    margin-bottom: 1em;
-                }
-
-                .nf-hero__overview {
-                    font-size: 1em;
-                    line-height: 1.5;
-                    color: rgba(255,255,255,0.85);
-                    display: -webkit-box;
-                    -webkit-line-clamp: 3;
-                    -webkit-box-orient: vertical;
-                    overflow: hidden;
-                }
-
-                /* Card Overlay */
+            var overlayStyles = overlaysEnabled ? `
                 .nf-card-overlay {
                     position: absolute;
                     bottom: 0;
@@ -290,28 +64,89 @@
                     font-size: 0.7em;
                     color: rgba(255,255,255,0.7);
                 }
-
-                /* Card Animations */
-                .card {
-                    transition: transform 0.3s cubic-bezier(0.2, 0, 0, 1);
-                }
-
-                .card.focus {
-                    transform: scale(var(--nf-card-scale));
-                    z-index: 10;
-                }
-
-                .card.focus .card__view {
-                    box-shadow: var(--nf-glow);
-                }
-
-                .card .card__view {
-                    border-radius: var(--nf-card-radius);
+            ` : '.nf-card-overlay { display: none !important; }';
+            
+            var heroStyles = heroEnabled ? `
+                .nf-hero {
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    height: 75vh;
+                    min-height: 500px;
+                    z-index: 5;
+                    opacity: 0;
+                    visibility: hidden;
+                    transition: opacity 0.5s ease, visibility 0.5s ease;
                     overflow: hidden;
-                    transition: box-shadow 0.3s ease;
                 }
 
-                /* Row Animations */
+                .nf-hero.visible {
+                    opacity: 1;
+                    visibility: visible;
+                }
+
+                .nf-hero__image {
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    object-fit: cover;
+                }
+
+                .nf-hero__gradient {
+                    position: absolute;
+                    bottom: 0;
+                    left: 0;
+                    right: 0;
+                    height: 60%;
+                    background: linear-gradient(to top, #141414 0%, transparent 100%);
+                }
+
+                .nf-hero__info {
+                    position: absolute;
+                    bottom: 20%;
+                    left: 5%;
+                    max-width: 45%;
+                    z-index: 2;
+                    animation: nf-fade-up 0.6s ease;
+                }
+
+                .nf-hero__title {
+                    font-size: 3.5em;
+                    font-weight: 700;
+                    color: white;
+                    margin-bottom: 0.3em;
+                    text-shadow: 2px 2px 8px rgba(0,0,0,0.5);
+                }
+
+                .nf-hero__meta {
+                    display: flex;
+                    gap: 1em;
+                    font-size: 1.1em;
+                    color: rgba(255,255,255,0.9);
+                    margin-bottom: 1em;
+                }
+
+                .nf-hero__vote::before {
+                    content: "★";
+                    color: gold;
+                    margin-right: 0.3em;
+                }
+
+                .nf-hero__overview {
+                    font-size: 1em;
+                    line-height: 1.5;
+                    color: rgba(255,255,255,0.85);
+                    display: -webkit-box;
+                    -webkit-line-clamp: 3;
+                    -webkit-box-orient: vertical;
+                    overflow: hidden;
+                }
+            ` : '.nf-hero { display: none !important; }';
+            
+            var animationStyles = animationsEnabled ? `
                 @keyframes nf-fade-up {
                     from {
                         opacity: 0;
@@ -327,93 +162,63 @@
                     animation: nf-fade-up 0.5s ease forwards;
                 }
 
-                /* Scrollbar Styling */
-                ::-webkit-scrollbar {
-                    width: 6px;
-                    height: 6px;
+                .card {
+                    transition: transform 0.3s cubic-bezier(0.2, 0, 0, 1);
                 }
 
-                ::-webkit-scrollbar-track {
-                    background: var(--nf-secondary);
+                .card.focus {
+                    transform: scale(1.08);
+                    z-index: 10;
                 }
 
-                ::-webkit-scrollbar-thumb {
-                    background: var(--nf-primary);
-                    border-radius: 3px;
+                .card.focus .card__view {
+                    box-shadow: 0 0 20px rgba(0,0,0,0.5);
                 }
+            ` : '';
+            
+            return `
+                <style id="netflix-theme-css">
+                    /* Netflix Theme Styles */
+                    ${heroStyles}
+                    ${overlayStyles}
+                    ${animationStyles}
+                    
+                    .card .card__view {
+                        border-radius: 8px;
+                        overflow: hidden;
+                        transition: box-shadow 0.3s ease;
+                    }
 
-                ::-webkit-scrollbar-thumb:hover {
-                    background: var(--nf-accent);
-                }
+                    /* Row base styles */
+                    .items-line {
+                        margin-bottom: 0;
+                    }
 
-                /* Focus styles for buttons and menus */
-                .menu__item.focus,
-                .settings-param.focus,
-                .selectbox-item.focus,
-                .full-start__button.focus {
-                    background: var(--nf-primary) !important;
-                    color: white !important;
-                }
+                    /* Focus styles for menus */
+                    .menu__item.focus,
+                    .settings-param.focus,
+                    .selectbox-item.focus,
+                    .full-start__button.focus {
+                        background: #e50914 !important;
+                        color: white !important;
+                    }
 
-                /* Fullstart button styling */
-                .full-start__button {
-                    transition: all 0.3s ease;
-                }
+                    /* Scrollbar styling */
+                    ::-webkit-scrollbar {
+                        width: 6px;
+                        height: 6px;
+                    }
 
-                .full-start__button.focus {
-                    transform: scale(1.05);
-                    background: var(--nf-primary) !important;
-                }
+                    ::-webkit-scrollbar-track {
+                        background: #221f1f;
+                    }
 
-                /* Loading animation */
-                .broadcast__scan div {
-                    background: var(--nf-primary);
-                }
-
-                /* Category headers */
-                .items-line__title {
-                    font-weight: 600;
-                    letter-spacing: -0.5px;
-                }
-
-                /* Settings panel accent */
-                .settings-param.focus .settings-param__value {
-                    color: var(--nf-primary);
-                }
-            </style>
+                    ::-webkit-scrollbar-thumb {
+                        background: #e50914;
+                        border-radius: 3px;
+                    }
+                </style>
             `;
-        }
-
-        function injectCSS() {
-            var existing = document.getElementById('netflix-theme-css');
-            if (existing) existing.remove();
-            
-            var css = generateCSS();
-            var div = document.createElement('div');
-            div.innerHTML = css;
-            var style = div.firstChild;
-            style.id = 'netflix-theme-css';
-            document.head.appendChild(style);
-        }
-
-        // ---- Применение темы ----
-        function applyTheme() {
-            injectCSS();
-            
-            // Применяем дополнительные стили для body
-            document.body.style.backgroundColor = currentSettings.secondaryColor;
-            
-            // Пересоздаем hero если нужно
-            if (currentSettings.heroEnabled && heroEl) {
-                var wasVisible = heroEl.classList.contains('visible');
-                heroEl.remove();
-                heroEl = null;
-                createHero();
-                if (wasVisible && currentSettings.heroEnabled) {
-                    var focusedCard = document.querySelector('.card.focus');
-                    if (focusedCard) updateHero(focusedCard);
-                }
-            }
         }
 
         // ---- Hero Billboard ----
@@ -430,8 +235,8 @@
                     '<div class="nf-hero__meta">' +
                         '<span class="nf-hero__year"></span>' +
                         '<span class="nf-hero__vote"></span>' +
+                        '<span class="nf-hero__genres"></span>' +
                     '</div>' +
-                    '<div class="nf-hero__genres"></div>' +
                     '<div class="nf-hero__overview"></div>' +
                 '</div>';
 
@@ -439,14 +244,15 @@
             if (wrap) {
                 wrap.parentNode.insertBefore(heroEl, wrap);
             } else {
-                document.body.insertBefore(heroEl, document.body.firstChild);
+                document.body.appendChild(heroEl);
             }
 
             return heroEl;
         }
 
         function updateHero(card) {
-            if (!currentSettings.heroEnabled) {
+            var heroEnabled = Lampa.Storage.get('netflix_hero', true);
+            if (!heroEnabled) {
                 hideHero();
                 return;
             }
@@ -481,10 +287,10 @@
 
                 title.textContent = data.title || '';
                 year.textContent = data.year || '';
-                
+
                 if (data.vote) {
                     vote.textContent = data.vote;
-                    vote.style.display = 'inline-flex';
+                    vote.style.display = '';
                 } else {
                     vote.style.display = 'none';
                 }
@@ -555,7 +361,8 @@
 
         // ---- Card Overlay Injection ----
         function addCardOverlay(card) {
-            if (!currentSettings.overlaysEnabled) return;
+            var overlaysEnabled = Lampa.Storage.get('netflix_overlays', true);
+            if (!overlaysEnabled) return;
             if (card.querySelector('.nf-card-overlay')) return;
 
             var view = card.querySelector('.card__view');
@@ -580,7 +387,6 @@
         }
 
         function processCards(container) {
-            if (!currentSettings.overlaysEnabled) return;
             var cards = (container || document).querySelectorAll('.card');
             for (var i = 0; i < cards.length; i++) {
                 addCardOverlay(cards[i]);
@@ -589,7 +395,9 @@
 
         // ---- Row Animations ----
         function animateRows(container) {
-            if (!currentSettings.animationsEnabled) return;
+            var animationsEnabled = Lampa.Storage.get('netflix_animations', true);
+            if (!animationsEnabled) return;
+            
             var rows = (container || document).querySelectorAll('.items-line');
             for (var i = 0; i < rows.length; i++) {
                 if (!rows[i].classList.contains('nf-row-animated')) {
@@ -598,7 +406,7 @@
             }
         }
 
-        // ---- Mutation Observer ----
+        // ---- Mutation Observer for Dynamic Content ----
         function startObservers() {
             var target = document.querySelector('.activitys') || document.body;
 
@@ -649,249 +457,101 @@
             return div.innerHTML;
         }
 
-        // ---- Настройки в Lampa ----
+        // ---- Translations ----
+        function addTranslations() {
+            if (!Lampa.Lang) return;
+
+            Lampa.Lang.add({
+                netflix_theme_name: {
+                    en: 'Netflix Theme',
+                    ru: 'Netflix Тема',
+                    uk: 'Netflix Тема',
+                    be: 'Netflix Тэма'
+                },
+                netflix_theme_hero: {
+                    en: 'Cinematic Hero',
+                    ru: 'Кинематографичный баннер',
+                    uk: 'Кінематографічний банер',
+                    be: 'Кінематаграфічны банер'
+                },
+                netflix_theme_hero_descr: {
+                    en: 'Show full-screen hero with backdrop image',
+                    ru: 'Показывать полноэкранный баннер с фоновым изображением',
+                    uk: 'Показувати повноекранний банер з фоновим зображенням',
+                    be: 'Паказваць поўнаэкранны банер з фонавым відарысам'
+                },
+                netflix_theme_overlays: {
+                    en: 'Card Focus Details',
+                    ru: 'Детали при фокусе',
+                    uk: 'Деталі при фокусі',
+                    be: 'Дэталі пры фокусе'
+                },
+                netflix_theme_overlays_descr: {
+                    en: 'Show title and year overlay on focused cards',
+                    ru: 'Показывать название и год на выбранной карточке',
+                    uk: 'Показувати назву та рік на вибраній картці',
+                    be: 'Паказваць назву і год на абранай картцы'
+                },
+                netflix_theme_animations: {
+                    en: 'Row Motion',
+                    ru: 'Анимация строк',
+                    uk: 'Анімація рядків',
+                    be: 'Анімацыя радкоў'
+                },
+                netflix_theme_animations_descr: {
+                    en: 'Smooth entrance motion for content rows',
+                    ru: 'Плавная анимация появления строк с контентом',
+                    uk: 'Плавна анімація появи рядків з контентом',
+                    be: 'Плаўная анімацыя з\'яўлення радкоў з кантэнтам'
+                }
+            });
+        }
+
+        // ---- Settings Integration (отдельная папка) ----
         function addSettings() {
             if (!Lampa.SettingsApi) return;
 
-            // Компонент настроек темы
+            // Добавляем компонент Netflix Theme как отдельную папку
             Lampa.SettingsApi.addComponent({
                 component: 'netflix_theme',
-                name: 'Netflix Theme',
-                icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"/></svg>'
+                name: Lampa.Lang.translate('netflix_theme_name') || 'Netflix Theme',
+                icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"/></svg>'
             });
 
-            // Выбор темы
-            var themeOptions = { default: 'Пользовательская' };
-            for (var key in themes) {
-                themeOptions[key] = themes[key].name;
-            }
-            
+            // Hero Banner
             Lampa.SettingsApi.addParam({
                 component: 'netflix_theme',
                 param: {
-                    name: 'theme_preset',
-                    type: 'select',
-                    values: themeOptions,
-                    default: 'netflix'
-                },
-                field: {
-                    name: 'Цветовая тема',
-                    description: 'Выберите предустановленную цветовую схему'
-                },
-                onChange: function (val) {
-                    if (val !== 'default' && themes[val]) {
-                        var theme = themes[val];
-                        saveSetting('primaryColor', theme.primaryColor);
-                        saveSetting('secondaryColor', theme.secondaryColor);
-                        saveSetting('accentColor', theme.accentColor);
-                    }
-                    saveSetting('theme', val);
-                }
-            });
-
-            // Основные цвета
-            Lampa.SettingsApi.addParam({
-                component: 'netflix_theme',
-                param: {
-                    name: 'primary_color',
-                    type: 'input',
-                    default: currentSettings.primaryColor,
-                    values: ''
-                },
-                field: {
-                    name: 'Основной цвет',
-                    description: 'HEX код основного цвета (например #e50914)'
-                },
-                onChange: function (val) {
-                    if (val && val.match(/^#?[A-Fa-f0-9]{6}$/)) {
-                        if (val[0] !== '#') val = '#' + val;
-                        saveSetting('primaryColor', val);
-                    }
-                }
-            });
-
-            Lampa.SettingsApi.addParam({
-                component: 'netflix_theme',
-                param: {
-                    name: 'secondary_color',
-                    type: 'input',
-                    default: currentSettings.secondaryColor,
-                    values: ''
-                },
-                field: {
-                    name: 'Фоновый цвет',
-                    description: 'HEX код фонового цвета'
-                },
-                onChange: function (val) {
-                    if (val && val.match(/^#?[A-Fa-f0-9]{6}$/)) {
-                        if (val[0] !== '#') val = '#' + val;
-                        saveSetting('secondaryColor', val);
-                    }
-                }
-            });
-
-            Lampa.SettingsApi.addParam({
-                component: 'netflix_theme',
-                param: {
-                    name: 'accent_color',
-                    type: 'input',
-                    default: currentSettings.accentColor,
-                    values: ''
-                },
-                field: {
-                    name: 'Акцентный цвет',
-                    description: 'HEX код акцентного цвета'
-                },
-                onChange: function (val) {
-                    if (val && val.match(/^#?[A-Fa-f0-9]{6}$/)) {
-                        if (val[0] !== '#') val = '#' + val;
-                        saveSetting('accentColor', val);
-                    }
-                }
-            });
-
-            Lampa.SettingsApi.addParam({
-                component: 'netflix_theme',
-                param: {
-                    name: 'separator_1',
-                    type: 'title'
-                },
-                field: { name: '───── Визуальные эффекты ─────' }
-            });
-
-            // Масштаб карточек
-            Lampa.SettingsApi.addParam({
-                component: 'netflix_theme',
-                param: {
-                    name: 'card_scale',
-                    type: 'select',
-                    values: {
-                        1.02: 'Минимальный (1.02x)',
-                        1.05: 'Малый (1.05x)',
-                        1.08: 'Средний (1.08x)',
-                        1.12: 'Большой (1.12x)',
-                        1.15: 'Максимальный (1.15x)'
-                    },
-                    default: String(currentSettings.cardScale)
-                },
-                field: {
-                    name: 'Масштаб карточек',
-                    description: 'Увеличение карточки при фокусе'
-                },
-                onChange: function (val) {
-                    saveSetting('cardScale', parseFloat(val));
-                }
-            });
-
-            // Скругление углов
-            Lampa.SettingsApi.addParam({
-                component: 'netflix_theme',
-                param: {
-                    name: 'card_border_radius',
-                    type: 'select',
-                    values: {
-                        0: '0px (прямые)',
-                        4: '4px (малые)',
-                        8: '8px (средние)',
-                        12: '12px (большие)',
-                        16: '16px (круглые)'
-                    },
-                    default: String(currentSettings.cardBorderRadius)
-                },
-                field: {
-                    name: 'Скругление углов карточек',
-                    description: 'Радиус скругления углов'
-                },
-                onChange: function (val) {
-                    saveSetting('cardBorderRadius', parseInt(val));
-                }
-            });
-
-            // Интенсивность свечения
-            Lampa.SettingsApi.addParam({
-                component: 'netflix_theme',
-                param: {
-                    name: 'glow_intensity',
-                    type: 'select',
-                    values: {
-                        low: 'Слабое',
-                        medium: 'Среднее',
-                        high: 'Сильное'
-                    },
-                    default: currentSettings.glowIntensity
-                },
-                field: {
-                    name: 'Свечение карточек',
-                    description: 'Интенсивность свечения при фокусе'
-                },
-                onChange: function (val) {
-                    saveSetting('glowIntensity', val);
-                }
-            });
-
-            // Размытие hero
-            Lampa.SettingsApi.addParam({
-                component: 'netflix_theme',
-                param: {
-                    name: 'hero_blur',
-                    type: 'select',
-                    values: {
-                        0: 'Нет',
-                        3: 'Слабое',
-                        6: 'Среднее',
-                        10: 'Сильное'
-                    },
-                    default: String(currentSettings.heroBlur)
-                },
-                field: {
-                    name: 'Размытие фона Hero',
-                    description: 'Размытие фонового изображения баннера'
-                },
-                onChange: function (val) {
-                    saveSetting('heroBlur', parseInt(val));
-                }
-            });
-
-            Lampa.SettingsApi.addParam({
-                component: 'netflix_theme',
-                param: {
-                    name: 'separator_2',
-                    type: 'title'
-                },
-                field: { name: '───── Функции интерфейса ─────' }
-            });
-
-            // Включение/выключение функций
-            Lampa.SettingsApi.addParam({
-                component: 'netflix_theme',
-                param: {
-                    name: 'hero_enabled',
+                    name: 'netflix_hero',
                     type: 'trigger',
-                    default: currentSettings.heroEnabled
+                    default: true
                 },
                 field: {
-                    name: 'Cinematic Hero',
-                    description: 'Показывать полноэкранный баннер с фоном'
+                    name: Lampa.Lang.translate('netflix_theme_hero') || 'Cinematic Hero',
+                    description: Lampa.Lang.translate('netflix_theme_hero_descr') || 'Show full-screen hero with backdrop image'
                 },
                 onChange: function (val) {
-                    saveSetting('heroEnabled', val);
+                    Lampa.Storage.set('netflix_hero', val);
+                    injectCSS();
                     if (!val) hideHero();
                 }
             });
 
+            // Card Overlays
             Lampa.SettingsApi.addParam({
                 component: 'netflix_theme',
                 param: {
-                    name: 'overlays_enabled',
+                    name: 'netflix_overlays',
                     type: 'trigger',
-                    default: currentSettings.overlaysEnabled
+                    default: true
                 },
                 field: {
-                    name: 'Детали на карточках',
-                    description: 'Показывать название и год на выбранной карточке'
+                    name: Lampa.Lang.translate('netflix_theme_overlays') || 'Card Focus Details',
+                    description: Lampa.Lang.translate('netflix_theme_overlays_descr') || 'Show title and year overlay on focused cards'
                 },
                 onChange: function (val) {
-                    saveSetting('overlaysEnabled', val);
+                    Lampa.Storage.set('netflix_overlays', val);
+                    injectCSS();
                     if (val) {
                         processCards();
                     } else {
@@ -900,64 +560,51 @@
                 }
             });
 
+            // Row Animations
             Lampa.SettingsApi.addParam({
                 component: 'netflix_theme',
                 param: {
-                    name: 'animations_enabled',
+                    name: 'netflix_animations',
                     type: 'trigger',
-                    default: currentSettings.animationsEnabled
+                    default: true
                 },
                 field: {
-                    name: 'Анимация строк',
-                    description: 'Плавная анимация появления строк с контентом'
+                    name: Lampa.Lang.translate('netflix_theme_animations') || 'Row Motion',
+                    description: Lampa.Lang.translate('netflix_theme_animations_descr') || 'Smooth entrance motion for content rows'
                 },
                 onChange: function (val) {
-                    saveSetting('animationsEnabled', val);
-                }
-            });
-
-            Lampa.SettingsApi.addParam({
-                component: 'netflix_theme',
-                param: {
-                    name: 'font_family',
-                    type: 'select',
-                    values: {
-                        default: 'Стандартный (Roboto)',
-                        modern: 'Современный (Inter)'
-                    },
-                    default: currentSettings.fontFamily
-                },
-                field: {
-                    name: 'Шрифт интерфейса',
-                    description: 'Выберите стиль шрифта'
-                },
-                onChange: function (val) {
-                    saveSetting('fontFamily', val);
+                    Lampa.Storage.set('netflix_animations', val);
+                    injectCSS();
                 }
             });
         }
 
         // ---- Main Init ----
         function addPlugin() {
-            loadSettings();
+            addTranslations();
             addSettings();
             injectCSS();
-            applyTheme();
 
+            // Process existing content
             setTimeout(function () {
-                if (currentSettings.overlaysEnabled) processCards();
-                if (currentSettings.animationsEnabled) animateRows();
+                var overlaysEnabled = Lampa.Storage.get('netflix_overlays', true);
+                var animationsEnabled = Lampa.Storage.get('netflix_animations', true);
+
+                if (overlaysEnabled) processCards();
+                if (animationsEnabled) animateRows();
                 startObservers();
 
+                // Listen to activity changes for row animations
                 Lampa.Listener.follow('activity', function (e) {
                     if (e.type === 'start' || e.type === 'archive') {
                         setTimeout(function () {
-                            if (currentSettings.overlaysEnabled) processCards();
-                            if (currentSettings.animationsEnabled) animateRows();
+                            if (Lampa.Storage.get('netflix_overlays', true)) processCards();
+                            if (Lampa.Storage.get('netflix_animations', true)) animateRows();
                         }, 100);
                     }
                 });
 
+                // Hide hero when entering detail or player views
                 Lampa.Listener.follow('full', function (e) {
                     if (e.type === 'start') hideHero();
                 });
