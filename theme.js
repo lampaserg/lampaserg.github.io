@@ -1,13 +1,13 @@
 /**
  * AppleTV+ Pro — расширенная версия Applecation
  * Стиль Apple TV с полными рейтингами, метаданными и развернутыми реакциями
- * Версия 2.3.0
+ * Версия 2.4.0
  */
 
 (function() {
     'use strict';
 
-    var PLUGIN_VERSION = '2.3.0';
+    var PLUGIN_VERSION = '2.4.0';
     var PLUGIN_NAME = 'AppleTV+ Pro';
 
     // =================================================================
@@ -126,6 +126,35 @@
     var DUB_SVG = '<svg viewBox="-1 558 313 136" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2.5" y="561.5" width="306" height="129" rx="17.5" stroke="currentColor" stroke-width="5" fill="none"/><path d="M60.5284 673H27.5284V579.909H60.8011C70.1648 579.909 78.2254 581.773 84.983 585.5C91.7405 589.197 96.9375 594.515 100.574 601.455C104.241 608.394 106.074 616.697 106.074 626.364C106.074 636.061 104.241 644.394 100.574 651.364C96.9375 658.333 91.7102 663.682 84.892 667.409C78.1042 671.136 69.983 673 60.5284 673ZM47.2102 656.136H59.7102C65.5284 656.136 70.4223 655.106 74.392 653.045C78.392 650.955 81.392 647.727 83.392 643.364C85.4223 638.97 86.4375 633.303 86.4375 626.364C86.4375 619.485 85.4223 613.864 83.392 609.5C81.392 605.136 78.4072 601.924 74.4375 599.864C70.4678 597.803 65.5739 596.773 59.7557 596.773H47.2102V656.136ZM178.153 579.909H197.835V640.364C197.835 647.152 196.214 653.091 192.972 658.182C189.759 663.273 185.259 667.242 179.472 670.091C173.684 672.909 166.941 674.318 159.244 674.318C151.517 674.318 144.759 672.909 138.972 670.091C133.184 667.242 128.684 663.273 125.472 658.182C122.259 653.091 120.653 647.152 120.653 640.364V579.909H140.335V638.682C140.335 642.227 141.108 645.379 142.653 648.136C144.229 650.894 146.441 653.061 149.29 654.636C152.138 656.212 155.456 657 159.244 657C163.063 657 166.381 656.212 169.199 654.636C172.047 653.061 174.244 650.894 175.79 648.136C177.366 645.379 178.153 642.227 178.153 638.682V579.909ZM214.028 673V579.909H251.301C258.15 579.909 263.862 580.924 268.438 582.955C273.013 584.985 276.453 587.803 278.756 591.409C281.059 594.985 282.21 599.106 282.21 603.773C282.21 607.409 281.483 610.606 280.028 613.364C278.574 616.091 276.574 618.333 274.028 620.091C271.513 621.818 268.634 623.045 265.392 623.773V624.682C268.938 624.833 272.256 625.833 275.347 627.682C278.468 629.53 280.998 632.121 282.938 635.455C284.877 638.758 285.847 642.697 285.847 647.273C285.847 652.212 284.619 656.621 282.165 660.5C279.741 664.348 276.15 667.394 271.392 669.636C266.634 671.879 260.771 673 253.801 673H214.028ZM233.71 656.909H249.756C255.241 656.909 259.241 655.864 261.756 653.773C264.271 651.652 265.528 648.833 265.528 645.318C265.528 642.742 264.907 640.47 263.665 638.5C262.422 636.53 260.65 634.985 258.347 633.864C256.074 632.742 253.362 632.182 250.21 632.182H233.71V656.909ZM233.71 618.864H248.301C250.998 618.864 253.392 618.394 255.483 617.455C257.604 616.485 259.271 615.121 260.483 613.364C261.725 611.606 262.347 609.5 262.347 607.045C262.347 603.682 261.15 600.97 258.756 598.909C256.392 596.848 253.028 595.818 248.665 595.818H233.71V618.864Z" fill="currentColor"/></svg>';
 
     var HDR_SVG = '<svg viewBox="-1 178 313 136" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2.5" y="181.5" width="306" height="129" rx="17.5" stroke="currentColor" stroke-width="5" fill="none"/><path d="M27.2784 293V199.909H46.9602V238.318H86.9148V199.909H106.551V293H86.9148V254.545H46.9602V293H27.2784ZM155.778 293H122.778V199.909H156.051C165.415 199.909 173.475 201.773 180.233 205.5C186.991 209.197 192.188 214.515 195.824 221.455C199.491 228.394 201.324 236.697 201.324 246.364C201.324 256.061 199.491 264.394 195.824 271.364C192.188 278.333 186.96 283.682 180.142 287.409C173.354 291.136 165.233 293 155.778 293ZM142.46 276.136H154.96C160.778 276.136 165.672 275.106 169.642 273.045C173.642 270.955 176.642 267.727 178.642 263.364C180.672 258.97 181.688 253.303 181.688 246.364C181.688 239.485 180.672 233.864 178.642 229.5C176.642 225.136 173.657 221.924 169.688 219.864C165.718 217.803 160.824 216.773 155.006 216.773H142.46V276.136ZM215.903 293V199.909H252.631C259.661 199.909 265.661 201.167 270.631 203.682C275.631 206.167 279.434 209.697 282.04 214.273C284.676 218.818 285.994 224.167 285.994 230.318C285.994 236.5 284.661 241.818 281.994 246.273C279.328 250.697 275.464 254.091 270.403 256.455C265.373 258.818 259.282 260 252.131 260H227.54V244.182H248.949C252.706 244.182 255.828 243.667 258.312 242.636C260.797 241.606 262.646 240.061 263.858 238C265.1 235.939 265.722 233.379 265.722 230.318C265.722 227.227 265.1 224.621 263.858 222.5C262.646 220.379 260.782 218.773 258.267 217.682C255.782 216.561 252.646 216 248.858 216H235.585V293H215.903ZM266.176 250.636L289.312 293H267.585L244.949 250.636H266.176Z" fill="currentColor"/></svg>';
+
+    // =================================================================
+    // Кэш метаданных (для быстрой загрузки)
+    // =================================================================
+    var METADATA_CACHE = {};
+    var METADATA_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 часа
+
+    function getCachedMetadata(movieId) {
+        var cached = METADATA_CACHE[movieId];
+        if (cached && (Date.now() - cached._ts < METADATA_CACHE_TTL)) {
+            return cached;
+        }
+        try {
+            var stored = Lampa.Storage.get('applecation_metadata_cache_' + movieId);
+            if (stored && stored._ts && (Date.now() - stored._ts < METADATA_CACHE_TTL)) {
+                METADATA_CACHE[movieId] = stored;
+                return stored;
+            }
+        } catch (e) {}
+        return null;
+    }
+
+    function setCachedMetadata(movieId, data) {
+        data._ts = Date.now();
+        METADATA_CACHE[movieId] = data;
+        try {
+            Lampa.Storage.set('applecation_metadata_cache_' + movieId, data);
+        } catch (e) {}
+    }
 
     // =================================================================
     // Вспомогательные функции
@@ -248,189 +277,172 @@
     }
 
     // =================================================================
-    // Получение метаданных (как в Flixio Studios)
+    // Получение метаданных (быстрая загрузка с кэшем)
     // =================================================================
-    function getMetadataFromJacred(movie) {
+    function getMetadata(movie) {
         return new Promise(function(resolve) {
             if (!movie || !movie.id) { resolve(null); return; }
 
-            var title = (movie.original_title || movie.title || movie.name || '').toLowerCase();
-            var year = (movie.release_date || movie.first_air_date || '').substr(0, 4);
-
-            if (!title || !year) { resolve(null); return; }
-
             // Проверяем кэш
-            var cacheKey = 'jacred_meta_' + movie.id;
-            try {
-                var cached = Lampa.Storage.get(cacheKey);
-                if (cached && cached._ts && (Date.now() - cached._ts < 24 * 60 * 60 * 1000)) {
-                    resolve(cached);
-                    return;
-                }
-            } catch (e) {}
-
-            var apiUrl = 'https://jr.maxvol.pro/api/v1.0/torrents?search=' + encodeURIComponent(title) + '&year=' + year;
-
-            var proxyList = [
-                'https://api.allorigins.win/raw?url=',
-                'https://corsproxy.io/?url=',
-                'https://api.codetabs.com/v1/proxy?quest='
-            ];
-
-            function tryProxy(index) {
-                if (index >= proxyList.length) {
-                    resolve(null);
-                    return;
-                }
-                var proxy = proxyList[index];
-                var url = proxy + encodeURIComponent(apiUrl);
-
-                var xhr = new XMLHttpRequest();
-                xhr.open('GET', url, true);
-                xhr.timeout = 10000;
-                xhr.onload = function() {
-                    if (xhr.status >= 200 && xhr.status < 300) {
-                        try {
-                            var data = JSON.parse(xhr.responseText);
-                            processJacredData(data);
-                        } catch (e) {
-                            tryProxy(index + 1);
-                        }
-                    } else {
-                        tryProxy(index + 1);
-                    }
-                };
-                xhr.onerror = function() { tryProxy(index + 1); };
-                xhr.ontimeout = function() { tryProxy(index + 1); };
-                xhr.send();
+            var cached = getCachedMetadata(movie.id);
+            if (cached) {
+                resolve(cached);
+                return;
             }
 
-            function processJacredData(data) {
-                var results = Array.isArray(data) ? data : (data.Results || []);
-                if (!results.length) {
-                    resolve(null);
-                    return;
-                }
-
-                var metadata = {
-                    quality: null,
-                    audio: null,
-                    dub: false,
-                    hdr: false
-                };
-
-                var qualityPriority = ['4K', 'FHD', 'HD', 'SD'];
-
-                results.forEach(function(item) {
-                    var t = (item.title || '').toLowerCase();
-                    var q = parseInt(item.quality || 0, 10);
-
-                    var currentQuality = null;
-                    if (q >= 2160) currentQuality = '4K';
-                    else if (q >= 1440) currentQuality = '2K';
-                    else if (q >= 1080) currentQuality = 'FHD';
-                    else if (q >= 720) currentQuality = 'HD';
-
-                    if (!currentQuality) {
-                        if (t.indexOf('4k') >= 0 || t.indexOf('2160') >= 0) currentQuality = '4K';
-                        else if (t.indexOf('1080') >= 0 || t.indexOf('fhd') >= 0) currentQuality = 'FHD';
-                        else if (t.indexOf('720') >= 0 || t.indexOf('hd') >= 0) currentQuality = 'HD';
-                    }
-
-                    if (currentQuality) {
-                        var currentIndex = qualityPriority.indexOf(currentQuality);
-                        var bestIndex = qualityPriority.indexOf(metadata.quality);
-                        if (bestIndex === -1 || currentIndex < bestIndex) {
-                            metadata.quality = currentQuality;
-                        }
-                    }
-
-                    if (t.indexOf('7.1') >= 0) metadata.audio = '7.1';
-                    else if (t.indexOf('5.1') >= 0) metadata.audio = '5.1';
-                    else if (t.indexOf('2.0') >= 0 && !metadata.audio) metadata.audio = '2.0';
-
-                    if (t.indexOf('ukr') >= 0 || t.indexOf('укр') >= 0 || t.indexOf('ua') >= 0) {
-                        metadata.dub = true;
-                    }
-
-                    if (t.indexOf('hdr') >= 0 || t.indexOf('dolby vision') >= 0 || t.indexOf('dovi') >= 0) {
-                        metadata.hdr = true;
-                    }
-                });
-
-                metadata._ts = Date.now();
-                try {
-                    Lampa.Storage.set(cacheKey, metadata);
-                } catch (e) {}
-
-                resolve(metadata);
-            }
-
-            tryProxy(0);
-        });
-    }
-
-    function getSeasonInfo(movie) {
-        if (!movie || !movie.name) return null;
-
-        var lastEpisode = movie.last_episode_to_air;
-        if (lastEpisode && lastEpisode.season_number && lastEpisode.episode_number) {
-            var seasonNum = lastEpisode.season_number;
-            var episodeNum = lastEpisode.episode_number;
-
-            var totalEpisodes = '?';
-            if (movie.seasons && Array.isArray(movie.seasons)) {
-                for (var i = 0; i < movie.seasons.length; i++) {
-                    if (movie.seasons[i].season_number === seasonNum && movie.seasons[i].episode_count) {
-                        totalEpisodes = movie.seasons[i].episode_count;
-                        break;
-                    }
-                }
-            }
-
-            return seasonNum + ' сезон ' + episodeNum + '/' + totalEpisodes + ' серий';
-        }
-
-        var seasons = Lampa.Utils.countSeasons(movie);
-        if (seasons) {
-            var t = [2, 0, 1, 1, 1, 2];
-            var forms = ['сезон', 'сезона', 'сезонов'];
-            return seasons + ' ' + forms[seasons % 100 > 4 && seasons % 100 < 20 ? 2 : t[Math.min(seasons % 10, 5)]];
-        }
-
-        return null;
-    }
-
-    function getMetadata(movie) {
-        return new Promise(function(resolve) {
             var result = {
-                seasonInfo: getSeasonInfo(movie),
+                seasonInfo: null,
                 quality: null,
                 audio: null,
                 dub: false,
-                hdr: false
+                hdr: false,
+                year: null
             };
 
-            getMetadataFromJacred(movie).then(function(jacredData) {
-                if (jacredData) {
-                    if (jacredData.quality) result.quality = jacredData.quality;
-                    if (jacredData.audio) result.audio = jacredData.audio;
-                    if (jacredData.dub) result.dub = jacredData.dub;
-                    if (jacredData.hdr) result.hdr = jacredData.hdr;
+            // Год
+            var year = (movie.release_date || movie.first_air_date || '').substr(0, 4);
+            if (year) {
+                result.year = year;
+            }
+
+            // Информация о сезонах (из TMDB, быстро)
+            if (movie.name) {
+                var lastEpisode = movie.last_episode_to_air;
+                if (lastEpisode && lastEpisode.season_number && lastEpisode.episode_number) {
+                    var seasonNum = lastEpisode.season_number;
+                    var episodeNum = lastEpisode.episode_number;
+                    var totalEpisodes = '?';
+                    if (movie.seasons && Array.isArray(movie.seasons)) {
+                        for (var i = 0; i < movie.seasons.length; i++) {
+                            if (movie.seasons[i].season_number === seasonNum && movie.seasons[i].episode_count) {
+                                totalEpisodes = movie.seasons[i].episode_count;
+                                break;
+                            }
+                        }
+                    }
+                    result.seasonInfo = seasonNum + ' сезон ' + episodeNum + '/' + totalEpisodes + ' серий';
+                } else {
+                    var seasons = Lampa.Utils.countSeasons(movie);
+                    if (seasons) {
+                        var t = [2, 0, 1, 1, 1, 2];
+                        var forms = ['сезон', 'сезона', 'сезонов'];
+                        result.seasonInfo = seasons + ' ' + forms[seasons % 100 > 4 && seasons % 100 < 20 ? 2 : t[Math.min(seasons % 10, 5)]];
+                    }
                 }
+            }
+
+            // Качество, аудио, озвучка, HDR — из JacRed (асинхронно, с кэшем)
+            var title = (movie.original_title || movie.title || movie.name || '').toLowerCase();
+            var yearStr = (movie.release_date || movie.first_air_date || '').substr(0, 4);
+
+            if (title && yearStr) {
+                var apiUrl = 'https://jr.maxvol.pro/api/v1.0/torrents?search=' + encodeURIComponent(title) + '&year=' + yearStr;
+
+                var proxyList = [
+                    'https://api.allorigins.win/raw?url=',
+                    'https://corsproxy.io/?url=',
+                    'https://api.codetabs.com/v1/proxy?quest='
+                ];
+
+                function tryProxy(index) {
+                    if (index >= proxyList.length) {
+                        // Сохраняем то, что есть (сезон, год)
+                        setCachedMetadata(movie.id, result);
+                        resolve(result);
+                        return;
+                    }
+                    var proxy = proxyList[index];
+                    var url = proxy + encodeURIComponent(apiUrl);
+
+                    var xhr = new XMLHttpRequest();
+                    xhr.open('GET', url, true);
+                    xhr.timeout = 8000;
+                    xhr.onload = function() {
+                        if (xhr.status >= 200 && xhr.status < 300) {
+                            try {
+                                var data = JSON.parse(xhr.responseText);
+                                processJacredData(data);
+                            } catch (e) {
+                                tryProxy(index + 1);
+                            }
+                        } else {
+                            tryProxy(index + 1);
+                        }
+                    };
+                    xhr.onerror = function() { tryProxy(index + 1); };
+                    xhr.ontimeout = function() { tryProxy(index + 1); };
+                    xhr.send();
+                }
+
+                function processJacredData(data) {
+                    var results = Array.isArray(data) ? data : (data.Results || []);
+                    if (!results.length) {
+                        setCachedMetadata(movie.id, result);
+                        resolve(result);
+                        return;
+                    }
+
+                    var qualityPriority = ['4K', 'FHD', 'HD', 'SD'];
+
+                    results.forEach(function(item) {
+                        var t = (item.title || '').toLowerCase();
+                        var q = parseInt(item.quality || 0, 10);
+
+                        var currentQuality = null;
+                        if (q >= 2160) currentQuality = '4K';
+                        else if (q >= 1440) currentQuality = '2K';
+                        else if (q >= 1080) currentQuality = 'FHD';
+                        else if (q >= 720) currentQuality = 'HD';
+
+                        if (!currentQuality) {
+                            if (t.indexOf('4k') >= 0 || t.indexOf('2160') >= 0) currentQuality = '4K';
+                            else if (t.indexOf('1080') >= 0 || t.indexOf('fhd') >= 0) currentQuality = 'FHD';
+                            else if (t.indexOf('720') >= 0 || t.indexOf('hd') >= 0) currentQuality = 'HD';
+                        }
+
+                        if (currentQuality) {
+                            var currentIndex = qualityPriority.indexOf(currentQuality);
+                            var bestIndex = qualityPriority.indexOf(result.quality);
+                            if (bestIndex === -1 || currentIndex < bestIndex) {
+                                result.quality = currentQuality;
+                            }
+                        }
+
+                        if (t.indexOf('7.1') >= 0) result.audio = '7.1';
+                        else if (t.indexOf('5.1') >= 0) result.audio = '5.1';
+                        else if (t.indexOf('2.0') >= 0 && !result.audio) result.audio = '2.0';
+
+                        if (t.indexOf('ukr') >= 0 || t.indexOf('укр') >= 0 || t.indexOf('ua') >= 0) {
+                            result.dub = true;
+                        }
+
+                        if (t.indexOf('hdr') >= 0 || t.indexOf('dolby vision') >= 0 || t.indexOf('dovi') >= 0) {
+                            result.hdr = true;
+                        }
+                    });
+
+                    setCachedMetadata(movie.id, result);
+                    resolve(result);
+                }
+
+                tryProxy(0);
+            } else {
+                setCachedMetadata(movie.id, result);
                 resolve(result);
-            });
+            }
         });
     }
 
     // =================================================================
-    // Формирование строки с метаданными (как в Flixio Studios)
+    // Формирование HTML метаданных
     // =================================================================
     function buildMetadataHTML(metadata) {
         var html = '';
 
-        // Год (отдельно)
-        // Не добавляем, т.к. год отображается стандартно
+        // Год
+        if (metadata.year) {
+            html += '<span class="metadata-badge metadata-text">' + metadata.year + '</span>';
+        }
 
         // Сезон и серии
         if (metadata.seasonInfo) {
@@ -567,7 +579,6 @@
                 display: flex !important;
                 flex-wrap: wrap !important;
                 gap: 0.5em !important;
-                margin-top: 0.5em !important;
             }
             .full-start-new__buttons .full-start__button {
                 flex: 0 0 auto !important;
@@ -795,7 +806,7 @@
     }
 
     // =================================================================
-    // Загрузка метаданных
+    // Загрузка метаданных (быстрая, с кэшем)
     // =================================================================
     function loadMetadata(render, movie) {
         if (!getSetting('show_metadata', true)) {
@@ -806,8 +817,15 @@
         var metadataEl = render.find('.applecation__metadata');
         if (!metadataEl.length) return;
 
-        metadataEl.html('<span class="metadata-loading">' + tr('loading') + '</span>');
+        // Сначала показываем год из карточки (быстро)
+        var year = (movie.release_date || movie.first_air_date || '').substr(0, 4);
+        if (year) {
+            metadataEl.html('<span class="metadata-badge metadata-text">' + year + '</span>');
+        } else {
+            metadataEl.html('<span class="metadata-loading">' + tr('loading') + '</span>');
+        }
 
+        // Загружаем остальные метаданные асинхронно
         getMetadata(movie).then(function(metadata) {
             var html = buildMetadataHTML(metadata);
             if (html) {
@@ -827,7 +845,6 @@
         var standardDesc = render.find('.full-start__description');
 
         if (showDescription) {
-            // Показываем стилизованное описание
             descWrapper.show();
             standardDesc.hide();
 
@@ -898,7 +915,6 @@
                 if (Lampa.Controller) Lampa.Controller.toggle('applecation_description');
             });
         } else {
-            // Показываем стандартное описание Lampa
             descWrapper.hide();
             standardDesc.show();
         }
@@ -1238,6 +1254,7 @@
             '}\n' +
             '.applecation .applecation__ratings .rating-label {\n' +
             '    font-size: ' + (0.7 * ratingsSize / 100) + 'em !important;\n' +
+            '    opacity: 1 !important;\n' +
             '}\n' +
             '.applecation-reactions {\n' +
             '    gap: ' + (0.3 * reactionsSize / 100) + 'em !important;\n' +
@@ -1405,7 +1422,7 @@
             .applecation__ratings .rating-value.rate--lime { color: #cddc39; border-color: rgba(205,220,57,0.3); background: rgba(205,220,57,0.15); }
             .applecation__ratings .rating-value.rate--orange { color: #ff9800; border-color: rgba(255,152,0,0.3); background: rgba(255,152,0,0.15); }
             .applecation__ratings .rating-value.rate--red { color: #f44336; border-color: rgba(244,67,54,0.3); background: rgba(244,67,54,0.15); }
-            .applecation__ratings .rating-label { font-size: 0.7em; opacity: 0.6; color: #fff; margin-left: 0.1em; }
+            .applecation__ratings .rating-label { font-size: 0.7em; color: #fff; margin-left: 0.1em; opacity: 1 !important; }
             
             .applecation-reactions { margin-top: 0.2em !important; display: flex !important; flex-wrap: wrap !important; gap: 0.3em !important; }
             .applecation-reactions > div { display: block !important; }
@@ -1766,13 +1783,18 @@
             }
         });
 
-        // Отступ до кнопок
+        // Отступ до кнопок (100% - 1500%)
+        var buttonSpacingValues = {};
+        for (var i = 100; i <= 1500; i += 100) {
+            buttonSpacingValues[i] = i + '%';
+        }
+
         Lampa.SettingsApi.addParam({
             component: 'applecation_settings',
             param: {
                 name: 'applecation_buttons_spacing',
                 type: 'select',
-                values: {50: '50%', 60: '60%', 70: '70%', 80: '80%', 90: '90%', 100: tr('scale_default') + ' (100%)', 110: '110%', 120: '120%', 130: '130%', 140: '140%', 150: '150%', 160: '160%', 170: '170%', 180: '180%', 200: '200%', 250: '250%', 300: '300%'},
+                values: buttonSpacingValues,
                 default: '100'
             },
             field: {
