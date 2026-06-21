@@ -1,13 +1,13 @@
 /**
  * AppleTV+ Pro — расширенная версия Applecation
  * Стиль Apple TV с полными рейтингами, метаданными и развернутыми реакциями
- * Версия 2.2.0
+ * Версия 2.3.0
  */
 
 (function() {
     'use strict';
 
-    var PLUGIN_VERSION = '2.2.0';
+    var PLUGIN_VERSION = '2.3.0';
     var PLUGIN_NAME = 'AppleTV+ Pro';
 
     // =================================================================
@@ -16,9 +16,6 @@
     var TRANSLATIONS = {
         show_ratings: 'Показывать рейтинги',
         show_ratings_desc: 'Отображать все рейтинги на странице фильма',
-        ratings_display_mode: 'Режим отображения рейтингов',
-        ratings_display_mode_desc: 'Как отображать рейтинги',
-        ratings_mode_labels: 'Только названия',
         ratings_size: 'Размер рейтингов',
         ratings_size_desc: 'Масштаб рейтингов (иконки + цифры)',
         reactions_size: 'Размер реакций',
@@ -27,11 +24,8 @@
         show_reactions_desc: 'Отображать блок с реакциями под рейтингом',
         show_metadata: 'Показывать метаданные',
         show_metadata_desc: 'Отображать качество, аудио, озвучку и информацию о сезонах',
-        metadata_source: 'Источник метаданных',
-        metadata_source_desc: 'Откуда получать информацию о качестве и аудио',
-        metadata_source_jacred: 'JacRed (парсер)',
-        metadata_source_tmdb: 'TMDB (база)',
-        metadata_source_both: 'JacRed + TMDB',
+        show_description: 'Показывать описание',
+        show_description_desc: 'Отображать описание фильма в стиле Apple TV',
         logo_scale: 'Размер логотипа',
         logo_scale_desc: 'Масштаб логотипа фильма',
         text_scale: 'Размер текста',
@@ -39,6 +33,8 @@
         scale_default: 'По умолчанию',
         spacing_scale: 'Отступы между строками',
         spacing_scale_desc: 'Расстояние между элементами информации',
+        buttons_spacing: 'Отступ до кнопок',
+        buttons_spacing_desc: 'Расстояние от контента до кнопок',
         settings_title_display: 'Отображение',
         settings_title_scaling: 'Масштабирование',
         reverse_episodes: 'Перевернуть список эпизодов',
@@ -55,11 +51,7 @@
         rating_tmdb: 'TMDB',
         rating_imdb: 'IMDB',
         rating_kp: 'Кинопоиск',
-        rating_lampa: 'Lampa',
-        layout_position: 'Положение контента',
-        layout_position_desc: 'Разместить логотип и информацию выше кнопок',
-        layout_top: 'Сверху (над кнопками)',
-        layout_bottom: 'Снизу (под кнопками)'
+        rating_lampa: 'Lampa'
     };
 
     function tr(key) {
@@ -81,19 +73,18 @@
     // Инициализация настроек
     var defaults = {
         show_ratings: true,
-        ratings_display_mode: 'labels',
         ratings_size: 100,
         reactions_size: 100,
         show_reactions: true,
         show_metadata: true,
-        metadata_source: 'both',
+        show_description: true,
         logo_scale: 100,
         text_scale: 100,
         spacing_scale: 100,
+        buttons_spacing: 100,
         poster_quality: 'medium',
         reverse_episodes: true,
-        description_overlay: true,
-        layout_position: 'top'
+        description_overlay: true
     };
 
     for (var key in defaults) {
@@ -118,7 +109,7 @@
     };
 
     // =================================================================
-    // SVG иконки для метаданных (качество, аудио, озвучка)
+    // SVG иконки для метаданных (из Flixio Studios)
     // =================================================================
     var QUALITY_SVGS = {
         '4K': '<svg viewBox="0 0 311 134" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M291 0C302.046 3.57563e-06 311 8.95431 311 20V114C311 125.046 302.046 134 291 134H20C8.95431 134 0 125.046 0 114V20C0 8.95431 8.95431 0 20 0H291ZM113 20.9092L74.1367 82.1367V97.6367H118.818V114H137.637V97.6367H149.182V81.8633H137.637V20.9092H113ZM162.841 20.9092V114H182.522V87.5459L192.204 75.7275L217.704 114H241.25L206.296 62.5908L240.841 20.9092H217.25L183.75 61.9541H182.522V20.9092H162.841ZM119.182 81.8633H93.9541V81.1367L118.454 42.3633H119.182V81.8633Z" fill="white"/></svg>',
@@ -257,7 +248,7 @@
     }
 
     // =================================================================
-    // Получение метаданных через разные источники
+    // Получение метаданных (как в Flixio Studios)
     // =================================================================
     function getMetadataFromJacred(movie) {
         return new Promise(function(resolve) {
@@ -325,8 +316,7 @@
                     quality: null,
                     audio: null,
                     dub: false,
-                    hdr: false,
-                    seasonInfo: null
+                    hdr: false
                 };
 
                 var qualityPriority = ['4K', 'FHD', 'HD', 'SD'];
@@ -368,30 +358,6 @@
                     }
                 });
 
-                // Получаем информацию о сезонах
-                if (movie.name && movie.seasons) {
-                    var lastEpisode = movie.last_episode_to_air;
-                    if (lastEpisode && lastEpisode.season_number) {
-                        var seasonNum = lastEpisode.season_number;
-                        var episodeNum = lastEpisode.episode_number || '?';
-                        var totalEpisodes = '?';
-                        for (var i = 0; i < movie.seasons.length; i++) {
-                            if (movie.seasons[i].season_number === seasonNum && movie.seasons[i].episode_count) {
-                                totalEpisodes = movie.seasons[i].episode_count;
-                                break;
-                            }
-                        }
-                        metadata.seasonInfo = seasonNum + ' сезон ' + episodeNum + '/' + totalEpisodes + ' серий';
-                    } else {
-                        var seasons = Lampa.Utils.countSeasons(movie);
-                        if (seasons) {
-                            var t = [2, 0, 1, 1, 1, 2];
-                            var forms = ['сезон', 'сезона', 'сезонов'];
-                            metadata.seasonInfo = seasons + ' ' + forms[seasons % 100 > 4 && seasons % 100 < 20 ? 2 : t[Math.min(seasons % 10, 5)]];
-                        }
-                    }
-                }
-
                 metadata._ts = Date.now();
                 try {
                     Lampa.Storage.set(cacheKey, metadata);
@@ -404,118 +370,104 @@
         });
     }
 
-    function getMetadataFromTmdb(movie) {
-        return new Promise(function(resolve) {
-            if (!movie || !movie.id) { resolve(null); return; }
+    function getSeasonInfo(movie) {
+        if (!movie || !movie.name) return null;
 
-            var metadata = {
-                quality: null,
-                audio: null,
-                dub: false,
-                hdr: false,
-                seasonInfo: null
-            };
+        var lastEpisode = movie.last_episode_to_air;
+        if (lastEpisode && lastEpisode.season_number && lastEpisode.episode_number) {
+            var seasonNum = lastEpisode.season_number;
+            var episodeNum = lastEpisode.episode_number;
 
-            // Информация о сезонах
-            if (movie.name && movie.seasons) {
-                var lastEpisode = movie.last_episode_to_air;
-                if (lastEpisode && lastEpisode.season_number) {
-                    var seasonNum = lastEpisode.season_number;
-                    var episodeNum = lastEpisode.episode_number || '?';
-                    var totalEpisodes = '?';
-                    for (var i = 0; i < movie.seasons.length; i++) {
-                        if (movie.seasons[i].season_number === seasonNum && movie.seasons[i].episode_count) {
-                            totalEpisodes = movie.seasons[i].episode_count;
-                            break;
-                        }
-                    }
-                    metadata.seasonInfo = seasonNum + ' сезон ' + episodeNum + '/' + totalEpisodes + ' серий';
-                } else {
-                    var seasons = Lampa.Utils.countSeasons(movie);
-                    if (seasons) {
-                        var t = [2, 0, 1, 1, 1, 2];
-                        var forms = ['сезон', 'сезона', 'сезонов'];
-                        metadata.seasonInfo = seasons + ' ' + forms[seasons % 100 > 4 && seasons % 100 < 20 ? 2 : t[Math.min(seasons % 10, 5)]];
+            var totalEpisodes = '?';
+            if (movie.seasons && Array.isArray(movie.seasons)) {
+                for (var i = 0; i < movie.seasons.length; i++) {
+                    if (movie.seasons[i].season_number === seasonNum && movie.seasons[i].episode_count) {
+                        totalEpisodes = movie.seasons[i].episode_count;
+                        break;
                     }
                 }
             }
 
-            resolve(metadata);
-        });
+            return seasonNum + ' сезон ' + episodeNum + '/' + totalEpisodes + ' серий';
+        }
+
+        var seasons = Lampa.Utils.countSeasons(movie);
+        if (seasons) {
+            var t = [2, 0, 1, 1, 1, 2];
+            var forms = ['сезон', 'сезона', 'сезонов'];
+            return seasons + ' ' + forms[seasons % 100 > 4 && seasons % 100 < 20 ? 2 : t[Math.min(seasons % 10, 5)]];
+        }
+
+        return null;
     }
 
     function getMetadata(movie) {
-        var source = getSetting('metadata_source', 'both');
-
         return new Promise(function(resolve) {
             var result = {
+                seasonInfo: getSeasonInfo(movie),
                 quality: null,
                 audio: null,
                 dub: false,
-                hdr: false,
-                seasonInfo: null
+                hdr: false
             };
 
-            var promises = [];
-
-            if (source === 'jacred' || source === 'both') {
-                promises.push(getMetadataFromJacred(movie).then(function(data) {
-                    if (data) {
-                        if (data.quality) result.quality = data.quality;
-                        if (data.audio) result.audio = data.audio;
-                        if (data.dub) result.dub = data.dub;
-                        if (data.hdr) result.hdr = data.hdr;
-                        if (data.seasonInfo) result.seasonInfo = data.seasonInfo;
-                    }
-                }));
-            }
-
-            if (source === 'tmdb' || source === 'both') {
-                promises.push(getMetadataFromTmdb(movie).then(function(data) {
-                    if (data && data.seasonInfo) {
-                        result.seasonInfo = data.seasonInfo;
-                    }
-                }));
-            }
-
-            Promise.all(promises).then(function() {
+            getMetadataFromJacred(movie).then(function(jacredData) {
+                if (jacredData) {
+                    if (jacredData.quality) result.quality = jacredData.quality;
+                    if (jacredData.audio) result.audio = jacredData.audio;
+                    if (jacredData.dub) result.dub = jacredData.dub;
+                    if (jacredData.hdr) result.hdr = jacredData.hdr;
+                }
                 resolve(result);
             });
         });
     }
 
     // =================================================================
-    // Формирование строки с метаданными (без года)
+    // Формирование строки с метаданными (как в Flixio Studios)
     // =================================================================
-    function buildMetadataString(metadata) {
-        var parts = [];
+    function buildMetadataHTML(metadata) {
+        var html = '';
 
-        // Сезон и серии (для сериалов)
+        // Год (отдельно)
+        // Не добавляем, т.к. год отображается стандартно
+
+        // Сезон и серии
         if (metadata.seasonInfo) {
-            parts.push(metadata.seasonInfo);
+            html += '<span class="metadata-badge metadata-text">' + metadata.seasonInfo + '</span>';
         }
 
         // Качество
         if (metadata.quality) {
-            parts.push(metadata.quality);
+            var icon = QUALITY_SVGS[metadata.quality] || '';
+            if (icon) {
+                html += '<span class="metadata-badge">' + icon + '</span>';
+            } else {
+                html += '<span class="metadata-badge metadata-text">' + metadata.quality + '</span>';
+            }
         }
 
         // HDR
         if (metadata.hdr) {
-            parts.push('HDR');
+            html += '<span class="metadata-badge">' + HDR_SVG + '</span>';
         }
 
         // Аудио
         if (metadata.audio) {
-            parts.push(metadata.audio);
+            var audioIcon = AUDIO_SVGS[metadata.audio] || '';
+            if (audioIcon) {
+                html += '<span class="metadata-badge">' + audioIcon + '</span>';
+            } else {
+                html += '<span class="metadata-badge metadata-text">' + metadata.audio + '</span>';
+            }
         }
 
         // Озвучка
         if (metadata.dub) {
-            parts.push('DUB');
+            html += '<span class="metadata-badge">' + DUB_SVG + '</span>';
         }
 
-        return parts;
+        return html;
     }
 
     // =================================================================
@@ -634,9 +586,7 @@
     // Переопределение шаблона страницы фильма
     // =================================================================
     function overrideFullStartTemplate() {
-        var layoutPosition = getSetting('layout_position', 'top');
-
-        // Рейтинги (только названия)
+        // Рейтинги
         var ratingsHtml = '<div class="applecation__ratings">' +
             '<div class="full-start__rate rate--tmdb hide"><div class="rating-icon"></div><div class="rating-value"></div><div class="rating-label">' + tr('rating_tmdb') + '</div></div>' +
             '<div class="full-start__rate rate--imdb hide"><div class="rating-icon"></div><div class="rating-value"></div><div class="rating-label">' + tr('rating_imdb') + '</div></div>' +
@@ -650,13 +600,10 @@
             '<div>#{reactions_none}</div>' +
             '</div>';
 
-        // Метаданные (без года)
+        // Метаданные (с иконками как в Flixio Studios)
         var metadataHtml = '<div class="applecation__metadata"></div>';
 
-        // Год (стандартный от Lampa)
-        var yearHtml = '<div class="applecation__year"></div>';
-
-        // Контентная часть (логотип + информация)
+        // Контентная часть
         var contentHtml = 
             '<div class="applecation__logo"></div>' +
             '<div class="applecation__content-wrapper">' +
@@ -716,14 +663,12 @@
                 '</div>' +
             '</div>';
 
-        // Сборка шаблона в зависимости от положения
-        var bodyContent;
-        if (layoutPosition === 'top') {
-            bodyContent = contentHtml + buttonsHtml;
-        } else {
-            bodyContent = buttonsHtml + contentHtml;
-        }
+        // Стандартное описание Lampa (показывается после кнопок)
+        var standardDescriptionHtml = 
+            '<div class="full-start__description" style="display: none;">{description}</div>' +
+            '<div class="full-start__details" style="display: none;"></div>';
 
+        // Сборка шаблона
         var template = '<div class="full-start-new applecation">\n' +
             '    <div class="full-start-new__body">\n' +
             '        <div class="full-start-new__left hide">\n' +
@@ -733,9 +678,10 @@
             '        </div>\n' +
             '        <div class="full-start-new__right">\n' +
             '            <div class="applecation__left">\n' +
-            '                ' + bodyContent + '\n' +
+            '                ' + contentHtml + '\n' +
+            '                ' + buttonsHtml + '\n' +
+            '                ' + standardDescriptionHtml + '\n' +
             '                <div class="full-start-new__head" style="display: none;"></div>\n' +
-            '                <div class="full-start-new__details" style="display: none;"></div>\n' +
             '            </div>\n' +
             '            <div class="applecation__right">\n' +
             '                <div class="full-start-new__rate-line">\n' +
@@ -799,7 +745,6 @@
         fillInfo(render, movie);
         loadLogo(render, movie);
         loadRatings(render, movie);
-        applyRatingsDisplayMode(render);
         setupScrollDim(render);
         applyMarquee(render);
 
@@ -864,32 +809,8 @@
         metadataEl.html('<span class="metadata-loading">' + tr('loading') + '</span>');
 
         getMetadata(movie).then(function(metadata) {
-            var parts = buildMetadataString(metadata);
-            if (parts.length) {
-                var html = '';
-                parts.forEach(function(part) {
-                    var icon = '';
-                    if (part === '4K' || part === 'FHD' || part === 'HD') {
-                        icon = QUALITY_SVGS[part] || '';
-                    } else if (part === '7.1' || part === '5.1' || part === '2.0') {
-                        icon = AUDIO_SVGS[part] || '';
-                    } else if (part === 'DUB') {
-                        icon = DUB_SVG;
-                    } else if (part === 'HDR') {
-                        icon = HDR_SVG;
-                    } else {
-                        // Информация о сезонах и другие текстовые метки
-                        html += '<span class="metadata-badge metadata-text">' + part + '</span>';
-                        return;
-                    }
-
-                    if (icon) {
-                        html += '<span class="metadata-badge">' + icon + '</span>';
-                    } else {
-                        html += '<span class="metadata-badge metadata-text">' + part + '</span>';
-                    }
-                });
-
+            var html = buildMetadataHTML(metadata);
+            if (html) {
                 metadataEl.html(html);
             } else {
                 metadataEl.empty();
@@ -901,76 +822,90 @@
     // Заполнение описания
     // =================================================================
     function fillDescription(render, movie) {
-        var text = movie.overview || '';
-        var descEl = render.find('.applecation__description');
-        if (descEl.length) descEl.text(text);
+        var showDescription = getSetting('show_description', true);
+        var descWrapper = render.find('.applecation__description-wrapper');
+        var standardDesc = render.find('.full-start__description');
 
-        var wrap = render.find('.applecation__description-wrapper');
-        if (!wrap.length) return;
+        if (showDescription) {
+            // Показываем стилизованное описание
+            descWrapper.show();
+            standardDesc.hide();
 
-        wrap.off('hover:enter');
-        $('.applecation-description-overlay').remove();
+            var text = movie.overview || '';
+            var descEl = render.find('.applecation__description');
+            if (descEl.length) descEl.text(text);
 
-        if (!text || !getSetting('description_overlay', true)) return;
+            var wrap = render.find('.applecation__description-wrapper');
+            if (!wrap.length) return;
 
-        var title = movie.title || movie.name;
-        var dateStr = (movie.release_date || movie.first_air_date || '') + '';
-        var rel = dateStr.length > 3 ? Lampa.Utils.parseTime(dateStr).full : (dateStr.length > 0 ? dateStr : 'Неизвестно');
-        var budget = '$ ' + Lampa.Utils.numberWithSpaces(movie.budget || 0);
-        var countries = (movie.production_countries || []).map(function(c) {
-            var key = 'country_' + c.iso_3166_1.toLowerCase();
-            var t = Lampa.Lang.translate(key);
-            return t !== key ? t : c.name;
-        }).join(', ');
+            wrap.off('hover:enter');
+            $('.applecation-description-overlay').remove();
 
-        var overlay = $(Lampa.Template.get('applecation_overlay', {
-            title: title,
-            text: text,
-            relise: rel,
-            budget: budget,
-            countries: countries
-        }));
+            if (!text || !getSetting('description_overlay', true)) return;
 
-        if (!movie.budget || movie.budget === 0) overlay.find('.applecation--budget').remove();
-        if (!countries) overlay.find('.applecation--countries').remove();
+            var title = movie.title || movie.name;
+            var dateStr = (movie.release_date || movie.first_air_date || '') + '';
+            var rel = dateStr.length > 3 ? Lampa.Utils.parseTime(dateStr).full : (dateStr.length > 0 ? dateStr : 'Неизвестно');
+            var budget = '$ ' + Lampa.Utils.numberWithSpaces(movie.budget || 0);
+            var countries = (movie.production_countries || []).map(function(c) {
+                var key = 'country_' + c.iso_3166_1.toLowerCase();
+                var t = Lampa.Lang.translate(key);
+                return t !== key ? t : c.name;
+            }).join(', ');
 
-        $('body').append(overlay);
-        overlay.data('controller-created', false);
+            var overlay = $(Lampa.Template.get('applecation_overlay', {
+                title: title,
+                text: text,
+                relise: rel,
+                budget: budget,
+                countries: countries
+            }));
 
-        wrap.addClass('selector');
-        if (Lampa.Controller && Lampa.Controller.collectionAppend) {
-            Lampa.Controller.collectionAppend(wrap);
-        }
+            if (!movie.budget || movie.budget === 0) overlay.find('.applecation--budget').remove();
+            if (!countries) overlay.find('.applecation--countries').remove();
 
-        wrap.on('hover:enter', function() {
-            var el = $('.applecation-description-overlay');
-            if (!el.length) return;
+            $('body').append(overlay);
+            overlay.data('controller-created', false);
 
-            setTimeout(function() { el.addClass('show'); }, 10);
-
-            if (!el.data('controller-created') && Lampa.Controller) {
-                var ctrl = {
-                    toggle: function() {
-                        Lampa.Controller.collectionSet(el);
-                        Lampa.Controller.collectionFocus(el.find('.applecation-description-overlay__content'), el);
-                    },
-                    back: function() {
-                        var ol = $('.applecation-description-overlay');
-                        if (!ol.length) return;
-                        ol.removeClass('show');
-                        setTimeout(function() { Lampa.Controller.toggle('content'); }, 300);
-                    }
-                };
-                Lampa.Controller.add('applecation_description', ctrl);
-                el.data('controller-created', true);
+            wrap.addClass('selector');
+            if (Lampa.Controller && Lampa.Controller.collectionAppend) {
+                Lampa.Controller.collectionAppend(wrap);
             }
 
-            if (Lampa.Controller) Lampa.Controller.toggle('applecation_description');
-        });
+            wrap.on('hover:enter', function() {
+                var el = $('.applecation-description-overlay');
+                if (!el.length) return;
+
+                setTimeout(function() { el.addClass('show'); }, 10);
+
+                if (!el.data('controller-created') && Lampa.Controller) {
+                    var ctrl = {
+                        toggle: function() {
+                            Lampa.Controller.collectionSet(el);
+                            Lampa.Controller.collectionFocus(el.find('.applecation-description-overlay__content'), el);
+                        },
+                        back: function() {
+                            var ol = $('.applecation-description-overlay');
+                            if (!ol.length) return;
+                            ol.removeClass('show');
+                            setTimeout(function() { Lampa.Controller.toggle('content'); }, 300);
+                        }
+                    };
+                    Lampa.Controller.add('applecation_description', ctrl);
+                    el.data('controller-created', true);
+                }
+
+                if (Lampa.Controller) Lampa.Controller.toggle('applecation_description');
+            });
+        } else {
+            // Показываем стандартное описание Lampa
+            descWrapper.hide();
+            standardDesc.show();
+        }
     }
 
     // =================================================================
-    // Заполнение информации (без года, он уже есть в метаданных)
+    // Заполнение информации
     // =================================================================
     function fillInfo(render, movie) {
         var info = render.find('.applecation__info');
@@ -1172,8 +1107,6 @@
             if (avg !== null) {
                 updateRatingElement(ratingElements.avg, avg, SVG_ICONS.avg);
             }
-
-            applyRatingsDisplayMode(render);
         });
 
         setTimeout(function() {
@@ -1182,27 +1115,8 @@
                 if (avg !== null) {
                     updateRatingElement(ratingElements.avg, avg, SVG_ICONS.avg);
                 }
-                applyRatingsDisplayMode(render);
             }
         }, 5000);
-    }
-
-    // =================================================================
-    // Применение режима отображения рейтингов (только названия)
-    // =================================================================
-    function applyRatingsDisplayMode(render) {
-        var mode = getSetting('ratings_display_mode', 'labels');
-        var ratings = render.find('.applecation__ratings');
-
-        ratings.find('.full-start__rate').each(function() {
-            var el = $(this);
-            var icon = el.find('.rating-icon');
-            var label = el.find('.rating-label');
-
-            // Всегда показываем только названия
-            icon.hide();
-            label.show();
-        });
     }
 
     // =================================================================
@@ -1287,6 +1201,7 @@
         var logoScale = parseInt(getSetting('logo_scale', 100));
         var textScale = parseInt(getSetting('text_scale', 100));
         var spacingScale = parseInt(getSetting('spacing_scale', 100));
+        var buttonsSpacing = parseInt(getSetting('buttons_spacing', 100));
         var ratingsSize = parseInt(getSetting('ratings_size', 100));
         var reactionsSize = parseInt(getSetting('reactions_size', 100));
 
@@ -1353,6 +1268,10 @@
             '.applecation .applecation__metadata .metadata-badge {\n' +
             '    height: ' + (1.2 * reactionsSize / 100) + 'em !important;\n' +
             '    padding: ' + (0.1 * reactionsSize / 100) + 'em ' + (0.3 * reactionsSize / 100) + 'em !important;\n' +
+            '}\n' +
+            // Отступ до кнопок
+            '.applecation .full-start-new__buttons {\n' +
+            '    margin-top: ' + (0.5 * buttonsSpacing / 100) + 'em !important;\n' +
             '}\n' +
             '</style>';
 
@@ -1448,10 +1367,6 @@
         }
 
         applyScaling();
-
-        $('.applecation__ratings').each(function() {
-            applyRatingsDisplayMode($(this).closest('.full-start-new'));
-        });
     }
 
     // =================================================================
@@ -1652,29 +1567,6 @@
             }
         });
 
-        // Режим отображения рейтингов (только названия)
-        Lampa.SettingsApi.addParam({
-            component: 'applecation_settings',
-            param: {
-                name: 'applecation_ratings_display_mode',
-                type: 'select',
-                values: {
-                    labels: tr('ratings_mode_labels')
-                },
-                default: 'labels'
-            },
-            field: {
-                name: tr('ratings_display_mode'),
-                description: tr('ratings_display_mode_desc')
-            },
-            onChange: function(value) {
-                setSetting('ratings_display_mode', value);
-                $('.applecation__ratings').each(function() {
-                    applyRatingsDisplayMode($(this).closest('.full-start-new'));
-                });
-            }
-        });
-
         // Размер рейтингов
         Lampa.SettingsApi.addParam({
             component: 'applecation_settings',
@@ -1760,47 +1652,20 @@
             }
         });
 
-        // Источник метаданных
+        // Показывать описание
         Lampa.SettingsApi.addParam({
             component: 'applecation_settings',
             param: {
-                name: 'applecation_metadata_source',
-                type: 'select',
-                values: {
-                    jacred: tr('metadata_source_jacred'),
-                    tmdb: tr('metadata_source_tmdb'),
-                    both: tr('metadata_source_both')
-                },
-                default: 'both'
+                name: 'applecation_show_description',
+                type: 'trigger',
+                default: true
             },
             field: {
-                name: tr('metadata_source'),
-                description: tr('metadata_source_desc')
+                name: tr('show_description'),
+                description: tr('show_description_desc')
             },
             onChange: function(value) {
-                setSetting('metadata_source', value);
-            }
-        });
-
-        // Положение контента
-        Lampa.SettingsApi.addParam({
-            component: 'applecation_settings',
-            param: {
-                name: 'applecation_layout_position',
-                type: 'select',
-                values: {
-                    top: tr('layout_top'),
-                    bottom: tr('layout_bottom')
-                },
-                default: 'top'
-            },
-            field: {
-                name: tr('layout_position'),
-                description: tr('layout_position_desc')
-            },
-            onChange: function(value) {
-                setSetting('layout_position', value);
-                Lampa.Activity.back();
+                setSetting('show_description', value);
             }
         });
 
@@ -1897,6 +1762,25 @@
             },
             onChange: function(value) {
                 setSetting('spacing_scale', parseInt(value, 10));
+                applyScaling();
+            }
+        });
+
+        // Отступ до кнопок
+        Lampa.SettingsApi.addParam({
+            component: 'applecation_settings',
+            param: {
+                name: 'applecation_buttons_spacing',
+                type: 'select',
+                values: {50: '50%', 60: '60%', 70: '70%', 80: '80%', 90: '90%', 100: tr('scale_default') + ' (100%)', 110: '110%', 120: '120%', 130: '130%', 140: '140%', 150: '150%', 160: '160%', 170: '170%', 180: '180%', 200: '200%', 250: '250%', 300: '300%'},
+                default: '100'
+            },
+            field: {
+                name: tr('buttons_spacing'),
+                description: tr('buttons_spacing_desc')
+            },
+            onChange: function(value) {
+                setSetting('buttons_spacing', parseInt(value, 10));
                 applyScaling();
             }
         });
