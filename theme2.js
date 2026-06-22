@@ -201,7 +201,7 @@
     }
 
     // =================================================================
-    // LAMPA RATINGS (реакции) - как в Интерфейс Мод
+    // LAMPA RATINGS (реакции)
     // =================================================================
 
     function getLampaRating(movie, callback) {
@@ -301,7 +301,7 @@
     }
 
     // =================================================================
-    // JACRED QUALITY - как в Ліхтар Studios2
+    // JACRED QUALITY
     // =================================================================
 
     function fetchWithProxy(url, callback) {
@@ -371,7 +371,6 @@
                 return;
             }
 
-            // Формируем запрос как в Ліхтар Studios2
             var searchQuery = encodeURIComponent(title + ' ' + year);
             var apiUrl = 'https://jr.maxvol.pro/api/v1.0/torrents?search=' + searchQuery;
 
@@ -421,7 +420,6 @@
 
                         var currentRes = 'SD';
                         
-                        // Определяем качество как в Ліхтар Studios2
                         if (quality >= 2160) currentRes = '4K';
                         else if (quality >= 1440) currentRes = '2K';
                         else if (quality >= 1080) currentRes = 'FHD';
@@ -445,7 +443,6 @@
                             best.resolution = currentRes;
                         }
 
-                        // HDR / Dolby Vision
                         if (titleLower.indexOf('dolby vision') >= 0 || titleLower.indexOf('dovi') >= 0) {
                             best.dolbyVision = true;
                             best.hdr = true;
@@ -455,18 +452,15 @@
                             best.hdr = true;
                         }
 
-                        // Звук
                         if (titleLower.indexOf('7.1') >= 0) best.sound = '7.1';
                         else if (titleLower.indexOf('5.1') >= 0) best.sound = '5.1';
                         else if (titleLower.indexOf('2.0') >= 0) best.sound = '2.0';
 
-                        // DUB
                         if (titleLower.indexOf('dub') >= 0 || titleLower.indexOf('дубляж') >= 0) {
                             best.dub = true;
                         }
                     });
 
-                    // Если качество не определилось, но есть результаты - ставим HD
                     if (best.resolution === 'SD' && results.length > 0) {
                         best.resolution = 'HD';
                     }
@@ -598,7 +592,6 @@
                 render.addClass('applecation');
                 modifyCardDOM(render, movie);
 
-                // Получаем данные
                 var pending = 3;
                 var lampaData = null;
                 var qualityData = null;
@@ -606,7 +599,6 @@
                 function checkComplete() {
                     pending--;
                     if (pending === 0) {
-                        // Рейтинги берем из существующих данных
                         var ratings = {
                             tmdb: movie.vote_average || 0,
                             imdb: movie.imdb_rating || movie.ratingImdb || 0,
@@ -631,7 +623,6 @@
                     checkComplete();
                 });
 
-                // Для сезонов используем данные из карточки
                 checkComplete();
 
                 loadLogo(render, movie);
@@ -855,14 +846,13 @@
                 }
             }
 
-            // 3. Рейтинги - используем данные из карточки
+            // 3. Рейтинги
             var ratingsContainer = render.find('.applecation__ratings');
             if (ratingsContainer.length) {
                 ratingsContainer.empty();
                 var ratingItems = [];
                 var allRatings = [];
 
-                // Lampa
                 if (lampaData && lampaData.rating > 0) {
                     var lampaColor = getRatingColor(lampaData.rating);
                     var lampaBg = getRatingBackgroundColor(lampaData.rating);
@@ -876,7 +866,6 @@
                     allRatings.push(lampaData.rating);
                 }
 
-                // TMDB
                 if (ratings.tmdb > 0) {
                     var tmdbColor = getRatingColor(ratings.tmdb);
                     var tmdbBg = getRatingBackgroundColor(ratings.tmdb);
@@ -889,7 +878,6 @@
                     allRatings.push(ratings.tmdb);
                 }
 
-                // IMDb
                 if (ratings.imdb > 0) {
                     var imdbColor = getRatingColor(ratings.imdb);
                     var imdbBg = getRatingBackgroundColor(ratings.imdb);
@@ -902,7 +890,6 @@
                     allRatings.push(ratings.imdb);
                 }
 
-                // Кинопоиск
                 if (ratings.kinopoisk > 0) {
                     var kpColor = getRatingColor(ratings.kinopoisk);
                     var kpBg = getRatingBackgroundColor(ratings.kinopoisk);
@@ -915,7 +902,6 @@
                     allRatings.push(ratings.kinopoisk);
                 }
 
-                // ИТОГ
                 if (allRatings.length > 1) {
                     var sum = 0;
                     for (var i = 0; i < allRatings.length; i++) {
@@ -1015,7 +1001,7 @@
                 descWrapper.addClass('show');
             }
 
-            // 6. Информация о сезонах - из карточки
+            // 6. Информация о сезонах
             var infoText = render.find('.applecation__info-text');
             if (infoText.length) {
                 var infoParts = [];
@@ -1032,7 +1018,6 @@
                         infoParts.push(m + ' ' + Lampa.Lang.translate('time_m').replace('.', ''));
                     }
 
-                    // Текущий сезон
                     var currentSeason = 0;
                     var currentEpisode = 0;
                     var totalEpisodesInSeason = 0;
@@ -1066,7 +1051,6 @@
                         );
                     }
 
-                    // Всего серий
                     var totalSeasons = movie.number_of_seasons || 0;
                     var totalEpisodes = movie.number_of_episodes || 0;
                     
@@ -1087,7 +1071,6 @@
                         );
                     }
 
-                    // Статус
                     if (movie.status) {
                         var statusText = getStatusText(movie.status);
                         var statusColor = getStatusColor(movie.status);
@@ -1528,7 +1511,9 @@
 
     // =================================================================
     // SETTINGS
-    // =================================================================    function addSettings() {
+    // =================================================================
+
+    function addSettings() {
         try {
             if (!Lampa.SettingsApi || !Lampa.SettingsApi.addComponent) return;
 
@@ -1559,13 +1544,12 @@
                 field: { name: 'Описание в оверлее', description: 'Показывать описание в отдельном окне при нажатии' }
             });
 
-            // Кнопка очистки кэша
             Lampa.SettingsApi.addParam({
                 component: 'applecation_plus',
                 param: { name: 'applecation_clear_cache', type: 'trigger', default: false },
                 field: { 
                     name: '🗑️ Очистить кэш AppleTV+', 
-                    description: 'Очистить все кэшированные данные (рейтинги, информация о сезонах, реакции) и перезагрузить страницу' 
+                    description: 'Очистить все кэшированные данные и перезагрузить страницу' 
                 },
                 onChange: function(value) {
                     if (value === true || value === 'true' || value === 1 || value === '1') {
@@ -1579,7 +1563,6 @@
                 }
             });
 
-            // Кнопка перезагрузки
             Lampa.SettingsApi.addParam({
                 component: 'applecation_plus',
                 param: { name: 'applecation_reload', type: 'trigger', default: false },
@@ -1606,12 +1589,10 @@
 
     function clearAllCache() {
         try {
-            // Очищаем in-memory кэши
             _jacredCache = {};
             _logoCache = {};
             _lampaRatingCache = {};
 
-            // Очищаем Storage кэши
             var keys = ['jacred_', 'lampa_rating_', 'logo_'];
             var allKeys = [];
             try {
