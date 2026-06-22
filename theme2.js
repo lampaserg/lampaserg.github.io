@@ -1,5 +1,5 @@
 // @name AppleTV+
-// @version 3.9.0
+// @version 3.9.1
 // @author Your Name
 // @description Расширенная карточка фильма в стиле Apple TV+
 // @lampa-check Lampa.
@@ -11,7 +11,7 @@
     // CONFIGURATION
     // =================================================================
 
-    var PLUGIN_VERSION = '3.9.0';
+    var PLUGIN_VERSION = '3.9.1';
     var CACHE_TTL = 24 * 60 * 60 * 1000;
     var PROXY_TIMEOUT = 15000;
     var LAMPA_RATING_API = 'https://cubnotrip.top/api/reactions/get/';
@@ -1356,7 +1356,7 @@
                 descWrapper.addClass('show');
             }
 
-            // 6. Информация о сезонах
+            // 6. Информация о сезонах и статусе
             var infoText = render.find('.applecation__info-text');
             if (infoText.length) {
                 var infoParts = [];
@@ -1426,6 +1426,7 @@
                         );
                     }
 
+                    // Статус сериала
                     if (movie.status) {
                         var statusText = getStatusText(movie.status);
                         var statusColor = getStatusColor(movie.status);
@@ -1444,19 +1445,18 @@
                     infoParts.push(timeStr);
                 }
 
-                if (infoParts.length) {
-                    infoText.html(infoParts.join(' · '));
-                    render.find('.applecation__info').addClass('show');
-                }
+                infoText.html(infoParts.join(' · '));
+                render.find('.applecation__info').addClass('show');
             }
 
-            // 7. Бейджи качества - как в Ліхтар Studios2
+            // 7. Бейджи качества - как в Ліхтар Studios2 (после статуса)
             var badgesContainer = render.find('.applecation__quality-badges');
-            if (badgesContainer.length) {
+            if (badgesContainer.length && qualityData) {
                 badgesContainer.empty();
                 var hasBadges = false;
 
-                if (qualityData && qualityData.resolution && qualityData.resolution !== 'SD') {
+                // Качество видео
+                if (qualityData.resolution && qualityData.resolution !== 'SD') {
                     var resLabel = qualityData.resolution;
                     var icon = QUALITY_ICONS[resLabel];
                     
@@ -1469,15 +1469,17 @@
                     hasBadges = true;
                 }
 
-                if (qualityData && qualityData.dolbyVision) {
+                // Dolby Vision / HDR
+                if (qualityData.dolbyVision) {
                     badgesContainer.append('<span class="quality-badge quality-badge--icon">' + QUALITY_ICONS['Dolby Vision'] + '</span>');
                     hasBadges = true;
-                } else if (qualityData && qualityData.hdr) {
+                } else if (qualityData.hdr) {
                     badgesContainer.append('<span class="quality-badge quality-badge--icon">' + QUALITY_ICONS['HDR'] + '</span>');
                     hasBadges = true;
                 }
 
-                if (qualityData && qualityData.sound) {
+                // Звук
+                if (qualityData.sound) {
                     var soundIcon = QUALITY_ICONS[qualityData.sound];
                     if (soundIcon) {
                         badgesContainer.append('<span class="quality-badge quality-badge--icon">' + soundIcon + '</span>');
@@ -1487,15 +1489,19 @@
                     hasBadges = true;
                 }
 
-                if (qualityData && qualityData.dub) {
+                // DUB
+                if (qualityData.dub) {
                     badgesContainer.append('<span class="quality-badge quality-badge--icon">' + QUALITY_ICONS['DUB'] + '</span>');
                     hasBadges = true;
                 }
 
+                // Показываем или скрываем контейнер
                 if (hasBadges) {
                     badgesContainer.addClass('show');
+                    badgesContainer.css('display', 'flex');
                 } else {
-                    badgesContainer.hide();
+                    badgesContainer.removeClass('show');
+                    badgesContainer.css('display', 'none');
                 }
             }
         } catch (e) {
@@ -1703,10 +1709,10 @@
             .applecation__info.show { opacity: 1 !important; transform: translateY(0) !important; }
             .applecation__season-info { display: inline-flex !important; align-items: center !important; padding: 0.15em 0.5em !important; border-radius: 0.3em !important; color: #fff !important; font-size: 0.8em !important; font-weight: 600 !important; line-height: 1.3 !important; }
             .applecation__status-info { display: inline-flex !important; align-items: center !important; padding: 0.15em 0.5em !important; border-radius: 0.3em !important; color: #fff !important; font-size: 0.8em !important; font-weight: 600 !important; line-height: 1.3 !important; }
-            .applecation__quality-badges { display: flex !important; align-items: center !important; flex-wrap: wrap !important; gap: 0.4em !important; margin-left: 0.6em !important; opacity: 0 !important; transform: translateY(10px) !important; transition: opacity 0.3s ease-out, transform 0.3s ease-out !important; }
+            .applecation__quality-badges { display: flex !important; align-items: center !important; flex-wrap: wrap !important; gap: 0.3em !important; margin-left: 0.4em !important; opacity: 0 !important; transform: translateY(10px) !important; transition: opacity 0.3s ease-out, transform 0.3s ease-out !important; }
             .applecation__quality-badges.show { opacity: 1 !important; transform: translateY(0) !important; }
-            .quality-badge { display: inline-flex !important; align-items: center !important; justify-content: center !important; padding: 0.15em 0.5em !important; border-radius: 0.3em !important; font-size: 0.7em !important; font-weight: 700 !important; line-height: 1.3 !important; color: #fff !important; text-transform: uppercase !important; letter-spacing: 0.03em !important; border: 1px solid rgba(255,255,255,0.15) !important; background: rgba(0,0,0,0.5) !important; }
-            .quality-badge--icon { background: transparent !important; border: none !important; padding: 0 !important; height: 1.2em !important; }
+            .quality-badge { display: inline-flex !important; align-items: center !important; justify-content: center !important; padding: 0.1em 0.3em !important; border-radius: 0.2em !important; font-size: 0.65em !important; font-weight: 700 !important; line-height: 1.2 !important; color: #fff !important; text-transform: uppercase !important; letter-spacing: 0.02em !important; border: 1px solid rgba(255,255,255,0.1) !important; background: rgba(0,0,0,0.4) !important; }
+            .quality-badge--icon { background: transparent !important; border: none !important; padding: 0 !important; height: 1.1em !important; }
             .quality-badge--icon svg { height: 100% !important; width: auto !important; display: block !important; }
             .quality-badge--4k { background: rgba(46,204,113,0.8) !important; border-color: rgba(46,204,113,0.4) !important; }
             .quality-badge--fhd { background: rgba(52,152,219,0.8) !important; border-color: rgba(52,152,219,0.4) !important; }
