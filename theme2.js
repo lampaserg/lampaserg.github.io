@@ -1,5 +1,5 @@
 // @name AppleTV+
-// @version 3.2.0
+// @version 3.3.0
 // @author Your Name
 // @description Расширенная карточка фильма в стиле Apple TV+
 // @lampa-check Lampa.
@@ -11,9 +11,10 @@
     // CONFIGURATION
     // =================================================================
 
-    var PLUGIN_VERSION = '3.2.0';
+    var PLUGIN_VERSION = '3.3.0';
     var CACHE_TTL = 24 * 60 * 60 * 1000;
     var PROXY_TIMEOUT = 10000;
+    var LAMPA_RATING_API = 'https://cubnotrip.top/api/reactions/get/';
 
     var PROXY_LIST = [
         'https://api.allorigins.win/raw?url=',
@@ -28,6 +29,7 @@
     var _jacredCache = {};
     var _ratingCache = {};
     var _logoCache = {};
+    var _lampaRatingCache = {};
     var workingProxy = null;
 
     // =================================================================
@@ -59,6 +61,17 @@
         if (v < 6) return 'rgba(243,156,18,0.85)';
         if (v < 8) return 'rgba(52,152,219,0.85)';
         return 'rgba(46,204,113,0.85)';
+    }
+
+    function getAgeColor(pg) {
+        if (!pg) return '#ffffff';
+        var num = parseInt(pg);
+        if (isNaN(num)) return '#ffffff';
+        if (num <= 0) return '#4caf50';
+        if (num <= 6) return '#8bc34a';
+        if (num <= 12) return '#ffeb3b';
+        if (num <= 16) return '#ff9800';
+        return '#e74c3c';
     }
 
     function getStatusText(status) {
@@ -123,7 +136,6 @@
             var pg = null;
             var lang = LANG.toUpperCase();
             
-            // Пробуем получить из content_ratings
             if (movie.content_ratings && movie.content_ratings.results) {
                 var find = movie.content_ratings.results.find(function(a) {
                     return a.iso_3166_1 === lang;
@@ -138,7 +150,6 @@
                 }
             }
             
-            // Пробуем из release_dates
             if (!pg && movie.release_dates && movie.release_dates.results) {
                 var find = movie.release_dates.results.find(function(a) {
                     return a.iso_3166_1 === lang;
@@ -153,7 +164,6 @@
                 }
             }
             
-            // Пробуем из restrict
             if (!pg && movie.restrict) {
                 pg = movie.restrict + '+';
             }
@@ -181,29 +191,109 @@
             'TV-PG': '6+',
             'TV-14': '14+',
             'TV-MA': '17+',
-            '0': '0+',
-            '1': '1+',
-            '2': '2+',
-            '3': '3+',
-            '4': '4+',
-            '5': '5+',
-            '6': '6+',
-            '7': '7+',
-            '8': '8+',
-            '9': '9+',
-            '10': '10+',
-            '11': '11+',
-            '12': '12+',
-            '13': '13+',
-            '14': '14+',
-            '15': '15+',
-            '16': '16+',
-            '17': '17+',
-            '18': '18+'
+            '0': '0+', '1': '1+', '2': '2+', '3': '3+',
+            '4': '4+', '5': '5+', '6': '6+', '7': '7+',
+            '8': '8+', '9': '9+', '10': '10+', '11': '11+',
+            '12': '12+', '13': '13+', '14': '14+', '15': '15+',
+            '16': '16+', '17': '17+', '18': '18+'
         };
         
-        var decoded = map[rating] || rating;
-        return decoded;
+        return map[rating] || rating;
+    }
+
+    // =================================================================
+    // LAMPA RATINGS (реакции)
+    // =================================================================
+
+    function getLampaRating(movie, callback) {
+        try {
+            if (!movie || !movie.id) {
+                callback(null);
+                return;
+            }
+
+            var type = movie.name ? 'tv' : 'movie';
+            var key = type + '_' + movie.id;
+            var cacheKey = 'lampa_rating_' + key;
+            var now = Date.now();
+
+            if (_lampaRatingCache[cacheKey] && (now - _lampaRatingCache[cacheKey]._ts < CACHE_TTL)) {
+                callback(_lampaRatingCache[cacheKey]);
+                return;
+            }
+
+            var network = new Lampa.Reguest();
+            network.timeout(PROXY_TIMEOUT);
+            
+            network.silent(LAMPA_RATING_API + key, function(data) {
+                try {
+                    if (data && data.result && Array.isArray(data.result)) {
+                        var rating = calculateLampaRating(data.result);
+                        var result = {
+                            rating: rating.rating,
+                            medianReaction: rating.medianReaction,
+                            _ts: now
+                        };
+                        _lampaRatingCache[cacheKey] = result;
+                        callback(result);
+                    } else {
+                        callback(null);
+                    }
+                } catch (e) {
+                    callback(null);
+                }
+            }, function() {
+                callback(null);
+            }, false, { timeout: PROXY_TIMEOUT });
+
+        } catch (e) {
+            console.error('[AppleTV+] getLampaRating error:', e);
+            callback(null);
+        }
+    }
+
+    function calculateLampaRating(reactions) {
+        try {
+            var weightedSum = 0;
+            var totalCount = 0;
+            var reactionCnt = {};
+            var reactionCoef = { fire: 5, nice: 4, think: 3, bore: 2, shit: 1 };
+
+            for (var i = 0; i < reactions.length; i++) {
+                var item = reactions[i];
+                var count = parseInt(item.counter, 10) || 0;
+                var coef = reactionCoef[item.type] || 0;
+                weightedSum += count * coef;
+                totalCount += count;
+                reactionCnt[item.type] = (reactionCnt[item.type] || 0) + count;
+            }
+
+            if (totalCount === 0) {
+                return { rating: 0, medianReaction: '' };
+            }
+
+            var avgRating = weightedSum / totalCount;
+            var rating10 = (avgRating - 1) * 2.5;
+            var finalRating = rating10 >= 0 ? parseFloat(rating10.toFixed(1)) : 0;
+
+            var medianReaction = '';
+            var medianIndex = Math.ceil(totalCount / 2.0);
+            var keys = Object.keys(reactionCoef);
+            var sortedReactions = keys.sort(function(a, b) {
+                return reactionCoef[a] - reactionCoef[b];
+            });
+            var cumulativeCount = 0;
+            
+            while (sortedReactions.length && cumulativeCount < medianIndex) {
+                medianReaction = sortedReactions.pop();
+                cumulativeCount += (reactionCnt[medianReaction] || 0);
+            }
+
+            return { rating: finalRating, medianReaction: medianReaction };
+
+        } catch (e) {
+            return { rating: 0, medianReaction: '' };
+        }
     }
 
     // =================================================================
@@ -387,7 +477,6 @@
                 kinopoisk: 0
             };
 
-            // IMDb через external_ids
             var imdbId = movie.imdb_id || (movie.external_ids && movie.external_ids.imdb_id);
             if (imdbId) {
                 var network = new Lampa.Reguest();
@@ -560,8 +649,29 @@
                 modifyCardDOM(render, movie);
 
                 // Получаем все данные асинхронно
+                var pending = 3;
+                var ratingsData = { tmdb: 0, imdb: 0, kinopoisk: 0 };
+                var lampaData = null;
+
+                function checkComplete() {
+                    pending--;
+                    if (pending === 0) {
+                        fillContent(render, movie, ratingsData, lampaData);
+                    }
+                }
+
                 getRatings(movie, function(ratings) {
-                    fillContent(render, movie, ratings);
+                    ratingsData = ratings;
+                    checkComplete();
+                });
+
+                getLampaRating(movie, function(data) {
+                    lampaData = data;
+                    checkComplete();
+                });
+
+                getBestJacred(movie, function() {
+                    checkComplete();
                 });
 
                 loadLogo(render, movie);
@@ -672,7 +782,6 @@
             render.addClass('applecation');
             contentWrapper.addClass('applecation-glass');
 
-            // Добавляем виньетку на фон
             var bg = render.find('.full-start__background:not(.applecation__overlay)');
             if (bg.length && !bg.next('.applecation__overlay').length) {
                 bg.after('<div class="full-start__background loaded applecation__overlay"></div>');
@@ -686,7 +795,7 @@
     // CONTENT FILLING
     // =================================================================
 
-    function fillContent(render, movie, ratings) {
+    function fillContent(render, movie, ratings, lampaData) {
         try {
             var isTv = !!(movie.name || movie.original_name || movie.first_air_date || movie.number_of_seasons);
             var descriptionOverlayEnabled = Lampa.Storage.get('applecation_description_overlay', false);
@@ -704,10 +813,11 @@
                     parts = parts.concat(g);
                 }
 
-                // Возрастное ограничение
+                // Возрастное ограничение (цветное)
                 var pg = parsePG(movie);
                 if (pg) {
-                    parts.push('<span class="applecation__age-rating">' + pg + '</span>');
+                    var ageColor = getAgeColor(pg);
+                    parts.push('<span class="applecation__age-rating" style="border-color: ' + ageColor + '; color: ' + ageColor + ';">' + pg + '</span>');
                 }
 
                 metaText.html(parts.join(' · '));
@@ -753,58 +863,119 @@
                 }
             }
 
-            // 3. Рейтинги
+            // 3. Рейтинги: Lampa, TMDB, IMDb, Кинопоиск, ИТОГ
             var ratingsContainer = render.find('.applecation__ratings');
             if (ratingsContainer.length) {
                 ratingsContainer.empty();
-                var hasRating = false;
+                var ratingItems = [];
+                var allRatings = [];
+
+                // Lampa
+                if (lampaData && lampaData.rating > 0) {
+                    var lampaColor = getRatingColor(lampaData.rating);
+                    var lampaBg = getRatingBackgroundColor(lampaData.rating);
+                    ratingItems.push({
+                        source: 'Lampa',
+                        value: lampaData.rating,
+                        color: lampaColor,
+                        bg: lampaBg,
+                        icon: '❤️'
+                    });
+                    allRatings.push(lampaData.rating);
+                }
 
                 // TMDB
                 if (ratings.tmdb > 0) {
-                    var color = getRatingColor(ratings.tmdb);
-                    ratingsContainer.append(
-                        '<div class="applecation__rating-item" style="border-color: ' + color + '40; background: ' + getRatingBackgroundColor(ratings.tmdb) + ';">' +
-                        '<span class="rating-value" style="color: ' + color + ';">' + ratings.tmdb.toFixed(1) + '</span>' +
-                        '<span class="rating-source">TMDB</span>' +
-                        '</div>'
-                    );
-                    hasRating = true;
+                    var tmdbColor = getRatingColor(ratings.tmdb);
+                    var tmdbBg = getRatingBackgroundColor(ratings.tmdb);
+                    ratingItems.push({
+                        source: 'TMDB',
+                        value: ratings.tmdb,
+                        color: tmdbColor,
+                        bg: tmdbBg
+                    });
+                    allRatings.push(ratings.tmdb);
                 }
 
                 // IMDb
                 if (ratings.imdb > 0) {
                     var imdbColor = getRatingColor(ratings.imdb);
-                    ratingsContainer.append(
-                        '<div class="applecation__rating-item" style="border-color: ' + imdbColor + '40; background: ' + getRatingBackgroundColor(ratings.imdb) + ';">' +
-                        '<span class="rating-value" style="color: ' + imdbColor + ';">' + ratings.imdb.toFixed(1) + '</span>' +
-                        '<span class="rating-source">IMDb</span>' +
-                        '</div>'
-                    );
-                    hasRating = true;
+                    var imdbBg = getRatingBackgroundColor(ratings.imdb);
+                    ratingItems.push({
+                        source: 'IMDb',
+                        value: ratings.imdb,
+                        color: imdbColor,
+                        bg: imdbBg
+                    });
+                    allRatings.push(ratings.imdb);
                 }
 
                 // Кинопоиск
                 if (ratings.kinopoisk > 0) {
                     var kpColor = getRatingColor(ratings.kinopoisk);
-                    ratingsContainer.append(
-                        '<div class="applecation__rating-item" style="border-color: ' + kpColor + '40; background: ' + getRatingBackgroundColor(ratings.kinopoisk) + ';">' +
-                        '<span class="rating-value" style="color: ' + kpColor + ';">' + ratings.kinopoisk.toFixed(1) + '</span>' +
-                        '<span class="rating-source">Кинопоиск</span>' +
-                        '</div>'
-                    );
-                    hasRating = true;
+                    var kpBg = getRatingBackgroundColor(ratings.kinopoisk);
+                    ratingItems.push({
+                        source: 'Кинопоиск',
+                        value: ratings.kinopoisk,
+                        color: kpColor,
+                        bg: kpBg
+                    });
+                    allRatings.push(ratings.kinopoisk);
                 }
 
-                if (hasRating) {
+                // ИТОГ (среднее арифметическое)
+                if (allRatings.length > 1) {
+                    var sum = 0;
+                    for (var i = 0; i < allRatings.length; i++) {
+                        sum += allRatings[i];
+                    }
+                    var avg = sum / allRatings.length;
+                    var avgColor = getRatingColor(avg);
+                    var avgBg = getRatingBackgroundColor(avg);
+                    ratingItems.push({
+                        source: 'ИТОГ',
+                        value: avg,
+                        color: avgColor,
+                        bg: avgBg,
+                        isTotal: true
+                    });
+                }
+
+                // Отображаем рейтинги
+                ratingItems.forEach(function(item) {
+                    var displayValue = item.value.toFixed(1);
+                    var extraClass = item.isTotal ? ' applecation__rating-item--total' : '';
+                    var iconHtml = item.icon ? '<span class="rating-icon">' + item.icon + '</span>' : '';
+                    
+                    ratingsContainer.append(
+                        '<div class="applecation__rating-item' + extraClass + '" style="border-color: ' + item.color + '40; background: ' + item.bg + ';">' +
+                        iconHtml +
+                        '<span class="rating-value" style="color: ' + item.color + ';">' + displayValue + '</span>' +
+                        '<span class="rating-source">' + item.source + '</span>' +
+                        '</div>'
+                    );
+                });
+
+                if (ratingItems.length > 0) {
                     ratingsContainer.addClass('show');
                 } else {
                     ratingsContainer.hide();
                 }
             }
 
-            // 4. Реакции Lampa
+            // 4. Реакции Lampa (отдельно, в развернутом виде)
             var reactionsContainer = render.find('.applecation__reactions');
-            if (reactionsContainer.length && window.Lampa && Lampa.Api && Lampa.Api.sources && Lampa.Api.sources.cub) {
+            if (reactionsContainer.length && lampaData && lampaData.medianReaction) {
+                reactionsContainer.empty().show();
+                reactionsContainer.append(
+                    '<div class="applecation__reaction-item">' +
+                    '<span>🔥</span>' +
+                    '<span class="reaction-count">' + lampaData.rating.toFixed(1) + '</span>' +
+                    '</div>'
+                );
+                reactionsContainer.addClass('show');
+            } else if (reactionsContainer.length && window.Lampa && Lampa.Api && Lampa.Api.sources && Lampa.Api.sources.cub) {
+                // Fallback: пытаемся получить реакции через стандартный API
                 var type = movie.name ? 'tv' : 'movie';
                 try {
                     Lampa.Api.sources.cub.reactionsGet({ method: type, id: movie.id }, function(data) {
@@ -879,7 +1050,7 @@
                 descWrapper.addClass('show');
             }
 
-            // 6. Информация о сезонах (актуальная)
+            // 6. Информация о сезонах (синий фон - текущий, красный - всего)
             var infoText = render.find('.applecation__info-text');
             if (infoText.length) {
                 var infoParts = [];
@@ -893,19 +1064,17 @@
 
                 // Длительность
                 if (isTv) {
-                    // Сериал - актуальная информация о сезонах
                     if (movie.episode_run_time && movie.episode_run_time.length) {
                         var m = movie.episode_run_time[0];
                         infoParts.push(m + ' ' + Lampa.Lang.translate('time_m').replace('.', ''));
                     }
 
-                    // Текущий сезон и серии
+                    // Текущий сезон (синий фон)
                     var lastEpisode = movie.last_episode_to_air;
                     if (lastEpisode && lastEpisode.season_number) {
                         var seasonNum = lastEpisode.season_number;
                         var episodeNum = lastEpisode.episode_number || 0;
 
-                        // Ищем общее количество серий в сезоне
                         var totalEpisodes = 0;
                         if (movie.seasons && Array.isArray(movie.seasons)) {
                             for (var i = 0; i < movie.seasons.length; i++) {
@@ -918,12 +1087,36 @@
 
                         var seasonText = 'Сезон ' + seasonNum;
                         if (totalEpisodes > 0) {
-                            seasonText += ' · ' + episodeNum + '/' + totalEpisodes + ' серий';
+                            seasonText += ' · ' + episodeNum + '/' + totalEpisodes + ' сер.';
                         } else if (episodeNum > 0) {
-                            seasonText += ' · ' + episodeNum + ' серия';
+                            seasonText += ' · ' + episodeNum + ' сер.';
                         }
 
-                        infoParts.push(seasonText);
+                        infoParts.push(
+                            '<span class="applecation__season-info" style="background: #2196f3;">' +
+                            seasonText +
+                            '</span>'
+                        );
+                    }
+
+                    // Всего серий (красный фон)
+                    if (movie.number_of_seasons > 0 || movie.number_of_episodes > 0) {
+                        var totalText = '';
+                        if (movie.number_of_seasons > 0 && movie.number_of_episodes > 0) {
+                            totalText = movie.number_of_seasons + ' сез. · ' + movie.number_of_episodes + ' сер.';
+                        } else if (movie.number_of_seasons > 0) {
+                            totalText = movie.number_of_seasons + ' сез.';
+                        } else if (movie.number_of_episodes > 0) {
+                            totalText = movie.number_of_episodes + ' сер.';
+                        }
+
+                        if (totalText) {
+                            infoParts.push(
+                                '<span class="applecation__season-info" style="background: #e74c3c;">' +
+                                'Всего: ' + totalText +
+                                '</span>'
+                            );
+                        }
                     }
 
                     // Статус сериала
@@ -931,13 +1124,12 @@
                         var statusText = getStatusText(movie.status);
                         var statusColor = getStatusColor(movie.status);
                         infoParts.push(
-                            '<span class="applecation__status-info" style="background: ' + statusColor + '; padding: 0.15em 0.5em; border-radius: 0.3em; font-size: 0.85em; font-weight: 600; color: #fff;">' +
+                            '<span class="applecation__status-info" style="background: ' + statusColor + ';">' +
                             statusText +
                             '</span>'
                         );
                     }
                 } else if (movie.runtime && movie.runtime > 0) {
-                    // Фильм
                     var h = Math.floor(movie.runtime / 60);
                     var mm = movie.runtime % 60;
                     var th = Lampa.Lang.translate('time_h').replace('.', '');
@@ -952,7 +1144,7 @@
                 }
             }
 
-            // 7. Бейджи качества (всегда показываем)
+            // 7. Бейджи качества
             var badgesContainer = render.find('.applecation__quality-badges');
             if (badgesContainer.length) {
                 getBestJacred(movie, function(result) {
@@ -1181,17 +1373,19 @@
             .applecation__meta { display: flex !important; align-items: center !important; flex-wrap: wrap !important; color: #fff !important; font-size: 1em !important; margin-bottom: 0.5em !important; line-height: 1 !important; gap: 0.5em !important; opacity: 0 !important; transform: translateY(15px) !important; transition: opacity 0.4s ease-out, transform 0.4s ease-out !important; }
             .applecation__meta.show { opacity: 1 !important; transform: translateY(0) !important; }
             .applecation__meta-text { opacity: 0.85 !important; }
-            .applecation__age-rating { display: inline-flex !important; align-items: center !important; padding: 0.1em 0.4em !important; border-radius: 0.2em !important; border: 1px solid rgba(255,255,255,0.3) !important; font-size: 0.8em !important; font-weight: 700 !important; color: #fff !important; }
+            .applecation__age-rating { display: inline-flex !important; align-items: center !important; padding: 0.1em 0.4em !important; border-radius: 0.2em !important; border: 1.5px solid !important; font-size: 0.8em !important; font-weight: 700 !important; }
             .applecation__studios { display: flex !important; align-items: center !important; flex-wrap: wrap !important; gap: 0.7em !important; margin: 0 0 0.5em 0 !important; opacity: 0 !important; transform: translateY(15px) !important; transition: opacity 0.4s ease-out, transform 0.4s ease-out !important; }
             .applecation__studios.show { opacity: 1 !important; transform: translateY(0) !important; }
             .applecation__studio { display: inline-flex !important; align-items: center !important; gap: 0.4em !important; background: rgba(255,255,255,0.08) !important; border: 1px solid rgba(255,255,255,0.1) !important; border-radius: 0.6em !important; padding: 0.25em 0.6em !important; transition: all 0.2s ease !important; cursor: pointer !important; }
             .applecation__studio.focus { background: rgba(255,255,255,0.2) !important; border-color: #fff !important; transform: scale(1.05) !important; }
             .applecation__studio img { height: 1.3em !important; max-width: 120px !important; width: auto !important; object-fit: contain !important; filter: brightness(0) invert(1) !important; }
-            .applecation__ratings { display: flex !important; align-items: center !important; flex-wrap: wrap !important; gap: 0.6em !important; margin-bottom: 0.5em !important; opacity: 0 !important; transform: translateY(15px) !important; transition: opacity 0.4s ease-out, transform 0.4s ease-out !important; }
+            .applecation__ratings { display: flex !important; align-items: center !important; flex-wrap: wrap !important; gap: 0.5em !important; margin-bottom: 0.5em !important; opacity: 0 !important; transform: translateY(15px) !important; transition: opacity 0.4s ease-out, transform 0.4s ease-out !important; }
             .applecation__ratings.show { opacity: 1 !important; transform: translateY(0) !important; }
-            .applecation__rating-item { display: flex !important; align-items: center !important; gap: 0.35em !important; padding: 0.2em 0.6em !important; border-radius: 0.4em !important; background: rgba(0,0,0,0.5) !important; border: 1.5px solid rgba(255,255,255,0.15) !important; font-size: 0.85em !important; font-weight: 600 !important; color: #fff !important; line-height: 1 !important; }
-            .applecation__rating-item .rating-value { font-size: 1.1em !important; font-weight: 700 !important; }
-            .applecation__rating-item .rating-source { font-size: 0.75em !important; opacity: 0.7 !important; margin-left: 0.15em !important; }
+            .applecation__rating-item { display: flex !important; align-items: center !important; gap: 0.35em !important; padding: 0.2em 0.6em !important; border-radius: 0.4em !important; background: rgba(0,0,0,0.5) !important; border: 1.5px solid rgba(255,255,255,0.15) !important; font-size: 0.8em !important; font-weight: 600 !important; color: #fff !important; line-height: 1 !important; }
+            .applecation__rating-item .rating-value { font-size: 1.05em !important; font-weight: 700 !important; }
+            .applecation__rating-item .rating-source { font-size: 0.7em !important; opacity: 0.7 !important; margin-left: 0.15em !important; }
+            .applecation__rating-item .rating-icon { margin-right: 0.1em; }
+            .applecation__rating-item--total { border-color: rgba(255,215,0,0.5) !important; background: rgba(255,215,0,0.15) !important; }
             .applecation__reactions { display: flex !important; align-items: center !important; flex-wrap: wrap !important; gap: 0.6em !important; margin-bottom: 0.5em !important; opacity: 0 !important; transform: translateY(15px) !important; transition: opacity 0.4s ease-out, transform 0.4s ease-out !important; }
             .applecation__reactions.show { opacity: 1 !important; transform: translateY(0) !important; }
             .applecation__reaction-item { display: flex !important; align-items: center !important; gap: 0.3em !important; padding: 0.15em 0.5em !important; border-radius: 0.4em !important; background: rgba(255,255,255,0.06) !important; border: 1px solid rgba(255,255,255,0.08) !important; font-size: 0.85em !important; color: #fff !important; line-height: 1 !important; }
@@ -1203,9 +1397,8 @@
             .focus .applecation__description { color: rgba(255,255,255,0.92) !important; }
             .applecation__info { color: rgba(255,255,255,0.75) !important; font-size: 0.95em !important; line-height: 1.4 !important; margin-bottom: 0.5em !important; opacity: 0 !important; transform: translateY(15px) !important; transition: opacity 0.4s ease-out, transform 0.4s ease-out !important; display: flex !important; align-items: center !important; flex-wrap: wrap !important; gap: 0.5em !important; }
             .applecation__info.show { opacity: 1 !important; transform: translateY(0) !important; }
-            .applecation__season-info { display: inline-flex !important; align-items: center !important; padding: 0.15em 0.5em !important; border-radius: 0.3em !important; background: rgba(231,76,60,0.85) !important; color: #fff !important; font-size: 0.85em !important; font-weight: 600 !important; line-height: 1.3 !important; }
-            .applecation__season-info.completed { background: rgba(46,204,113,0.85) !important; }
-            .applecation__status-info { display: inline-flex !important; align-items: center !important; padding: 0.15em 0.5em !important; border-radius: 0.3em !important; color: #fff !important; font-size: 0.85em !important; font-weight: 600 !important; line-height: 1.3 !important; }
+            .applecation__season-info { display: inline-flex !important; align-items: center !important; padding: 0.15em 0.5em !important; border-radius: 0.3em !important; color: #fff !important; font-size: 0.8em !important; font-weight: 600 !important; line-height: 1.3 !important; }
+            .applecation__status-info { display: inline-flex !important; align-items: center !important; padding: 0.15em 0.5em !important; border-radius: 0.3em !important; color: #fff !important; font-size: 0.8em !important; font-weight: 600 !important; line-height: 1.3 !important; }
             .applecation__quality-badges { display: flex !important; align-items: center !important; flex-wrap: wrap !important; gap: 0.4em !important; margin-left: 0.6em !important; opacity: 0 !important; transform: translateY(10px) !important; transition: opacity 0.3s ease-out, transform 0.3s ease-out !important; }
             .applecation__quality-badges.show { opacity: 1 !important; transform: translateY(0) !important; }
             .quality-badge { display: inline-flex !important; align-items: center !important; justify-content: center !important; padding: 0.15em 0.5em !important; border-radius: 0.3em !important; font-size: 0.7em !important; font-weight: 700 !important; line-height: 1.3 !important; color: #fff !important; text-transform: uppercase !important; letter-spacing: 0.03em !important; border: 1px solid rgba(255,255,255,0.15) !important; background: rgba(0,0,0,0.5) !important; }
@@ -1237,7 +1430,6 @@
             $('#applecation_plus_extra_css').remove();
 
             var css = `
-            /* Виньетка на фоне */
             .applecation .applecation__overlay {
                 width: 90vw !important;
                 background: linear-gradient(to right,
@@ -1252,7 +1444,6 @@
                 z-index: 1 !important;
             }
 
-            /* Четкий фон */
             .applecation .full-start__background {
                 height: calc(100% + 6em) !important;
                 left: 0 !important;
@@ -1277,7 +1468,6 @@
                 opacity: 1 !important;
             }
 
-            /* Оверлей для описания */
             .applecation-description-overlay {
                 position: fixed !important;
                 top: 0 !important;
