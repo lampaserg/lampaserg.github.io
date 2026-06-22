@@ -1,5 +1,5 @@
 // @name AppleTV+
-// @version 3.6.0
+// @version 3.7.0
 // @author Your Name
 // @description Расширенная карточка фильма в стиле Apple TV+
 // @lampa-check Lampa.
@@ -11,7 +11,7 @@
     // CONFIGURATION
     // =================================================================
 
-    var PLUGIN_VERSION = '3.6.0';
+    var PLUGIN_VERSION = '3.7.0';
     var CACHE_TTL = 24 * 60 * 60 * 1000;
     var PROXY_TIMEOUT = 10000;
     var LAMPA_RATING_API = 'https://cubnotrip.top/api/reactions/get/';
@@ -41,6 +41,10 @@
         lampa_rating_cache: 'applecation_lampa_rating_cache'
     };
 
+    // API ключи для Кинопоиска и OMDb
+    var KP_API_KEYS = (window.RATINGS_PLUGIN_TOKENS && window.RATINGS_PLUGIN_TOKENS.KP_API_KEYS) || ['5178ab83-699c-4422-937e-f8a759f872ef'];
+    var OMDB_API_KEYS = (window.RATINGS_PLUGIN_TOKENS && window.RATINGS_PLUGIN_TOKENS.OMDB_API_KEYS) || ['73ff4450'];
+
     // =================================================================
     // UTILITY FUNCTIONS
     // =================================================================
@@ -52,6 +56,11 @@
         } catch (e) {
             return '';
         }
+    }
+
+    function getRandomToken(arr) {
+        if (!arr || !arr.length) return '';
+        return arr[Math.floor(Math.random() * arr.length)];
     }
 
     function getRatingColor(value) {
@@ -127,13 +136,11 @@
 
     function clearAllCache() {
         try {
-            // Очищаем in-memory кэши
             _jacredCache = {};
             _ratingCache = {};
             _logoCache = {};
             _lampaRatingCache = {};
 
-            // Очищаем Storage кэши
             var keys = Object.values(STORAGE_KEYS);
             for (var i = 0; i < keys.length; i++) {
                 try {
@@ -144,7 +151,6 @@
             console.log('[AppleTV+] All cache cleared');
             Lampa.Noty.show('Кэш AppleTV+ очищен');
 
-            // Перезагружаем страницу
             setTimeout(function() {
                 try {
                     if (Lampa.Activity && Lampa.Activity.active) {
@@ -287,7 +293,6 @@
             var key = type + '_' + movie.id;
             var cacheKey = key;
 
-            // Проверяем кэш
             var cached = getFromStorage('lampa_rating_cache', cacheKey);
             if (cached && cached._ts && (Date.now() - cached._ts < CACHE_TTL)) {
                 _lampaRatingCache[cacheKey] = cached;
@@ -422,7 +427,6 @@
             var cacheKey = 'jacred_' + (card.id || card.tmdb_id);
             var now = Date.now();
 
-            // Проверяем кэш
             var cached = getFromStorage('jacred_cache', cacheKey);
             if (cached && cached._ts && (now - cached._ts < CACHE_TTL)) {
                 _jacredCache[cacheKey] = cached;
@@ -540,7 +544,6 @@
             var cacheKey = 'ratings_' + movie.id;
             var now = Date.now();
 
-            // Проверяем кэш
             var cached = getFromStorage('rating_cache', cacheKey);
             if (cached && cached._ts && (now - cached._ts < CACHE_TTL)) {
                 _ratingCache[cacheKey] = cached;
@@ -569,12 +572,12 @@
                 }
             }
 
-            // IMDb
+            // IMDb через OMDb API
             var imdbId = movie.imdb_id || (movie.external_ids && movie.external_ids.imdb_id);
             if (imdbId) {
                 pending++;
                 var network = new Lampa.Reguest();
-                var omdbUrl = 'https://www.omdbapi.com/?apikey=73ff4450&i=' + imdbId;
+                var omdbUrl = 'https://www.omdbapi.com/?apikey=' + getRandomToken(OMDB_API_KEYS) + '&i=' + imdbId;
                 network.silent(omdbUrl, function(data) {
                     if (data && data.imdbRating) {
                         result.imdb = parseFloat(data.imdbRating) || 0;
@@ -587,17 +590,21 @@
 
             // Кинопоиск - как в Интерфейс Мод
             var kpApiKey = Lampa.Storage.get('rating_kp_api_key', '') || Lampa.Storage.get('source_api_key', '');
+            if (!kpApiKey) {
+                // Если ключ не задан в настройках, пробуем стандартный
+                kpApiKey = getRandomToken(KP_API_KEYS);
+            }
+            
             if (kpApiKey) {
                 pending++;
-                getKinopoiskRatingLikeInterface(movie, function(kpRating) {
-                    if (kpRating > 0) {
+                getKinopoiskRating(movie, kpApiKey, function(kpRating) {
+                    if (kpRating && kpRating > 0) {
                         result.kinopoisk = kpRating;
                     }
                     checkComplete();
                 });
             }
 
-            // Если нет запросов - завершаем
             if (pending === 0) {
                 _ratingCache[cacheKey] = result;
                 saveToStorage('rating_cache', { [cacheKey]: result });
@@ -610,15 +617,17 @@
         }
     }
 
-    function getKinopoiskRatingLikeInterface(movie, callback) {
+    // =================================================================
+    // КИНОПОИСК - как в Интерфейс Мод
+    // =================================================================
+
+    function getKinopoiskRating(movie, apiKey, callback) {
         try {
-            var kpApiKey = Lampa.Storage.get('rating_kp_api_key', '') || Lampa.Storage.get('source_api_key', '');
-            if (!kpApiKey) {
+            if (!movie || !movie.id) {
                 callback(0);
                 return;
             }
 
-            var network = new Lampa.Reguest();
             var title = movie.title || movie.name || '';
             var year = (movie.release_date || movie.first_air_date || '').substr(0, 4);
             var originalTitle = movie.original_title || movie.original_name || '';
@@ -627,6 +636,8 @@
                 callback(0);
                 return;
             }
+
+            var network = new Lampa.Reguest();
 
             // Сначала пробуем через IMDb ID
             var imdbId = movie.imdb_id || (movie.external_ids && movie.external_ids.imdb_id);
@@ -644,13 +655,13 @@
                     searchKinopoiskByTitle(title, year, originalTitle, callback);
                 }, function() {
                     searchKinopoiskByTitle(title, year, originalTitle, callback);
-                }, false, { headers: { 'X-API-KEY': kpApiKey } });
+                }, false, { headers: { 'X-API-KEY': apiKey } });
             } else {
                 searchKinopoiskByTitle(title, year, originalTitle, callback);
             }
 
         } catch (e) {
-            console.error('[AppleTV+] getKinopoiskRatingLikeInterface error:', e);
+            console.error('[AppleTV+] getKinopoiskRating error:', e);
             callback(0);
         }
     }
@@ -658,6 +669,9 @@
     function searchKinopoiskByTitle(title, year, originalTitle, callback) {
         try {
             var kpApiKey = Lampa.Storage.get('rating_kp_api_key', '') || Lampa.Storage.get('source_api_key', '');
+            if (!kpApiKey) {
+                kpApiKey = getRandomToken(KP_API_KEYS);
+            }
             if (!kpApiKey) {
                 callback(0);
                 return;
@@ -670,29 +684,46 @@
                 if (data && data.films && data.films.length) {
                     var results = data.films;
                     
-                    // Функция для поиска лучшего совпадения
                     function findBestMatch() {
-                        // Сначала ищем точное совпадение по году
+                        // 1. Сначала ищем точное совпадение по году
                         if (year) {
-                            var yearMatch = results.filter(function(f) {
+                            var yearMatches = results.filter(function(f) {
                                 return f.year && String(f.year) === year;
                             });
-                            if (yearMatch.length > 0) {
-                                return yearMatch[0];
+                            
+                            if (yearMatches.length > 0) {
+                                // Ищем среди них по оригинальному названию
+                                if (originalTitle) {
+                                    var origMatch = yearMatches.filter(function(f) {
+                                        return f.nameOriginal && f.nameOriginal.toLowerCase() === originalTitle.toLowerCase();
+                                    });
+                                    if (origMatch.length > 0) return origMatch[0];
+                                }
+                                // Ищем по точному совпадению названия
+                                var titleMatch = yearMatches.filter(function(f) {
+                                    return f.nameRu && f.nameRu.toLowerCase() === title.toLowerCase();
+                                });
+                                if (titleMatch.length > 0) return titleMatch[0];
+                                // Берем первый из совпадающих по году
+                                return yearMatches[0];
                             }
                         }
                         
-                        // Затем ищем по оригинальному названию
+                        // 2. Ищем по оригинальному названию
                         if (originalTitle) {
-                            var titleMatch = results.filter(function(f) {
+                            var origMatches = results.filter(function(f) {
                                 return f.nameOriginal && f.nameOriginal.toLowerCase() === originalTitle.toLowerCase();
                             });
-                            if (titleMatch.length > 0) {
-                                return titleMatch[0];
-                            }
+                            if (origMatches.length > 0) return origMatches[0];
                         }
                         
-                        // Затем берем первый с максимальным рейтингом
+                        // 3. Ищем по точному совпадению названия
+                        var titleMatches = results.filter(function(f) {
+                            return f.nameRu && f.nameRu.toLowerCase() === title.toLowerCase();
+                        });
+                        if (titleMatches.length > 0) return titleMatches[0];
+                        
+                        // 4. Берем первый с максимальным рейтингом
                         var sorted = results.slice().sort(function(a, b) {
                             return (parseFloat(b.rating) || 0) - (parseFloat(a.rating) || 0);
                         });
@@ -700,6 +731,7 @@
                     }
 
                     var found = findBestMatch();
+                    
                     if (found) {
                         // Пробуем получить детальный рейтинг
                         var filmId = found.filmId || found.kinopoiskId;
@@ -749,7 +781,6 @@
             var cacheKey = type + '_' + movie.id + '_logo';
             var now = Date.now();
 
-            // Проверяем кэш
             var cached = getFromStorage('logo_cache', cacheKey);
             if (cached && cached._ts && (now - cached._ts < CACHE_TTL)) {
                 _logoCache[cacheKey] = cached;
@@ -853,7 +884,6 @@
                     pending--;
                     if (pending === 0) {
                         fillContent(render, movie, ratingsData, lampaData);
-                        // Устанавливаем фокус на первую кнопку
                         setTimeout(function() {
                             try {
                                 focusFirstButton(render);
@@ -901,13 +931,11 @@
 
     function focusFirstButton(render) {
         try {
-            // Ищем первую кнопку в контейнере
             var buttons = render.find('.full-start-new__buttons .full-start__button:not(.hidden)');
             if (!buttons.length) return;
 
             var firstButton = buttons.first();
             
-            // Проверяем, что это не кнопка редактирования
             if (firstButton.hasClass('button--edit-order')) {
                 var nextButton = buttons.eq(1);
                 if (nextButton.length) {
@@ -917,19 +945,13 @@
                 }
             }
 
-            // Устанавливаем фокус
             if (Lampa.Controller && typeof Lampa.Controller.collectionFocus === 'function') {
-                // Пробуем через collectionFocus
                 Lampa.Controller.collectionFocus(firstButton[0], render.find('.full-start-new__buttons')[0]);
             } else if (typeof firstButton.focus === 'function') {
-                // Fallback на native focus
                 firstButton.focus();
             }
 
-            // Добавляем класс focus
             firstButton.addClass('focus');
-
-            console.log('[AppleTV+] Focus set on first button');
 
         } catch (e) {
             console.warn('[AppleTV+] focusFirstButton error:', e);
@@ -1802,7 +1824,7 @@
                 after: 'interface'
             });
 
-            // Убрана настройка качества постера - всегда 4K
+            // Настройка качества постера УБРАНА - всегда 4K
 
             Lampa.SettingsApi.addParam({
                 component: 'applecation_plus',
@@ -1821,7 +1843,6 @@
                 onChange: function(value) {
                     if (value === true || value === 'true' || value === 1 || value === '1') {
                         clearAllCache();
-                        // Сбрасываем значение, чтобы кнопка не оставалась включенной
                         setTimeout(function() {
                             try {
                                 Lampa.Storage.set('applecation_clear_cache', false);
