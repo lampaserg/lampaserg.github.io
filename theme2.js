@@ -1,5 +1,5 @@
 // @name AppleTV+
-// @version 3.3.0
+// @version 3.4.0
 // @author Your Name
 // @description Расширенная карточка фильма в стиле Apple TV+
 // @lampa-check Lampa.
@@ -11,7 +11,7 @@
     // CONFIGURATION
     // =================================================================
 
-    var PLUGIN_VERSION = '3.3.0';
+    var PLUGIN_VERSION = '3.4.0';
     var CACHE_TTL = 24 * 60 * 60 * 1000;
     var PROXY_TIMEOUT = 10000;
     var LAMPA_RATING_API = 'https://cubnotrip.top/api/reactions/get/';
@@ -22,6 +22,12 @@
         'https://thingproxy.freeboard.io/fetch/'
     ];
 
+    // Alloha API для получения информации о сезонах
+    var ALLOHA_SERVERS = [
+        { url: 'https://api.allohajr.workers.dev', token: 'alloha_public' },
+        { url: 'https://api.apbugall.org', token: 'alloha_public' }
+    ];
+
     var LANG = (Lampa.Storage.get('language', 'uk') || 'uk').toLowerCase();
     if (LANG === 'ua') LANG = 'uk';
     if (['uk', 'ru', 'en', 'pl'].indexOf(LANG) === -1) LANG = 'en';
@@ -30,6 +36,7 @@
     var _ratingCache = {};
     var _logoCache = {};
     var _lampaRatingCache = {};
+    var _seasonCache = {};
     var workingProxy = null;
 
     // =================================================================
@@ -232,6 +239,7 @@
                         var result = {
                             rating: rating.rating,
                             medianReaction: rating.medianReaction,
+                            reactions: data.result,
                             _ts: now
                         };
                         _lampaRatingCache[cacheKey] = result;
@@ -293,6 +301,60 @@
 
         } catch (e) {
             return { rating: 0, medianReaction: '' };
+        }
+    }
+
+    // =================================================================
+    // ALLOHA SEASON INFO
+    // =================================================================
+
+    function getSeasonInfoFromAlloha(movie, callback) {
+        try {
+            if (!movie || !movie.id) {
+                callback(null);
+                return;
+            }
+
+            var cacheKey = 'season_info_' + movie.id;
+            var now = Date.now();
+
+            if (_seasonCache[cacheKey] && (now - _seasonCache[cacheKey]._ts < CACHE_TTL)) {
+                callback(_seasonCache[cacheKey]);
+                return;
+            }
+
+            var server = ALLOHA_SERVERS[Math.floor(Math.random() * ALLOHA_SERVERS.length)];
+            var url = server.url + '?token=' + server.token + '&tmdb=' + movie.id;
+
+            var network = new Lampa.Reguest();
+            network.timeout(PROXY_TIMEOUT);
+
+            network.silent(url, function(data) {
+                try {
+                    if (data && data.status === 'success' && data.data) {
+                        var info = {
+                            seasons: data.data.seasons || 0,
+                            episodes: data.data.episodes || 0,
+                            lastSeason: data.data.last_season || 0,
+                            lastEpisode: data.data.last_episode || 0,
+                            totalEpisodesInSeason: data.data.total_episodes_in_season || 0,
+                            _ts: now
+                        };
+                        _seasonCache[cacheKey] = info;
+                        callback(info);
+                    } else {
+                        callback(null);
+                    }
+                } catch (e) {
+                    callback(null);
+                }
+            }, function() {
+                callback(null);
+            }, false, { timeout: PROXY_TIMEOUT });
+
+        } catch (e) {
+            console.error('[AppleTV+] getSeasonInfoFromAlloha error:', e);
+            callback(null);
         }
     }
 
@@ -477,6 +539,7 @@
                 kinopoisk: 0
             };
 
+            // IMDb через external_ids
             var imdbId = movie.imdb_id || (movie.external_ids && movie.external_ids.imdb_id);
             if (imdbId) {
                 var network = new Lampa.Reguest();
@@ -485,12 +548,13 @@
                     if (data && data.imdbRating) {
                         result.imdb = parseFloat(data.imdbRating) || 0;
                     }
-                    getKinopoiskRating(movie, result, callback, cacheKey);
+                    // После получения IMDb, пробуем Кинопоиск
+                    getKinopoiskRatingWithImdb(movie, result, callback, cacheKey);
                 }, function() {
-                    getKinopoiskRating(movie, result, callback, cacheKey);
+                    getKinopoiskRatingWithImdb(movie, result, callback, cacheKey);
                 });
             } else {
-                getKinopoiskRating(movie, result, callback, cacheKey);
+                getKinopoiskRatingWithImdb(movie, result, callback, cacheKey);
             }
         } catch (e) {
             console.error('[AppleTV+] getRatings error:', e);
@@ -498,7 +562,44 @@
         }
     }
 
-    function getKinopoiskRating(movie, result, callback, cacheKey) {
+    function getKinopoiskRatingWithImdb(movie, result, callback, cacheKey) {
+        try {
+            var kpApiKey = Lampa.Storage.get('rating_kp_api_key', '') || Lampa.Storage.get('source_api_key', '');
+            if (!kpApiKey) {
+                finishRatings(result, callback, cacheKey);
+                return;
+            }
+
+            var network = new Lampa.Reguest();
+            
+            // Пробуем сначала через IMDb ID (если есть)
+            var imdbId = movie.imdb_id || (movie.external_ids && movie.external_ids.imdb_id);
+            if (imdbId) {
+                var urlById = 'https://kinopoiskapiunofficial.tech/api/v2.2/films?imdbId=' + imdbId;
+                network.silent(urlById, function(data) {
+                    if (data && data.items && data.items.length) {
+                        var found = data.items[0];
+                        if (found && found.ratingKinopoisk) {
+                            result.kinopoisk = parseFloat(found.ratingKinopoisk) || 0;
+                            finishRatings(result, callback, cacheKey);
+                            return;
+                        }
+                    }
+                    // Если не нашли по IMDb, пробуем по названию
+                    searchKinopoiskByTitle(movie, result, callback, cacheKey);
+                }, function() {
+                    searchKinopoiskByTitle(movie, result, callback, cacheKey);
+                }, false, { headers: { 'X-API-KEY': kpApiKey } });
+            } else {
+                searchKinopoiskByTitle(movie, result, callback, cacheKey);
+            }
+        } catch (e) {
+            console.error('[AppleTV+] getKinopoiskRating error:', e);
+            finishRatings(result, callback, cacheKey);
+        }
+    }
+
+    function searchKinopoiskByTitle(movie, result, callback, cacheKey) {
         try {
             var kpApiKey = Lampa.Storage.get('rating_kp_api_key', '') || Lampa.Storage.get('source_api_key', '');
             if (!kpApiKey) {
@@ -510,7 +611,7 @@
             var title = movie.title || movie.name || '';
             var year = (movie.release_date || movie.first_air_date || '').substr(0, 4);
 
-            if (!title || !year) {
+            if (!title) {
                 finishRatings(result, callback, cacheKey);
                 return;
             }
@@ -519,11 +620,44 @@
 
             network.silent(searchUrl, function(data) {
                 if (data && data.films && data.films.length) {
-                    var found = data.films.find(function(f) {
-                        return f.year && String(f.year) === year;
-                    }) || data.films[0];
-
+                    // Ищем точное совпадение по названию и году
+                    var found = null;
+                    
+                    // Сначала ищем точное совпадение по году
+                    if (year) {
+                        found = data.films.find(function(f) {
+                            return f.year && String(f.year) === year;
+                        });
+                    }
+                    
+                    // Если не нашли по году, берем первый с максимальным рейтингом
+                    if (!found) {
+                        var sorted = data.films.slice().sort(function(a, b) {
+                            return (parseFloat(b.rating) || 0) - (parseFloat(a.rating) || 0);
+                        });
+                        found = sorted[0];
+                    }
+                    
+                    // Если нашли и есть рейтинг
                     if (found && found.rating) {
+                        // Пробуем получить детальный рейтинг
+                        var filmId = found.filmId || found.kinopoiskId;
+                        if (filmId) {
+                            var detailUrl = 'https://kinopoiskapiunofficial.tech/api/v2.2/films/' + filmId;
+                            var detailNetwork = new Lampa.Reguest();
+                            detailNetwork.silent(detailUrl, function(detailData) {
+                                if (detailData && detailData.ratingKinopoisk) {
+                                    result.kinopoisk = parseFloat(detailData.ratingKinopoisk) || 0;
+                                } else {
+                                    result.kinopoisk = parseFloat(found.rating) || 0;
+                                }
+                                finishRatings(result, callback, cacheKey);
+                            }, function() {
+                                result.kinopoisk = parseFloat(found.rating) || 0;
+                                finishRatings(result, callback, cacheKey);
+                            }, false, { headers: { 'X-API-KEY': kpApiKey } });
+                            return;
+                        }
                         result.kinopoisk = parseFloat(found.rating) || 0;
                     }
                 }
@@ -531,8 +665,9 @@
             }, function() {
                 finishRatings(result, callback, cacheKey);
             }, false, { headers: { 'X-API-KEY': kpApiKey } });
+
         } catch (e) {
-            console.error('[AppleTV+] getKinopoiskRating error:', e);
+            console.error('[AppleTV+] searchKinopoiskByTitle error:', e);
             finishRatings(result, callback, cacheKey);
         }
     }
@@ -649,14 +784,15 @@
                 modifyCardDOM(render, movie);
 
                 // Получаем все данные асинхронно
-                var pending = 3;
+                var pending = 4;
                 var ratingsData = { tmdb: 0, imdb: 0, kinopoisk: 0 };
                 var lampaData = null;
+                var seasonData = null;
 
                 function checkComplete() {
                     pending--;
                     if (pending === 0) {
-                        fillContent(render, movie, ratingsData, lampaData);
+                        fillContent(render, movie, ratingsData, lampaData, seasonData);
                     }
                 }
 
@@ -667,6 +803,11 @@
 
                 getLampaRating(movie, function(data) {
                     lampaData = data;
+                    checkComplete();
+                });
+
+                getSeasonInfoFromAlloha(movie, function(data) {
+                    seasonData = data;
                     checkComplete();
                 });
 
@@ -795,7 +936,7 @@
     // CONTENT FILLING
     // =================================================================
 
-    function fillContent(render, movie, ratings, lampaData) {
+    function fillContent(render, movie, ratings, lampaData, seasonData) {
         try {
             var isTv = !!(movie.name || movie.original_name || movie.first_air_date || movie.number_of_seasons);
             var descriptionOverlayEnabled = Lampa.Storage.get('applecation_description_overlay', false);
@@ -813,7 +954,6 @@
                     parts = parts.concat(g);
                 }
 
-                // Возрастное ограничение (цветное)
                 var pg = parsePG(movie);
                 if (pg) {
                     var ageColor = getAgeColor(pg);
@@ -941,7 +1081,6 @@
                     });
                 }
 
-                // Отображаем рейтинги
                 ratingItems.forEach(function(item) {
                     var displayValue = item.value.toFixed(1);
                     var extraClass = item.isTotal ? ' applecation__rating-item--total' : '';
@@ -963,67 +1102,91 @@
                 }
             }
 
-            // 4. Реакции Lampa (отдельно, в развернутом виде)
+            // 4. Реакции Lampa (развернутые)
             var reactionsContainer = render.find('.applecation__reactions');
-            if (reactionsContainer.length && lampaData && lampaData.medianReaction) {
-                reactionsContainer.empty().show();
-                reactionsContainer.append(
-                    '<div class="applecation__reaction-item">' +
-                    '<span>🔥</span>' +
-                    '<span class="reaction-count">' + lampaData.rating.toFixed(1) + '</span>' +
-                    '</div>'
-                );
-                reactionsContainer.addClass('show');
-            } else if (reactionsContainer.length && window.Lampa && Lampa.Api && Lampa.Api.sources && Lampa.Api.sources.cub) {
-                // Fallback: пытаемся получить реакции через стандартный API
-                var type = movie.name ? 'tv' : 'movie';
-                try {
-                    Lampa.Api.sources.cub.reactionsGet({ method: type, id: movie.id }, function(data) {
-                        try {
-                            if (!data || !data.result || !Array.isArray(data.result) || !data.result.length) {
-                                reactionsContainer.hide();
-                                return;
-                            }
+            if (reactionsContainer.length) {
+                reactionsContainer.empty();
+                var hasReactions = false;
 
-                            reactionsContainer.empty().show();
-                            var reactions = data.result;
-                            reactions.sort(function(a, b) {
-                                return (parseInt(b.counter) || 0) - (parseInt(a.counter) || 0);
-                            });
+                // Показываем реакции из lampaData
+                if (lampaData && lampaData.reactions && Array.isArray(lampaData.reactions) && lampaData.reactions.length > 0) {
+                    var emojiMap = {
+                        'fire': '🔥', 'nice': '👍', 'think': '🤔',
+                        'bore': '😴', 'shit': '💩', 'like': '❤️', 'dislike': '👎'
+                    };
 
-                            var emojiMap = {
-                                'fire': '🔥', 'nice': '👍', 'think': '🤔',
-                                'bore': '😴', 'shit': '💩', 'like': '❤️', 'dislike': '👎'
-                            };
-
-                            reactions.forEach(function(reaction) {
-                                var count = parseInt(reaction.counter) || 0;
-                                if (count === 0) return;
-                                var emoji = emojiMap[reaction.type] || '⭐';
-                                reactionsContainer.append(
-                                    '<div class="applecation__reaction-item">' +
-                                    '<span>' + emoji + '</span>' +
-                                    '<span class="reaction-count">' + count + '</span>' +
-                                    '</div>'
-                                );
-                            });
-
-                            if (reactionsContainer.children().length > 0) {
-                                reactionsContainer.addClass('show');
-                            } else {
-                                reactionsContainer.hide();
-                            }
-                        } catch (e) {
-                            reactionsContainer.hide();
-                        }
-                    }, function() {
-                        reactionsContainer.hide();
+                    // Сортируем по популярности
+                    var sorted = lampaData.reactions.slice().sort(function(a, b) {
+                        return (parseInt(b.counter) || 0) - (parseInt(a.counter) || 0);
                     });
-                } catch (e) {
+
+                    sorted.forEach(function(reaction) {
+                        var count = parseInt(reaction.counter) || 0;
+                        if (count === 0) return;
+                        var emoji = emojiMap[reaction.type] || '⭐';
+                        reactionsContainer.append(
+                            '<div class="applecation__reaction-item">' +
+                            '<span>' + emoji + '</span>' +
+                            '<span class="reaction-count">' + count + '</span>' +
+                            '</div>'
+                        );
+                        hasReactions = true;
+                    });
+                }
+
+                // Fallback: пытаемся получить реакции через стандартный API
+                if (!hasReactions && window.Lampa && Lampa.Api && Lampa.Api.sources && Lampa.Api.sources.cub) {
+                    var type = movie.name ? 'tv' : 'movie';
+                    try {
+                        Lampa.Api.sources.cub.reactionsGet({ method: type, id: movie.id }, function(data) {
+                            try {
+                                if (!data || !data.result || !Array.isArray(data.result) || !data.result.length) {
+                                    reactionsContainer.hide();
+                                    return;
+                                }
+
+                                reactionsContainer.empty().show();
+                                var reactions = data.result;
+                                reactions.sort(function(a, b) {
+                                    return (parseInt(b.counter) || 0) - (parseInt(a.counter) || 0);
+                                });
+
+                                var emojiMap = {
+                                    'fire': '🔥', 'nice': '👍', 'think': '🤔',
+                                    'bore': '😴', 'shit': '💩', 'like': '❤️', 'dislike': '👎'
+                                };
+
+                                reactions.forEach(function(reaction) {
+                                    var count = parseInt(reaction.counter) || 0;
+                                    if (count === 0) return;
+                                    var emoji = emojiMap[reaction.type] || '⭐';
+                                    reactionsContainer.append(
+                                        '<div class="applecation__reaction-item">' +
+                                        '<span>' + emoji + '</span>' +
+                                        '<span class="reaction-count">' + count + '</span>' +
+                                        '</div>'
+                                    );
+                                });
+
+                                if (reactionsContainer.children().length > 0) {
+                                    reactionsContainer.addClass('show');
+                                } else {
+                                    reactionsContainer.hide();
+                                }
+                            } catch (e) {
+                                reactionsContainer.hide();
+                            }
+                        }, function() {
+                            reactionsContainer.hide();
+                        });
+                    } catch (e) {
+                        reactionsContainer.hide();
+                    }
+                } else if (hasReactions) {
+                    reactionsContainer.addClass('show');
+                } else {
                     reactionsContainer.hide();
                 }
-            } else {
-                reactionsContainer.hide();
             }
 
             // 5. Описание
@@ -1050,7 +1213,7 @@
                 descWrapper.addClass('show');
             }
 
-            // 6. Информация о сезонах (синий фон - текущий, красный - всего)
+            // 6. Информация о сезонах (Alloha + TMDB)
             var infoText = render.find('.applecation__info-text');
             if (infoText.length) {
                 var infoParts = [];
@@ -1069,29 +1232,50 @@
                         infoParts.push(m + ' ' + Lampa.Lang.translate('time_m').replace('.', ''));
                     }
 
-                    // Текущий сезон (синий фон)
-                    var lastEpisode = movie.last_episode_to_air;
-                    if (lastEpisode && lastEpisode.season_number) {
-                        var seasonNum = lastEpisode.season_number;
-                        var episodeNum = lastEpisode.episode_number || 0;
+                    // Используем данные из Alloha
+                    var currentSeason = 0;
+                    var currentEpisode = 0;
+                    var totalEpisodesInSeason = 0;
+                    var totalSeasons = 0;
+                    var totalEpisodes = 0;
 
-                        var totalEpisodes = 0;
-                        if (movie.seasons && Array.isArray(movie.seasons)) {
-                            for (var i = 0; i < movie.seasons.length; i++) {
-                                if (movie.seasons[i].season_number === seasonNum) {
-                                    totalEpisodes = movie.seasons[i].episode_count || 0;
-                                    break;
+                    if (seasonData) {
+                        currentSeason = seasonData.lastSeason || 0;
+                        currentEpisode = seasonData.lastEpisode || 0;
+                        totalEpisodesInSeason = seasonData.totalEpisodesInSeason || 0;
+                        totalSeasons = seasonData.seasons || 0;
+                        totalEpisodes = seasonData.episodes || 0;
+                    }
+
+                    // Если Alloha не дала данных, используем TMDB
+                    if (!seasonData || totalSeasons === 0) {
+                        totalSeasons = movie.number_of_seasons || 0;
+                        totalEpisodes = movie.number_of_episodes || 0;
+                        
+                        var lastEpisode = movie.last_episode_to_air;
+                        if (lastEpisode) {
+                            currentSeason = lastEpisode.season_number || 0;
+                            currentEpisode = lastEpisode.episode_number || 0;
+                            
+                            if (movie.seasons && Array.isArray(movie.seasons)) {
+                                for (var i = 0; i < movie.seasons.length; i++) {
+                                    if (movie.seasons[i].season_number === currentSeason) {
+                                        totalEpisodesInSeason = movie.seasons[i].episode_count || 0;
+                                        break;
+                                    }
                                 }
                             }
                         }
+                    }
 
-                        var seasonText = 'Сезон ' + seasonNum;
-                        if (totalEpisodes > 0) {
-                            seasonText += ' · ' + episodeNum + '/' + totalEpisodes + ' сер.';
-                        } else if (episodeNum > 0) {
-                            seasonText += ' · ' + episodeNum + ' сер.';
+                    // Текущий сезон (синий фон)
+                    if (currentSeason > 0) {
+                        var seasonText = 'Сезон ' + currentSeason;
+                        if (currentEpisode > 0 && totalEpisodesInSeason > 0) {
+                            seasonText += ' · ' + currentEpisode + '/' + totalEpisodesInSeason + ' серий';
+                        } else if (currentEpisode > 0) {
+                            seasonText += ' · ' + currentEpisode + ' серия';
                         }
-
                         infoParts.push(
                             '<span class="applecation__season-info" style="background: #2196f3;">' +
                             seasonText +
@@ -1100,23 +1284,21 @@
                     }
 
                     // Всего серий (красный фон)
-                    if (movie.number_of_seasons > 0 || movie.number_of_episodes > 0) {
-                        var totalText = '';
-                        if (movie.number_of_seasons > 0 && movie.number_of_episodes > 0) {
-                            totalText = movie.number_of_seasons + ' сез. · ' + movie.number_of_episodes + ' сер.';
-                        } else if (movie.number_of_seasons > 0) {
-                            totalText = movie.number_of_seasons + ' сез.';
-                        } else if (movie.number_of_episodes > 0) {
-                            totalText = movie.number_of_episodes + ' сер.';
-                        }
+                    var totalText = '';
+                    if (totalSeasons > 0 && totalEpisodes > 0) {
+                        totalText = totalSeasons + ' сез. · ' + totalEpisodes + ' сер.';
+                    } else if (totalSeasons > 0) {
+                        totalText = totalSeasons + ' сез.';
+                    } else if (totalEpisodes > 0) {
+                        totalText = totalEpisodes + ' сер.';
+                    }
 
-                        if (totalText) {
-                            infoParts.push(
-                                '<span class="applecation__season-info" style="background: #e74c3c;">' +
-                                'Всего: ' + totalText +
-                                '</span>'
-                            );
-                        }
+                    if (totalText) {
+                        infoParts.push(
+                            '<span class="applecation__season-info" style="background: #e74c3c;">' +
+                            'Всего: ' + totalText +
+                            '</span>'
+                        );
                     }
 
                     // Статус сериала
