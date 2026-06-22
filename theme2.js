@@ -1,5 +1,5 @@
 // @name AppleTV+
-// @version 3.5.0
+// @version 3.6.0
 // @author Your Name
 // @description Расширенная карточка фильма в стиле Apple TV+
 // @lampa-check Lampa.
@@ -11,7 +11,7 @@
     // CONFIGURATION
     // =================================================================
 
-    var PLUGIN_VERSION = '3.5.0';
+    var PLUGIN_VERSION = '3.6.0';
     var CACHE_TTL = 24 * 60 * 60 * 1000;
     var PROXY_TIMEOUT = 10000;
     var LAMPA_RATING_API = 'https://cubnotrip.top/api/reactions/get/';
@@ -20,11 +20,6 @@
         'https://api.allorigins.win/raw?url=',
         'https://corsproxy.io/?url=',
         'https://thingproxy.freeboard.io/fetch/'
-    ];
-
-    var ALLOHA_SERVERS = [
-        { url: 'https://api.allohajr.workers.dev', token: 'alloha_public' },
-        { url: 'https://api.apbugall.org', token: 'alloha_public' }
     ];
 
     var LANG = (Lampa.Storage.get('language', 'uk') || 'uk').toLowerCase();
@@ -36,7 +31,6 @@
     var _ratingCache = {};
     var _logoCache = {};
     var _lampaRatingCache = {};
-    var _seasonCache = {};
     var workingProxy = null;
 
     // Ключи для хранения в Lampa.Storage
@@ -44,8 +38,7 @@
         jacred_cache: 'applecation_jacred_cache',
         rating_cache: 'applecation_rating_cache',
         logo_cache: 'applecation_logo_cache',
-        lampa_rating_cache: 'applecation_lampa_rating_cache',
-        season_cache: 'applecation_season_cache'
+        lampa_rating_cache: 'applecation_lampa_rating_cache'
     };
 
     // =================================================================
@@ -114,26 +107,13 @@
         return map[status] || 'rgba(0,0,0,0.6)';
     }
 
+    // Качество постера всегда 4K
     function getPosterQuality() {
-        var quality = Lampa.Storage.get('applecation_poster_quality', '4k');
-        var map = {
-            '720p': 'w780',
-            '1080p': 'w1280',
-            '4k': 'original',
-            '8k': 'original'
-        };
-        return map[quality] || 'original';
+        return 'original';
     }
 
     function getLogoQuality() {
-        var quality = Lampa.Storage.get('applecation_poster_quality', '4k');
-        var map = {
-            '720p': 'w300',
-            '1080p': 'w500',
-            '4k': 'original',
-            '8k': 'original'
-        };
-        return map[quality] || 'original';
+        return 'original';
     }
 
     function escapeHtml(str) {
@@ -152,7 +132,6 @@
             _ratingCache = {};
             _logoCache = {};
             _lampaRatingCache = {};
-            _seasonCache = {};
 
             // Очищаем Storage кэши
             var keys = Object.values(STORAGE_KEYS);
@@ -389,63 +368,6 @@
 
         } catch (e) {
             return { rating: 0, medianReaction: '' };
-        }
-    }
-
-    // =================================================================
-    // ALLOHA SEASON INFO
-    // =================================================================
-
-    function getSeasonInfoFromAlloha(movie, callback) {
-        try {
-            if (!movie || !movie.id) {
-                callback(null);
-                return;
-            }
-
-            var cacheKey = 'season_' + movie.id;
-
-            // Проверяем кэш
-            var cached = getFromStorage('season_cache', cacheKey);
-            if (cached && cached._ts && (Date.now() - cached._ts < CACHE_TTL)) {
-                _seasonCache[cacheKey] = cached;
-                callback(cached);
-                return;
-            }
-
-            var server = ALLOHA_SERVERS[Math.floor(Math.random() * ALLOHA_SERVERS.length)];
-            var url = server.url + '?token=' + server.token + '&tmdb=' + movie.id;
-
-            var network = new Lampa.Reguest();
-            network.timeout(PROXY_TIMEOUT);
-
-            network.silent(url, function(data) {
-                try {
-                    if (data && data.status === 'success' && data.data) {
-                        var info = {
-                            seasons: data.data.seasons || 0,
-                            episodes: data.data.episodes || 0,
-                            lastSeason: data.data.last_season || 0,
-                            lastEpisode: data.data.last_episode || 0,
-                            totalEpisodesInSeason: data.data.total_episodes_in_season || 0,
-                            _ts: Date.now()
-                        };
-                        _seasonCache[cacheKey] = info;
-                        saveToStorage('season_cache', { [cacheKey]: info });
-                        callback(info);
-                    } else {
-                        callback(null);
-                    }
-                } catch (e) {
-                    callback(null);
-                }
-            }, function() {
-                callback(null);
-            }, false, { timeout: PROXY_TIMEOUT });
-
-        } catch (e) {
-            console.error('[AppleTV+] getSeasonInfoFromAlloha error:', e);
-            callback(null);
         }
     }
 
@@ -923,15 +845,14 @@
                 modifyCardDOM(render, movie);
 
                 // Получаем все данные асинхронно
-                var pending = 4;
+                var pending = 3;
                 var ratingsData = { tmdb: 0, imdb: 0, kinopoisk: 0 };
                 var lampaData = null;
-                var seasonData = null;
 
                 function checkComplete() {
                     pending--;
                     if (pending === 0) {
-                        fillContent(render, movie, ratingsData, lampaData, seasonData);
+                        fillContent(render, movie, ratingsData, lampaData);
                         // Устанавливаем фокус на первую кнопку
                         setTimeout(function() {
                             try {
@@ -948,11 +869,6 @@
 
                 getLampaRating(movie, function(data) {
                     lampaData = data;
-                    checkComplete();
-                });
-
-                getSeasonInfoFromAlloha(movie, function(data) {
-                    seasonData = data;
                     checkComplete();
                 });
 
@@ -1122,7 +1038,7 @@
     // CONTENT FILLING
     // =================================================================
 
-    function fillContent(render, movie, ratings, lampaData, seasonData) {
+    function fillContent(render, movie, ratings, lampaData) {
         try {
             var isTv = !!(movie.name || movie.original_name || movie.first_air_date || movie.number_of_seasons);
             var descriptionOverlayEnabled = Lampa.Storage.get('applecation_description_overlay', false);
@@ -1349,7 +1265,7 @@
                 descWrapper.addClass('show');
             }
 
-            // 6. Информация о сезонах
+            // 6. Информация о сезонах (из TMDB)
             var infoText = render.find('.applecation__info-text');
             if (infoText.length) {
                 var infoParts = [];
@@ -1368,37 +1284,26 @@
                         infoParts.push(m + ' ' + Lampa.Lang.translate('time_m').replace('.', ''));
                     }
 
-                    // Используем данные из Alloha
+                    // Текущий сезон и серии
                     var currentSeason = 0;
                     var currentEpisode = 0;
                     var totalEpisodesInSeason = 0;
                     var totalSeasons = 0;
                     var totalEpisodes = 0;
 
-                    if (seasonData) {
-                        currentSeason = seasonData.lastSeason || 0;
-                        currentEpisode = seasonData.lastEpisode || 0;
-                        totalEpisodesInSeason = seasonData.totalEpisodesInSeason || 0;
-                        totalSeasons = seasonData.seasons || 0;
-                        totalEpisodes = seasonData.episodes || 0;
-                    }
-
-                    // Если Alloha не дала данных, используем TMDB
-                    if (!seasonData || totalSeasons === 0) {
-                        totalSeasons = movie.number_of_seasons || 0;
-                        totalEpisodes = movie.number_of_episodes || 0;
+                    totalSeasons = movie.number_of_seasons || 0;
+                    totalEpisodes = movie.number_of_episodes || 0;
+                    
+                    var lastEpisode = movie.last_episode_to_air;
+                    if (lastEpisode) {
+                        currentSeason = lastEpisode.season_number || 0;
+                        currentEpisode = lastEpisode.episode_number || 0;
                         
-                        var lastEpisode = movie.last_episode_to_air;
-                        if (lastEpisode) {
-                            currentSeason = lastEpisode.season_number || 0;
-                            currentEpisode = lastEpisode.episode_number || 0;
-                            
-                            if (movie.seasons && Array.isArray(movie.seasons)) {
-                                for (var i = 0; i < movie.seasons.length; i++) {
-                                    if (movie.seasons[i].season_number === currentSeason) {
-                                        totalEpisodesInSeason = movie.seasons[i].episode_count || 0;
-                                        break;
-                                    }
+                        if (movie.seasons && Array.isArray(movie.seasons)) {
+                            for (var i = 0; i < movie.seasons.length; i++) {
+                                if (movie.seasons[i].season_number === currentSeason) {
+                                    totalEpisodesInSeason = movie.seasons[i].episode_count || 0;
+                                    break;
                                 }
                             }
                         }
@@ -1897,19 +1802,7 @@
                 after: 'interface'
             });
 
-            Lampa.SettingsApi.addParam({
-                component: 'applecation_plus',
-                param: { name: 'applecation_poster_quality', type: 'select', values: {
-                    '720p': '720p (HD)',
-                    '1080p': '1080p (FHD)',
-                    '4k': '4K (Ultra HD)',
-                    '8k': '8K (Super Ultra HD)'
-                }, default: '4k' },
-                field: { name: 'Качество постера', description: 'Выберите качество изображений постеров и фона' },
-                onChange: function(value) {
-                    Lampa.Storage.set('applecation_poster_quality', value);
-                }
-            });
+            // Убрана настройка качества постера - всегда 4K
 
             Lampa.SettingsApi.addParam({
                 component: 'applecation_plus',
