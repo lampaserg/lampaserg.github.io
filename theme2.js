@@ -1,5 +1,5 @@
 // @name AppleTV+
-// @version 3.7.0
+// @version 3.8.0
 // @author Your Name
 // @description Расширенная карточка фильма в стиле Apple TV+
 // @lampa-check Lampa.
@@ -11,7 +11,7 @@
     // CONFIGURATION
     // =================================================================
 
-    var PLUGIN_VERSION = '3.7.0';
+    var PLUGIN_VERSION = '3.8.0';
     var CACHE_TTL = 24 * 60 * 60 * 1000;
     var PROXY_TIMEOUT = 15000;
 
@@ -25,10 +25,8 @@
     if (LANG === 'ua') LANG = 'uk';
     if (['uk', 'ru', 'en', 'pl'].indexOf(LANG) === -1) LANG = 'en';
 
-    // Кэши
     var _jacredCache = {};
     var _logoCache = {};
-    var _lampaRatingCache = {};
     var workingProxy = null;
 
     // =================================================================
@@ -201,107 +199,7 @@
     }
 
     // =================================================================
-    // LAMPA RATINGS (реакции)
-    // =================================================================
-
-    function getLampaRating(movie, callback) {
-        try {
-            if (!movie || !movie.id) {
-                callback(null);
-                return;
-            }
-
-            var type = movie.name ? 'tv' : 'movie';
-            var key = type + '_' + movie.id;
-            var cacheKey = 'lampa_rating_' + key;
-
-            var cached = Lampa.Storage.get(cacheKey, null);
-            if (cached && cached._ts && (Date.now() - cached._ts < CACHE_TTL)) {
-                _lampaRatingCache[cacheKey] = cached;
-                callback(cached);
-                return;
-            }
-
-            var network = new Lampa.Reguest();
-            network.timeout(PROXY_TIMEOUT);
-            
-            var url = 'https://cubnotrip.top/api/reactions/get/' + key;
-            
-            network.silent(url, function(data) {
-                try {
-                    if (data && data.result && Array.isArray(data.result)) {
-                        var rating = calculateLampaRating(data.result);
-                        var result = {
-                            rating: rating.rating,
-                            medianReaction: rating.medianReaction,
-                            reactions: data.result,
-                            _ts: Date.now()
-                        };
-                        _lampaRatingCache[cacheKey] = result;
-                        Lampa.Storage.set(cacheKey, result);
-                        callback(result);
-                    } else {
-                        callback(null);
-                    }
-                } catch (e) {
-                    callback(null);
-                }
-            }, function() {
-                callback(null);
-            }, false, { timeout: PROXY_TIMEOUT });
-
-        } catch (e) {
-            console.error('[AppleTV+] getLampaRating error:', e);
-            callback(null);
-        }
-    }
-
-    function calculateLampaRating(reactions) {
-        try {
-            var weightedSum = 0;
-            var totalCount = 0;
-            var reactionCnt = {};
-            var reactionCoef = { fire: 5, nice: 4, think: 3, bore: 2, shit: 1 };
-
-            for (var i = 0; i < reactions.length; i++) {
-                var item = reactions[i];
-                var count = parseInt(item.counter, 10) || 0;
-                var coef = reactionCoef[item.type] || 0;
-                weightedSum += count * coef;
-                totalCount += count;
-                reactionCnt[item.type] = (reactionCnt[item.type] || 0) + count;
-            }
-
-            if (totalCount === 0) {
-                return { rating: 0, medianReaction: '' };
-            }
-
-            var avgRating = weightedSum / totalCount;
-            var rating10 = (avgRating - 1) * 2.5;
-            var finalRating = rating10 >= 0 ? parseFloat(rating10.toFixed(1)) : 0;
-
-            var medianReaction = '';
-            var medianIndex = Math.ceil(totalCount / 2.0);
-            var keys = Object.keys(reactionCoef);
-            var sortedReactions = keys.sort(function(a, b) {
-                return reactionCoef[a] - reactionCoef[b];
-            });
-            var cumulativeCount = 0;
-            
-            while (sortedReactions.length && cumulativeCount < medianIndex) {
-                medianReaction = sortedReactions.pop();
-                cumulativeCount += (reactionCnt[medianReaction] || 0);
-            }
-
-            return { rating: finalRating, medianReaction: medianReaction };
-
-        } catch (e) {
-            return { rating: 0, medianReaction: '' };
-        }
-    }
-
-    // =================================================================
-    // JACRED QUALITY
+    // JACRED QUALITY - как в Ліхтар Studios2
     // =================================================================
 
     function fetchWithProxy(url, callback) {
@@ -373,8 +271,6 @@
 
             var searchQuery = encodeURIComponent(title + ' ' + year);
             var apiUrl = 'https://jr.maxvol.pro/api/v1.0/torrents?search=' + searchQuery;
-
-            console.log('[AppleTV+] Jacred: Fetching quality for:', title, year);
 
             fetchWithProxy(apiUrl, function(err, data) {
                 if (err || !data) {
@@ -468,7 +364,6 @@
                     _jacredCache[cacheKey] = best;
                     Lampa.Storage.set(cacheKey, best);
                     
-                    console.log('[AppleTV+] Jacred result:', best);
                     callback(best);
 
                 } catch (e) {
@@ -592,38 +487,26 @@
                 render.addClass('applecation');
                 modifyCardDOM(render, movie);
 
-                var pending = 3;
-                var lampaData = null;
-                var qualityData = null;
-
-                function checkComplete() {
-                    pending--;
-                    if (pending === 0) {
-                        var ratings = {
-                            tmdb: movie.vote_average || 0,
-                            imdb: movie.imdb_rating || movie.ratingImdb || 0,
-                            kinopoisk: movie.kp_rating || movie.ratingKinopoisk || 0
-                        };
+                // Получаем качество через Jacred
+                getBestJacred(movie, function(qualityData) {
+                    // Рейтинги берем из готовых данных карточки
+                    var ratings = {
+                        tmdb: movie.vote_average || 0,
+                        imdb: movie.imdb_rating || movie.ratingImdb || 0,
+                        kinopoisk: movie.kp_rating || movie.ratingKinopoisk || 0
+                    };
+                    
+                    // Реакции Lampa получаем через API
+                    getLampaRating(movie, function(lampaData) {
                         fillContent(render, movie, ratings, lampaData, qualityData);
+                        
                         setTimeout(function() {
                             try {
                                 focusFirstButton(render);
                             } catch (err) {}
                         }, 500);
-                    }
-                }
-
-                getLampaRating(movie, function(data) {
-                    lampaData = data;
-                    checkComplete();
+                    });
                 });
-
-                getBestJacred(movie, function(data) {
-                    qualityData = data;
-                    checkComplete();
-                });
-
-                checkComplete();
 
                 loadLogo(render, movie);
                 setupAnimations(render);
@@ -642,6 +525,104 @@
         });
 
         console.log('[AppleTV+] Initialized successfully');
+    }
+
+    // =================================================================
+    // LAMPA RATINGS (реакции)
+    // =================================================================
+
+    function getLampaRating(movie, callback) {
+        try {
+            if (!movie || !movie.id) {
+                callback(null);
+                return;
+            }
+
+            var type = movie.name ? 'tv' : 'movie';
+            var key = type + '_' + movie.id;
+            var cacheKey = 'lampa_rating_' + key;
+
+            var cached = Lampa.Storage.get(cacheKey, null);
+            if (cached && cached._ts && (Date.now() - cached._ts < CACHE_TTL)) {
+                callback(cached);
+                return;
+            }
+
+            var network = new Lampa.Reguest();
+            network.timeout(PROXY_TIMEOUT);
+            
+            var url = 'https://cubnotrip.top/api/reactions/get/' + key;
+            
+            network.silent(url, function(data) {
+                try {
+                    if (data && data.result && Array.isArray(data.result)) {
+                        var rating = calculateLampaRating(data.result);
+                        var result = {
+                            rating: rating.rating,
+                            medianReaction: rating.medianReaction,
+                            reactions: data.result,
+                            _ts: Date.now()
+                        };
+                        Lampa.Storage.set(cacheKey, result);
+                        callback(result);
+                    } else {
+                        callback(null);
+                    }
+                } catch (e) {
+                    callback(null);
+                }
+            }, function() {
+                callback(null);
+            }, false, { timeout: PROXY_TIMEOUT });
+
+        } catch (e) {
+            console.error('[AppleTV+] getLampaRating error:', e);
+            callback(null);
+        }
+    }
+
+    function calculateLampaRating(reactions) {
+        try {
+            var weightedSum = 0;
+            var totalCount = 0;
+            var reactionCnt = {};
+            var reactionCoef = { fire: 5, nice: 4, think: 3, bore: 2, shit: 1 };
+
+            for (var i = 0; i < reactions.length; i++) {
+                var item = reactions[i];
+                var count = parseInt(item.counter, 10) || 0;
+                var coef = reactionCoef[item.type] || 0;
+                weightedSum += count * coef;
+                totalCount += count;
+                reactionCnt[item.type] = (reactionCnt[item.type] || 0) + count;
+            }
+
+            if (totalCount === 0) {
+                return { rating: 0, medianReaction: '' };
+            }
+
+            var avgRating = weightedSum / totalCount;
+            var rating10 = (avgRating - 1) * 2.5;
+            var finalRating = rating10 >= 0 ? parseFloat(rating10.toFixed(1)) : 0;
+
+            var medianReaction = '';
+            var medianIndex = Math.ceil(totalCount / 2.0);
+            var keys = Object.keys(reactionCoef);
+            var sortedReactions = keys.sort(function(a, b) {
+                return reactionCoef[a] - reactionCoef[b];
+            });
+            var cumulativeCount = 0;
+            
+            while (sortedReactions.length && cumulativeCount < medianIndex) {
+                medianReaction = sortedReactions.pop();
+                cumulativeCount += (reactionCnt[medianReaction] || 0);
+            }
+
+            return { rating: finalRating, medianReaction: medianReaction };
+
+        } catch (e) {
+            return { rating: 0, medianReaction: '' };
+        }
     }
 
     // =================================================================
@@ -846,13 +827,14 @@
                 }
             }
 
-            // 3. Рейтинги
+            // 3. Рейтинги - TMDB, IMDb, Кинопоиск из карточки
             var ratingsContainer = render.find('.applecation__ratings');
             if (ratingsContainer.length) {
                 ratingsContainer.empty();
                 var ratingItems = [];
                 var allRatings = [];
 
+                // Lampa
                 if (lampaData && lampaData.rating > 0) {
                     var lampaColor = getRatingColor(lampaData.rating);
                     var lampaBg = getRatingBackgroundColor(lampaData.rating);
@@ -866,6 +848,7 @@
                     allRatings.push(lampaData.rating);
                 }
 
+                // TMDB
                 if (ratings.tmdb > 0) {
                     var tmdbColor = getRatingColor(ratings.tmdb);
                     var tmdbBg = getRatingBackgroundColor(ratings.tmdb);
@@ -878,6 +861,7 @@
                     allRatings.push(ratings.tmdb);
                 }
 
+                // IMDb
                 if (ratings.imdb > 0) {
                     var imdbColor = getRatingColor(ratings.imdb);
                     var imdbBg = getRatingBackgroundColor(ratings.imdb);
@@ -890,6 +874,7 @@
                     allRatings.push(ratings.imdb);
                 }
 
+                // Кинопоиск
                 if (ratings.kinopoisk > 0) {
                     var kpColor = getRatingColor(ratings.kinopoisk);
                     var kpBg = getRatingBackgroundColor(ratings.kinopoisk);
@@ -902,6 +887,7 @@
                     allRatings.push(ratings.kinopoisk);
                 }
 
+                // ИТОГ
                 if (allRatings.length > 1) {
                     var sum = 0;
                     for (var i = 0; i < allRatings.length; i++) {
@@ -1591,9 +1577,8 @@
         try {
             _jacredCache = {};
             _logoCache = {};
-            _lampaRatingCache = {};
 
-            var keys = ['jacred_', 'lampa_rating_', 'logo_'];
+            var keys = ['jacred_', 'logo_'];
             var allKeys = [];
             try {
                 var storage = Lampa.Storage.getAll ? Lampa.Storage.getAll() : {};
