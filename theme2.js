@@ -1,5 +1,5 @@
 // @name AppleTV+
-// @version 3.1.0
+// @version 3.2.0
 // @author Your Name
 // @description Расширенная карточка фильма в стиле Apple TV+
 // @lampa-check Lampa.
@@ -11,7 +11,7 @@
     // CONFIGURATION
     // =================================================================
 
-    var PLUGIN_VERSION = '3.1.0';
+    var PLUGIN_VERSION = '3.2.0';
     var CACHE_TTL = 24 * 60 * 60 * 1000;
     var PROXY_TIMEOUT = 10000;
 
@@ -26,17 +26,21 @@
     if (['uk', 'ru', 'en', 'pl'].indexOf(LANG) === -1) LANG = 'en';
 
     var _jacredCache = {};
-    var workingProxy = null;
     var _ratingCache = {};
     var _logoCache = {};
+    var workingProxy = null;
 
     // =================================================================
     // UTILITY FUNCTIONS
     // =================================================================
 
     function getTmdbKey() {
-        var custom = (Lampa.Storage.get('applecation_tmdb_apikey') || '').trim();
-        return custom || (Lampa.TMDB && Lampa.TMDB.key ? Lampa.TMDB.key() : '');
+        try {
+            var custom = (Lampa.Storage.get('applecation_tmdb_apikey') || '').trim();
+            return custom || (Lampa.TMDB && Lampa.TMDB.key ? Lampa.TMDB.key() : '');
+        } catch (e) {
+            return '';
+        }
     }
 
     function getRatingColor(value) {
@@ -109,6 +113,100 @@
     }
 
     // =================================================================
+    // PARSE PG (возрастной рейтинг)
+    // =================================================================
+
+    function parsePG(movie) {
+        try {
+            if (!movie) return null;
+            
+            var pg = null;
+            var lang = LANG.toUpperCase();
+            
+            // Пробуем получить из content_ratings
+            if (movie.content_ratings && movie.content_ratings.results) {
+                var find = movie.content_ratings.results.find(function(a) {
+                    return a.iso_3166_1 === lang;
+                });
+                if (!find) {
+                    find = movie.content_ratings.results.find(function(a) {
+                        return a.iso_3166_1 === 'US';
+                    });
+                }
+                if (find && find.rating) {
+                    pg = decodePG(find.rating);
+                }
+            }
+            
+            // Пробуем из release_dates
+            if (!pg && movie.release_dates && movie.release_dates.results) {
+                var find = movie.release_dates.results.find(function(a) {
+                    return a.iso_3166_1 === lang;
+                });
+                if (!find) {
+                    find = movie.release_dates.results.find(function(a) {
+                        return a.iso_3166_1 === 'US';
+                    });
+                }
+                if (find && find.release_dates && find.release_dates.length) {
+                    pg = decodePG(find.release_dates[0].certification);
+                }
+            }
+            
+            // Пробуем из restrict
+            if (!pg && movie.restrict) {
+                pg = movie.restrict + '+';
+            }
+            
+            return pg;
+            
+        } catch (e) {
+            console.warn('[AppleTV+] Error parsing PG:', e);
+            return null;
+        }
+    }
+
+    function decodePG(rating) {
+        if (!rating) return null;
+        
+        var map = {
+            'G': '0+',
+            'PG': '6+',
+            'PG-13': '13+',
+            'R': '17+',
+            'NC-17': '18+',
+            'TV-Y': '0+',
+            'TV-Y7': '7+',
+            'TV-G': '3+',
+            'TV-PG': '6+',
+            'TV-14': '14+',
+            'TV-MA': '17+',
+            '0': '0+',
+            '1': '1+',
+            '2': '2+',
+            '3': '3+',
+            '4': '4+',
+            '5': '5+',
+            '6': '6+',
+            '7': '7+',
+            '8': '8+',
+            '9': '9+',
+            '10': '10+',
+            '11': '11+',
+            '12': '12+',
+            '13': '13+',
+            '14': '14+',
+            '15': '15+',
+            '16': '16+',
+            '17': '17+',
+            '18': '18+'
+        };
+        
+        var decoded = map[rating] || rating;
+        return decoded;
+    }
+
+    // =================================================================
     // JACRED QUALITY
     // =================================================================
 
@@ -155,138 +253,142 @@
     }
 
     function getBestJacred(card, callback) {
-        var cacheKey = 'jacred_v4_' + (card.id || card.tmdb_id);
-        var now = Date.now();
-
-        if (_jacredCache[cacheKey] && (now - _jacredCache[cacheKey]._ts < CACHE_TTL)) {
-            callback(_jacredCache[cacheKey]);
-            return;
-        }
-
         try {
-            var raw = Lampa.Storage.get(cacheKey, null);
-            if (raw && raw._ts && (now - raw._ts < CACHE_TTL)) {
-                _jacredCache[cacheKey] = raw;
-                callback(raw);
-                return;
-            }
-        } catch (e) {}
+            var cacheKey = 'jacred_v4_' + (card.id || card.tmdb_id);
+            var now = Date.now();
 
-        var title = (card.original_title || card.title || card.name || '').toLowerCase();
-        var year = (card.release_date || card.first_air_date || '').substr(0, 4);
-
-        if (!title || !year) {
-            callback(null);
-            return;
-        }
-
-        var apiUrl = 'https://jr.maxvol.pro/api/v1.0/torrents?search=' + encodeURIComponent(title) + '&year=' + year;
-
-        fetchWithProxy(apiUrl, function(err, data) {
-            if (err || !data) {
-                callback(null);
+            if (_jacredCache[cacheKey] && (now - _jacredCache[cacheKey]._ts < CACHE_TTL)) {
+                callback(_jacredCache[cacheKey]);
                 return;
             }
 
             try {
-                var parsed = JSON.parse(data);
-                if (parsed.contents) {
-                    try { parsed = JSON.parse(parsed.contents); } catch (e) {}
+                var raw = Lampa.Storage.get(cacheKey, null);
+                if (raw && raw._ts && (now - raw._ts < CACHE_TTL)) {
+                    _jacredCache[cacheKey] = raw;
+                    callback(raw);
+                    return;
                 }
+            } catch (e) {}
 
-                var results = Array.isArray(parsed) ? parsed : (parsed.Results || []);
-                if (!results.length) {
-                    var emptyData = { empty: true, _ts: now };
-                    _jacredCache[cacheKey] = emptyData;
-                    try { Lampa.Storage.set(cacheKey, emptyData); } catch (e) {}
+            var title = (card.original_title || card.title || card.name || '').toLowerCase();
+            var year = (card.release_date || card.first_air_date || '').substr(0, 4);
+
+            if (!title || !year) {
+                callback(null);
+                return;
+            }
+
+            var apiUrl = 'https://jr.maxvol.pro/api/v1.0/torrents?search=' + encodeURIComponent(title) + '&year=' + year;
+
+            fetchWithProxy(apiUrl, function(err, data) {
+                if (err || !data) {
                     callback(null);
                     return;
                 }
 
-                var best = {
-                    resolution: 'SD',
-                    hdr: false,
-                    dolbyVision: false,
-                    sound: null,
-                    dub: false
-                };
-
-                var resOrder = ['SD', 'HD', 'FHD', '2K', '4K'];
-
-                results.forEach(function(item) {
-                    var t = (item.title || '').toLowerCase();
-                    var videotype = (item.videotype || '').toLowerCase();
-
-                    var currentRes = 'SD';
-                    var q = parseInt(item.quality || 0, 10);
-                    if (q >= 2160) currentRes = '4K';
-                    else if (q >= 1440) currentRes = '2K';
-                    else if (q >= 1080) currentRes = 'FHD';
-                    else if (q >= 720) currentRes = 'HD';
-
-                    if (currentRes === 'SD') {
-                        if (t.indexOf('4k') >= 0 || t.indexOf('2160') >= 0) currentRes = '4K';
-                        else if (t.indexOf('2k') >= 0 || t.indexOf('1440') >= 0) currentRes = '2K';
-                        else if (t.indexOf('1080') >= 0 || t.indexOf('fhd') >= 0) currentRes = 'FHD';
-                        else if (t.indexOf('720') >= 0 || t.indexOf('hd') >= 0) currentRes = 'HD';
+                try {
+                    var parsed = JSON.parse(data);
+                    if (parsed.contents) {
+                        try { parsed = JSON.parse(parsed.contents); } catch (e) {}
                     }
 
-                    if (resOrder.indexOf(currentRes) > resOrder.indexOf(best.resolution)) {
-                        best.resolution = currentRes;
+                    var results = Array.isArray(parsed) ? parsed : (parsed.Results || []);
+                    if (!results.length) {
+                        var emptyData = { empty: true, _ts: now };
+                        _jacredCache[cacheKey] = emptyData;
+                        try { Lampa.Storage.set(cacheKey, emptyData); } catch (e) {}
+                        callback(null);
+                        return;
                     }
 
-                    if (t.indexOf('ukr') >= 0 || t.indexOf('укр') >= 0 || t.indexOf('ua') >= 0) best.ukr = true;
-                    if (t.indexOf('rus') >= 0 || t.indexOf('russian') >= 0 || t.indexOf('рус') >= 0) best.rus = true;
-                    if (t.indexOf('eng') >= 0 || t.indexOf('english') >= 0) best.eng = true;
-                    if (t.indexOf('dub') >= 0 || t.indexOf('дубляж') >= 0) best.dub = true;
+                    var best = {
+                        resolution: 'SD',
+                        hdr: false,
+                        dolbyVision: false,
+                        sound: null,
+                        dub: false
+                    };
 
-                    if (videotype.indexOf('dolby') >= 0 || videotype.indexOf('dv') >= 0) {
-                        best.dolbyVision = true;
-                        best.hdr = true;
-                    } else if (videotype.indexOf('hdr') >= 0 || t.indexOf('hdr') >= 0) {
-                        best.hdr = true;
-                    }
+                    var resOrder = ['SD', 'HD', 'FHD', '2K', '4K'];
 
-                    if (t.indexOf('7.1') >= 0) best.sound = '7.1';
-                    else if (t.indexOf('5.1') >= 0) best.sound = '5.1';
-                    else if (t.indexOf('2.0') >= 0) best.sound = '2.0';
-                });
+                    results.forEach(function(item) {
+                        var t = (item.title || '').toLowerCase();
+                        var videotype = (item.videotype || '').toLowerCase();
 
-                best._ts = now;
-                _jacredCache[cacheKey] = best;
-                try { Lampa.Storage.set(cacheKey, best); } catch (e) {}
-                callback(best);
+                        var currentRes = 'SD';
+                        var q = parseInt(item.quality || 0, 10);
+                        if (q >= 2160) currentRes = '4K';
+                        else if (q >= 1440) currentRes = '2K';
+                        else if (q >= 1080) currentRes = 'FHD';
+                        else if (q >= 720) currentRes = 'HD';
 
-            } catch (e) {
-                console.error('[AppleTV+] Jacred error:', e);
-                callback(null);
-            }
-        });
+                        if (currentRes === 'SD') {
+                            if (t.indexOf('4k') >= 0 || t.indexOf('2160') >= 0) currentRes = '4K';
+                            else if (t.indexOf('2k') >= 0 || t.indexOf('1440') >= 0) currentRes = '2K';
+                            else if (t.indexOf('1080') >= 0 || t.indexOf('fhd') >= 0) currentRes = 'FHD';
+                            else if (t.indexOf('720') >= 0 || t.indexOf('hd') >= 0) currentRes = 'HD';
+                        }
+
+                        if (resOrder.indexOf(currentRes) > resOrder.indexOf(best.resolution)) {
+                            best.resolution = currentRes;
+                        }
+
+                        if (t.indexOf('ukr') >= 0 || t.indexOf('укр') >= 0 || t.indexOf('ua') >= 0) best.ukr = true;
+                        if (t.indexOf('rus') >= 0 || t.indexOf('russian') >= 0 || t.indexOf('рус') >= 0) best.rus = true;
+                        if (t.indexOf('eng') >= 0 || t.indexOf('english') >= 0) best.eng = true;
+                        if (t.indexOf('dub') >= 0 || t.indexOf('дубляж') >= 0) best.dub = true;
+
+                        if (videotype.indexOf('dolby') >= 0 || videotype.indexOf('dv') >= 0) {
+                            best.dolbyVision = true;
+                            best.hdr = true;
+                        } else if (videotype.indexOf('hdr') >= 0 || t.indexOf('hdr') >= 0) {
+                            best.hdr = true;
+                        }
+
+                        if (t.indexOf('7.1') >= 0) best.sound = '7.1';
+                        else if (t.indexOf('5.1') >= 0) best.sound = '5.1';
+                        else if (t.indexOf('2.0') >= 0) best.sound = '2.0';
+                    });
+
+                    best._ts = now;
+                    _jacredCache[cacheKey] = best;
+                    try { Lampa.Storage.set(cacheKey, best); } catch (e) {}
+                    callback(best);
+
+                } catch (e) {
+                    console.error('[AppleTV+] Jacred error:', e);
+                    callback(null);
+                }
+            });
+        } catch (e) {
+            console.error('[AppleTV+] getBestJacred error:', e);
+            callback(null);
+        }
     }
 
     // =================================================================
-    // RATINGS (TMDB, IMDb, Kinopoisk, Lampa)
+    // RATINGS (TMDB, IMDb, Kinopoisk)
     // =================================================================
 
     function getRatings(movie, callback) {
-        var cacheKey = 'ratings_' + (movie.id || movie.tmdb_id);
-        var now = Date.now();
+        try {
+            var cacheKey = 'ratings_' + (movie.id || movie.tmdb_id);
+            var now = Date.now();
 
-        if (_ratingCache[cacheKey] && (now - _ratingCache[cacheKey]._ts < CACHE_TTL)) {
-            callback(_ratingCache[cacheKey]);
-            return;
-        }
+            if (_ratingCache[cacheKey] && (now - _ratingCache[cacheKey]._ts < CACHE_TTL)) {
+                callback(_ratingCache[cacheKey]);
+                return;
+            }
 
-        var result = {
-            tmdb: movie.vote_average || 0,
-            imdb: 0,
-            kinopoisk: 0,
-            lampa: 0
-        };
+            var result = {
+                tmdb: movie.vote_average || 0,
+                imdb: 0,
+                kinopoisk: 0
+            };
 
-        // IMDb через external_ids
-        if (movie.imdb_id || movie.external_ids && movie.external_ids.imdb_id) {
-            var imdbId = movie.imdb_id || movie.external_ids.imdb_id;
+            // IMDb через external_ids
+            var imdbId = movie.imdb_id || (movie.external_ids && movie.external_ids.imdb_id);
             if (imdbId) {
                 var network = new Lampa.Reguest();
                 var omdbUrl = 'https://www.omdbapi.com/?apikey=73ff4450&i=' + imdbId;
@@ -294,7 +396,6 @@
                     if (data && data.imdbRating) {
                         result.imdb = parseFloat(data.imdbRating) || 0;
                     }
-                    // Кинопоиск через API
                     getKinopoiskRating(movie, result, callback, cacheKey);
                 }, function() {
                     getKinopoiskRating(movie, result, callback, cacheKey);
@@ -302,44 +403,49 @@
             } else {
                 getKinopoiskRating(movie, result, callback, cacheKey);
             }
-        } else {
-            getKinopoiskRating(movie, result, callback, cacheKey);
+        } catch (e) {
+            console.error('[AppleTV+] getRatings error:', e);
+            callback({ tmdb: 0, imdb: 0, kinopoisk: 0 });
         }
     }
 
     function getKinopoiskRating(movie, result, callback, cacheKey) {
-        var kpApiKey = Lampa.Storage.get('rating_kp_api_key', '') || Lampa.Storage.get('source_api_key', '');
-        if (!kpApiKey) {
-            finishRatings(result, callback, cacheKey);
-            return;
-        }
-
-        var network = new Lampa.Reguest();
-        var title = movie.title || movie.name || '';
-        var year = (movie.release_date || movie.first_air_date || '').substr(0, 4);
-
-        if (!title || !year) {
-            finishRatings(result, callback, cacheKey);
-            return;
-        }
-
-        var searchUrl = 'https://kinopoiskapiunofficial.tech/api/v2.1/films/search-by-keyword?keyword=' + encodeURIComponent(title);
-
-        network.silent(searchUrl, function(data) {
-            if (data && data.films && data.films.length) {
-                // Ищем точное совпадение по году
-                var found = data.films.find(function(f) {
-                    return f.year && String(f.year) === year;
-                }) || data.films[0];
-
-                if (found && found.rating) {
-                    result.kinopoisk = parseFloat(found.rating) || 0;
-                }
+        try {
+            var kpApiKey = Lampa.Storage.get('rating_kp_api_key', '') || Lampa.Storage.get('source_api_key', '');
+            if (!kpApiKey) {
+                finishRatings(result, callback, cacheKey);
+                return;
             }
+
+            var network = new Lampa.Reguest();
+            var title = movie.title || movie.name || '';
+            var year = (movie.release_date || movie.first_air_date || '').substr(0, 4);
+
+            if (!title || !year) {
+                finishRatings(result, callback, cacheKey);
+                return;
+            }
+
+            var searchUrl = 'https://kinopoiskapiunofficial.tech/api/v2.1/films/search-by-keyword?keyword=' + encodeURIComponent(title);
+
+            network.silent(searchUrl, function(data) {
+                if (data && data.films && data.films.length) {
+                    var found = data.films.find(function(f) {
+                        return f.year && String(f.year) === year;
+                    }) || data.films[0];
+
+                    if (found && found.rating) {
+                        result.kinopoisk = parseFloat(found.rating) || 0;
+                    }
+                }
+                finishRatings(result, callback, cacheKey);
+            }, function() {
+                finishRatings(result, callback, cacheKey);
+            }, false, { headers: { 'X-API-KEY': kpApiKey } });
+        } catch (e) {
+            console.error('[AppleTV+] getKinopoiskRating error:', e);
             finishRatings(result, callback, cacheKey);
-        }, function() {
-            finishRatings(result, callback, cacheKey);
-        }, false, { headers: { 'X-API-KEY': kpApiKey } });
+        }
     }
 
     function finishRatings(result, callback, cacheKey) {
@@ -353,44 +459,34 @@
     // =================================================================
 
     function fetchLogo(movie, callback) {
-        if (!movie || !movie.id) {
-            callback(null);
-            return;
-        }
-
-        var type = movie.name ? 'tv' : 'movie';
-        var cacheKey = type + '_' + movie.id + '_logo';
-        var now = Date.now();
-
-        if (_logoCache[cacheKey] && (now - _logoCache[cacheKey]._ts < CACHE_TTL)) {
-            callback(_logoCache[cacheKey]);
-            return;
-        }
-
-        var lang = LANG;
-        var url = Lampa.TMDB.api(type + '/' + movie.id + '/images?api_key=' + getTmdbKey() + '&language=' + lang);
-        var urlAll = Lampa.TMDB.api(type + '/' + movie.id + '/images?api_key=' + getTmdbKey());
-
-        var network = new Lampa.Reguest();
-        network.timeout(PROXY_TIMEOUT);
-
-        network.silent(url, function(data) {
-            if (data && data.logos && data.logos.length) {
-                var logo = data.logos.find(function(l) { return l.iso_639_1 === lang; }) ||
-                          data.logos.find(function(l) { return l.iso_639_1 === 'en'; }) ||
-                          data.logos[0];
-
-                if (logo) {
-                    var result = { file_path: logo.file_path, _ts: now };
-                    _logoCache[cacheKey] = result;
-                    callback(result);
-                    return;
-                }
+        try {
+            if (!movie || !movie.id) {
+                callback(null);
+                return;
             }
 
-            network.silent(urlAll, function(dataAll) {
-                if (dataAll && dataAll.logos && dataAll.logos.length) {
-                    var logo = dataAll.logos.find(function(l) { return l.iso_639_1 === 'en'; }) || dataAll.logos[0];
+            var type = movie.name ? 'tv' : 'movie';
+            var cacheKey = type + '_' + movie.id + '_logo';
+            var now = Date.now();
+
+            if (_logoCache[cacheKey] && (now - _logoCache[cacheKey]._ts < CACHE_TTL)) {
+                callback(_logoCache[cacheKey]);
+                return;
+            }
+
+            var lang = LANG;
+            var url = Lampa.TMDB.api(type + '/' + movie.id + '/images?api_key=' + getTmdbKey() + '&language=' + lang);
+            var urlAll = Lampa.TMDB.api(type + '/' + movie.id + '/images?api_key=' + getTmdbKey());
+
+            var network = new Lampa.Reguest();
+            network.timeout(PROXY_TIMEOUT);
+
+            network.silent(url, function(data) {
+                if (data && data.logos && data.logos.length) {
+                    var logo = data.logos.find(function(l) { return l.iso_639_1 === lang; }) ||
+                              data.logos.find(function(l) { return l.iso_639_1 === 'en'; }) ||
+                              data.logos[0];
+
                     if (logo) {
                         var result = { file_path: logo.file_path, _ts: now };
                         _logoCache[cacheKey] = result;
@@ -398,14 +494,29 @@
                         return;
                     }
                 }
-                callback(null);
+
+                network.silent(urlAll, function(dataAll) {
+                    if (dataAll && dataAll.logos && dataAll.logos.length) {
+                        var logo = dataAll.logos.find(function(l) { return l.iso_639_1 === 'en'; }) || dataAll.logos[0];
+                        if (logo) {
+                            var result = { file_path: logo.file_path, _ts: now };
+                            _logoCache[cacheKey] = result;
+                            callback(result);
+                            return;
+                        }
+                    }
+                    callback(null);
+                }, function() {
+                    callback(null);
+                });
+
             }, function() {
                 callback(null);
             });
-
-        }, function() {
+        } catch (e) {
+            console.error('[AppleTV+] fetchLogo error:', e);
             callback(null);
-        });
+        }
     }
 
     function getLogoUrl(logo) {
@@ -430,21 +541,21 @@
         Lampa.Listener.follow('full', function(e) {
             if (e.type !== 'complite') return;
 
-            var activity = e.object && e.object.activity;
-            if (!activity || !activity.render) return;
-
-            var render = activity.render();
-            if (!render || !render.length) return;
-
-            if (render.data('applecation_plus_processed')) return;
-            render.data('applecation_plus_processed', true);
-
-            var movie = e.data && e.data.movie;
-            if (!movie) return;
-
-            console.log('[AppleTV+] Processing card for:', movie.title || movie.name);
-
             try {
+                var activity = e.object && e.object.activity;
+                if (!activity || !activity.render) return;
+
+                var render = activity.render();
+                if (!render || !render.length) return;
+
+                if (render.data('applecation_plus_processed')) return;
+                render.data('applecation_plus_processed', true);
+
+                var movie = e.data && e.data.movie;
+                if (!movie) return;
+
+                console.log('[AppleTV+] Processing card for:', movie.title || movie.name);
+
                 render.addClass('applecation');
                 modifyCardDOM(render, movie);
 
@@ -477,93 +588,97 @@
     // =================================================================
 
     function modifyCardDOM(render, movie) {
-        var isTv = !!(movie.name || movie.original_name || movie.first_air_date || movie.number_of_seasons);
+        try {
+            var isTv = !!(movie.name || movie.original_name || movie.first_air_date || movie.number_of_seasons);
 
-        render.find('.full-start-new__head, .full-start-new__details, .full-descr, .full-descr__title, .full-start__head, .full-start-new__reactions').hide();
+            render.find('.full-start-new__head, .full-start-new__details, .full-descr, .full-descr__title, .full-start__head, .full-start-new__reactions').hide();
 
-        var right = render.find('.full-start-new__right');
-        if (!right.length) return;
+            var right = render.find('.full-start-new__right');
+            if (!right.length) return;
 
-        var left = right.find('.applecation__left');
-        if (!left.length) {
-            left = $('<div class="applecation__left"></div>');
-            right.prepend(left);
-        }
-
-        var logoWrapper = left.find('.applecation__logo-wrapper');
-        if (!logoWrapper.length) {
-            logoWrapper = $('<div class="applecation__logo-wrapper"><img class="applecation__logo" style="display:none;" /></div>');
-            left.prepend(logoWrapper);
-        }
-
-        var contentWrapper = left.find('.applecation__content-wrapper');
-        if (!contentWrapper.length) {
-            contentWrapper = $('<div class="applecation__content-wrapper"></div>');
-            left.append(contentWrapper);
-        }
-
-        var title = render.find('.full-start-new__title');
-        if (title.length) {
-            title.detach();
-            contentWrapper.append(title);
-            title.show();
-        }
-
-        var meta = contentWrapper.find('.applecation__meta');
-        if (!meta.length) {
-            meta = $('<div class="applecation__meta"><div class="applecation__meta-left"><span class="applecation__network"></span><span class="applecation__meta-text"></span></div></div>');
-            contentWrapper.append(meta);
-        }
-
-        var studios = contentWrapper.find('.applecation__studios');
-        if (!studios.length) {
-            studios = $('<div class="applecation__studios"></div>');
-            contentWrapper.append(studios);
-        }
-
-        var ratings = contentWrapper.find('.applecation__ratings');
-        if (!ratings.length) {
-            ratings = $('<div class="applecation__ratings"></div>');
-            contentWrapper.append(ratings);
-        }
-
-        var reactions = contentWrapper.find('.applecation__reactions');
-        if (!reactions.length) {
-            reactions = $('<div class="applecation__reactions"></div>');
-            contentWrapper.append(reactions);
-        }
-
-        var descWrapper = contentWrapper.find('.applecation__description-wrapper');
-        if (!descWrapper.length) {
-            descWrapper = $('<div class="applecation__description-wrapper"><div class="applecation__description"></div></div>');
-            contentWrapper.append(descWrapper);
-        }
-
-        var info = contentWrapper.find('.applecation__info');
-        if (!info.length) {
-            info = $('<div class="applecation__info"><span class="applecation__info-text"></span><span class="applecation__quality-badges"></span></div>');
-            contentWrapper.append(info);
-        }
-
-        var buttons = contentWrapper.find('.full-start-new__buttons');
-        if (!buttons.length) {
-            buttons = render.find('.full-start-new__buttons');
-            if (buttons.length) {
-                buttons.detach();
-                contentWrapper.append(buttons);
+            var left = right.find('.applecation__left');
+            if (!left.length) {
+                left = $('<div class="applecation__left"></div>');
+                right.prepend(left);
             }
-        }
 
-        render.find('.full-start-new__rate-line').remove();
-        render.find('.applecation__right').remove();
+            var logoWrapper = left.find('.applecation__logo-wrapper');
+            if (!logoWrapper.length) {
+                logoWrapper = $('<div class="applecation__logo-wrapper"><img class="applecation__logo" style="display:none;" /></div>');
+                left.prepend(logoWrapper);
+            }
 
-        render.addClass('applecation');
-        contentWrapper.addClass('applecation-glass');
+            var contentWrapper = left.find('.applecation__content-wrapper');
+            if (!contentWrapper.length) {
+                contentWrapper = $('<div class="applecation__content-wrapper"></div>');
+                left.append(contentWrapper);
+            }
 
-        // Добавляем виньетку на фон
-        var bg = render.find('.full-start__background:not(.applecation__overlay)');
-        if (bg.length && !bg.next('.applecation__overlay').length) {
-            bg.after('<div class="full-start__background loaded applecation__overlay"></div>');
+            var title = render.find('.full-start-new__title');
+            if (title.length) {
+                title.detach();
+                contentWrapper.append(title);
+                title.show();
+            }
+
+            var meta = contentWrapper.find('.applecation__meta');
+            if (!meta.length) {
+                meta = $('<div class="applecation__meta"><div class="applecation__meta-left"><span class="applecation__network"></span><span class="applecation__meta-text"></span></div></div>');
+                contentWrapper.append(meta);
+            }
+
+            var studios = contentWrapper.find('.applecation__studios');
+            if (!studios.length) {
+                studios = $('<div class="applecation__studios"></div>');
+                contentWrapper.append(studios);
+            }
+
+            var ratings = contentWrapper.find('.applecation__ratings');
+            if (!ratings.length) {
+                ratings = $('<div class="applecation__ratings"></div>');
+                contentWrapper.append(ratings);
+            }
+
+            var reactions = contentWrapper.find('.applecation__reactions');
+            if (!reactions.length) {
+                reactions = $('<div class="applecation__reactions"></div>');
+                contentWrapper.append(reactions);
+            }
+
+            var descWrapper = contentWrapper.find('.applecation__description-wrapper');
+            if (!descWrapper.length) {
+                descWrapper = $('<div class="applecation__description-wrapper"><div class="applecation__description"></div></div>');
+                contentWrapper.append(descWrapper);
+            }
+
+            var info = contentWrapper.find('.applecation__info');
+            if (!info.length) {
+                info = $('<div class="applecation__info"><span class="applecation__info-text"></span><span class="applecation__quality-badges"></span></div>');
+                contentWrapper.append(info);
+            }
+
+            var buttons = contentWrapper.find('.full-start-new__buttons');
+            if (!buttons.length) {
+                buttons = render.find('.full-start-new__buttons');
+                if (buttons.length) {
+                    buttons.detach();
+                    contentWrapper.append(buttons);
+                }
+            }
+
+            render.find('.full-start-new__rate-line').remove();
+            render.find('.applecation__right').remove();
+
+            render.addClass('applecation');
+            contentWrapper.addClass('applecation-glass');
+
+            // Добавляем виньетку на фон
+            var bg = render.find('.full-start__background:not(.applecation__overlay)');
+            if (bg.length && !bg.next('.applecation__overlay').length) {
+                bg.after('<div class="full-start__background loaded applecation__overlay"></div>');
+            }
+        } catch (e) {
+            console.error('[AppleTV+] modifyCardDOM error:', e);
         }
     }
 
@@ -572,310 +687,323 @@
     // =================================================================
 
     function fillContent(render, movie, ratings) {
-        var isTv = !!(movie.name || movie.original_name || movie.first_air_date || movie.number_of_seasons);
-        var descriptionOverlayEnabled = Lampa.Storage.get('applecation_description_overlay', false);
+        try {
+            var isTv = !!(movie.name || movie.original_name || movie.first_air_date || movie.number_of_seasons);
+            var descriptionOverlayEnabled = Lampa.Storage.get('applecation_description_overlay', false);
 
-        // 1. Мета-информация
-        var metaText = render.find('.applecation__meta-text');
-        if (metaText.length) {
-            var parts = [];
-            parts.push(isTv ? 'Сериал' : 'Фильм');
+            // 1. Мета-информация
+            var metaText = render.find('.applecation__meta-text');
+            if (metaText.length) {
+                var parts = [];
+                parts.push(isTv ? 'Сериал' : 'Фильм');
 
-            if (movie.genres && movie.genres.length) {
-                var g = movie.genres.slice(0, 2).map(function(x) {
-                    return Lampa.Utils.capitalizeFirstLetter(x.name);
-                });
-                parts = parts.concat(g);
+                if (movie.genres && movie.genres.length) {
+                    var g = movie.genres.slice(0, 2).map(function(x) {
+                        return Lampa.Utils.capitalizeFirstLetter(x.name);
+                    });
+                    parts = parts.concat(g);
+                }
+
+                // Возрастное ограничение
+                var pg = parsePG(movie);
+                if (pg) {
+                    parts.push('<span class="applecation__age-rating">' + pg + '</span>');
+                }
+
+                metaText.html(parts.join(' · '));
             }
 
-            // Возрастное ограничение
-            var pg = Lampa.Tmdb.parsePG(movie);
-            if (pg) {
-                parts.push('<span class="applecation__age-rating">' + pg + '</span>');
-            }
+            // 2. Студии
+            var studiosContainer = render.find('.applecation__studios');
+            if (studiosContainer.length) {
+                var companies = (movie && movie.production_companies && movie.production_companies.length) ?
+                    movie.production_companies.slice(0, 3) : [];
 
-            metaText.html(parts.join(' · '));
-        }
+                if (companies.length) {
+                    studiosContainer.empty().show();
+                    companies.forEach(function(co) {
+                        if (!co || !co.id) return;
+                        var node = $('<div class="applecation__studio selector" data-id="' + co.id + '" data-name="' + (co.name || '') + '"></div>');
 
-        // 2. Студии
-        var studiosContainer = render.find('.applecation__studios');
-        if (studiosContainer.length) {
-            var companies = (movie && movie.production_companies && movie.production_companies.length) ?
-                movie.production_companies.slice(0, 3) : [];
+                        if (co.logo_path) {
+                            var imgUrl = Lampa.Api.img(co.logo_path, 'h100');
+                            node.append('<img src="' + imgUrl + '" title="' + (co.name || '') + '" />');
+                        } else {
+                            node.append('<span class="applecation__studio-name">' + (co.name || '') + '</span>');
+                        }
 
-            if (companies.length) {
-                studiosContainer.empty().show();
-                companies.forEach(function(co) {
-                    if (!co || !co.id) return;
-                    var node = $('<div class="applecation__studio selector" data-id="' + co.id + '" data-name="' + (co.name || '') + '"></div>');
-
-                    if (co.logo_path) {
-                        var imgUrl = Lampa.Api.img(co.logo_path, 'h100');
-                        node.append('<img src="' + imgUrl + '" title="' + (co.name || '') + '" />');
-                    } else {
-                        node.append('<span class="applecation__studio-name">' + (co.name || '') + '</span>');
-                    }
-
-                    node.on('hover:enter click', function() {
-                        var id = $(this).data('id');
-                        if (!id) return;
-                        Lampa.Activity.push({
-                            url: 'movie',
-                            id: id,
-                            title: $(this).data('name') || '',
-                            component: 'company',
-                            source: 'tmdb',
-                            page: 1
+                        node.on('hover:enter click', function() {
+                            var id = $(this).data('id');
+                            if (!id) return;
+                            Lampa.Activity.push({
+                                url: 'movie',
+                                id: id,
+                                title: $(this).data('name') || '',
+                                component: 'company',
+                                source: 'tmdb',
+                                page: 1
+                            });
                         });
+
+                        studiosContainer.append(node);
                     });
-
-                    studiosContainer.append(node);
-                });
-                studiosContainer.addClass('show');
-            } else {
-                studiosContainer.hide();
-            }
-        }
-
-        // 3. Рейтинги (TMDB, IMDb, Кинопоиск)
-        var ratingsContainer = render.find('.applecation__ratings');
-        if (ratingsContainer.length) {
-            ratingsContainer.empty();
-
-            var hasRating = false;
-
-            // TMDB
-            if (ratings.tmdb > 0) {
-                var color = getRatingColor(ratings.tmdb);
-                ratingsContainer.append(
-                    '<div class="applecation__rating-item" style="border-color: ' + color + '40; background: ' + getRatingBackgroundColor(ratings.tmdb) + ';">' +
-                    '<span class="rating-value" style="color: ' + color + ';">' + ratings.tmdb.toFixed(1) + '</span>' +
-                    '<span class="rating-source">TMDB</span>' +
-                    '</div>'
-                );
-                hasRating = true;
+                    studiosContainer.addClass('show');
+                } else {
+                    studiosContainer.hide();
+                }
             }
 
-            // IMDb
-            if (ratings.imdb > 0) {
-                var imdbColor = getRatingColor(ratings.imdb);
-                ratingsContainer.append(
-                    '<div class="applecation__rating-item" style="border-color: ' + imdbColor + '40; background: ' + getRatingBackgroundColor(ratings.imdb) + ';">' +
-                    '<span class="rating-value" style="color: ' + imdbColor + ';">' + ratings.imdb.toFixed(1) + '</span>' +
-                    '<span class="rating-source">IMDb</span>' +
-                    '</div>'
-                );
-                hasRating = true;
+            // 3. Рейтинги
+            var ratingsContainer = render.find('.applecation__ratings');
+            if (ratingsContainer.length) {
+                ratingsContainer.empty();
+                var hasRating = false;
+
+                // TMDB
+                if (ratings.tmdb > 0) {
+                    var color = getRatingColor(ratings.tmdb);
+                    ratingsContainer.append(
+                        '<div class="applecation__rating-item" style="border-color: ' + color + '40; background: ' + getRatingBackgroundColor(ratings.tmdb) + ';">' +
+                        '<span class="rating-value" style="color: ' + color + ';">' + ratings.tmdb.toFixed(1) + '</span>' +
+                        '<span class="rating-source">TMDB</span>' +
+                        '</div>'
+                    );
+                    hasRating = true;
+                }
+
+                // IMDb
+                if (ratings.imdb > 0) {
+                    var imdbColor = getRatingColor(ratings.imdb);
+                    ratingsContainer.append(
+                        '<div class="applecation__rating-item" style="border-color: ' + imdbColor + '40; background: ' + getRatingBackgroundColor(ratings.imdb) + ';">' +
+                        '<span class="rating-value" style="color: ' + imdbColor + ';">' + ratings.imdb.toFixed(1) + '</span>' +
+                        '<span class="rating-source">IMDb</span>' +
+                        '</div>'
+                    );
+                    hasRating = true;
+                }
+
+                // Кинопоиск
+                if (ratings.kinopoisk > 0) {
+                    var kpColor = getRatingColor(ratings.kinopoisk);
+                    ratingsContainer.append(
+                        '<div class="applecation__rating-item" style="border-color: ' + kpColor + '40; background: ' + getRatingBackgroundColor(ratings.kinopoisk) + ';">' +
+                        '<span class="rating-value" style="color: ' + kpColor + ';">' + ratings.kinopoisk.toFixed(1) + '</span>' +
+                        '<span class="rating-source">Кинопоиск</span>' +
+                        '</div>'
+                    );
+                    hasRating = true;
+                }
+
+                if (hasRating) {
+                    ratingsContainer.addClass('show');
+                } else {
+                    ratingsContainer.hide();
+                }
             }
 
-            // Кинопоиск
-            if (ratings.kinopoisk > 0) {
-                var kpColor = getRatingColor(ratings.kinopoisk);
-                ratingsContainer.append(
-                    '<div class="applecation__rating-item" style="border-color: ' + kpColor + '40; background: ' + getRatingBackgroundColor(ratings.kinopoisk) + ';">' +
-                    '<span class="rating-value" style="color: ' + kpColor + ';">' + ratings.kinopoisk.toFixed(1) + '</span>' +
-                    '<span class="rating-source">Кинопоиск</span>' +
-                    '</div>'
-                );
-                hasRating = true;
-            }
+            // 4. Реакции Lampa
+            var reactionsContainer = render.find('.applecation__reactions');
+            if (reactionsContainer.length && window.Lampa && Lampa.Api && Lampa.Api.sources && Lampa.Api.sources.cub) {
+                var type = movie.name ? 'tv' : 'movie';
+                try {
+                    Lampa.Api.sources.cub.reactionsGet({ method: type, id: movie.id }, function(data) {
+                        try {
+                            if (!data || !data.result || !Array.isArray(data.result) || !data.result.length) {
+                                reactionsContainer.hide();
+                                return;
+                            }
 
-            if (hasRating) {
-                ratingsContainer.addClass('show');
-            } else {
-                ratingsContainer.hide();
-            }
-        }
+                            reactionsContainer.empty().show();
+                            var reactions = data.result;
+                            reactions.sort(function(a, b) {
+                                return (parseInt(b.counter) || 0) - (parseInt(a.counter) || 0);
+                            });
 
-        // 4. Реакции Lampa
-        var reactionsContainer = render.find('.applecation__reactions');
-        if (reactionsContainer.length && window.Lampa && Lampa.Api && Lampa.Api.sources && Lampa.Api.sources.cub) {
-            var type = movie.name ? 'tv' : 'movie';
-            try {
-                Lampa.Api.sources.cub.reactionsGet({ method: type, id: movie.id }, function(data) {
-                    if (!data || !data.result || !Array.isArray(data.result) || !data.result.length) {
+                            var emojiMap = {
+                                'fire': '🔥', 'nice': '👍', 'think': '🤔',
+                                'bore': '😴', 'shit': '💩', 'like': '❤️', 'dislike': '👎'
+                            };
+
+                            reactions.forEach(function(reaction) {
+                                var count = parseInt(reaction.counter) || 0;
+                                if (count === 0) return;
+                                var emoji = emojiMap[reaction.type] || '⭐';
+                                reactionsContainer.append(
+                                    '<div class="applecation__reaction-item">' +
+                                    '<span>' + emoji + '</span>' +
+                                    '<span class="reaction-count">' + count + '</span>' +
+                                    '</div>'
+                                );
+                            });
+
+                            if (reactionsContainer.children().length > 0) {
+                                reactionsContainer.addClass('show');
+                            } else {
+                                reactionsContainer.hide();
+                            }
+                        } catch (e) {
+                            reactionsContainer.hide();
+                        }
+                    }, function() {
                         reactionsContainer.hide();
-                        return;
-                    }
-
-                    reactionsContainer.empty().show();
-                    var reactions = data.result;
-                    reactions.sort(function(a, b) {
-                        return (parseInt(b.counter) || 0) - (parseInt(a.counter) || 0);
                     });
-
-                    var emojiMap = {
-                        'fire': '🔥', 'nice': '👍', 'think': '🤔',
-                        'bore': '😴', 'shit': '💩', 'like': '❤️', 'dislike': '👎'
-                    };
-
-                    reactions.forEach(function(reaction) {
-                        var count = parseInt(reaction.counter) || 0;
-                        if (count === 0) return;
-                        var emoji = emojiMap[reaction.type] || '⭐';
-                        reactionsContainer.append(
-                            '<div class="applecation__reaction-item">' +
-                            '<span>' + emoji + '</span>' +
-                            '<span class="reaction-count">' + count + '</span>' +
-                            '</div>'
-                        );
-                    });
-
-                    if (reactionsContainer.children().length > 0) {
-                        reactionsContainer.addClass('show');
-                    } else {
-                        reactionsContainer.hide();
-                    }
-                }, function() {
+                } catch (e) {
                     reactionsContainer.hide();
-                });
-            } catch (e) {
+                }
+            } else {
                 reactionsContainer.hide();
             }
-        } else {
-            reactionsContainer.hide();
-        }
 
-        // 5. Описание
-        var descWrapper = render.find('.applecation__description-wrapper');
-        var description = render.find('.applecation__description');
-        if (descWrapper.length && description.length) {
-            var text = movie.overview || 'Описание отсутствует';
-            description.text(text);
+            // 5. Описание
+            var descWrapper = render.find('.applecation__description-wrapper');
+            var description = render.find('.applecation__description');
+            if (descWrapper.length && description.length) {
+                var text = movie.overview || 'Описание отсутствует';
+                description.text(text);
 
-            if (descriptionOverlayEnabled) {
-                descWrapper.off('hover:enter').on('hover:enter', function() {
-                    showDescriptionOverlay(movie);
-                });
-                descWrapper.addClass('selector');
-                if (window.Lampa && Lampa.Controller) {
-                    Lampa.Controller.collectionAppend(descWrapper);
+                if (descriptionOverlayEnabled) {
+                    descWrapper.off('hover:enter').on('hover:enter', function() {
+                        showDescriptionOverlay(movie);
+                    });
+                    descWrapper.addClass('selector');
+                    if (window.Lampa && Lampa.Controller) {
+                        try {
+                            Lampa.Controller.collectionAppend(descWrapper);
+                        } catch (e) {}
+                    }
+                } else {
+                    descWrapper.removeClass('selector');
+                    descWrapper.off('hover:enter');
                 }
-            } else {
-                descWrapper.removeClass('selector');
-                descWrapper.off('hover:enter');
-            }
-            descWrapper.addClass('show');
-        }
-
-        // 6. Информация о сезонах (актуальная)
-        var infoText = render.find('.applecation__info-text');
-        if (infoText.length) {
-            var infoParts = [];
-
-            // Год
-            var date = movie.release_date || movie.first_air_date || '';
-            if (date) {
-                var year = date.split('-')[0];
-                infoParts.push(year);
+                descWrapper.addClass('show');
             }
 
-            // Длительность
-            if (isTv) {
-                // Сериал - актуальная информация о сезонах
-                if (movie.episode_run_time && movie.episode_run_time.length) {
-                    var m = movie.episode_run_time[0];
-                    infoParts.push(m + ' ' + Lampa.Lang.translate('time_m').replace('.', ''));
+            // 6. Информация о сезонах (актуальная)
+            var infoText = render.find('.applecation__info-text');
+            if (infoText.length) {
+                var infoParts = [];
+
+                // Год
+                var date = movie.release_date || movie.first_air_date || '';
+                if (date) {
+                    var year = date.split('-')[0];
+                    infoParts.push(year);
                 }
 
-                // Текущий сезон и серии
-                var lastEpisode = movie.last_episode_to_air;
-                if (lastEpisode && lastEpisode.season_number) {
-                    var seasonNum = lastEpisode.season_number;
-                    var episodeNum = lastEpisode.episode_number || 0;
+                // Длительность
+                if (isTv) {
+                    // Сериал - актуальная информация о сезонах
+                    if (movie.episode_run_time && movie.episode_run_time.length) {
+                        var m = movie.episode_run_time[0];
+                        infoParts.push(m + ' ' + Lampa.Lang.translate('time_m').replace('.', ''));
+                    }
 
-                    // Ищем общее количество серий в сезоне
-                    var totalEpisodes = 0;
-                    if (movie.seasons && Array.isArray(movie.seasons)) {
-                        for (var i = 0; i < movie.seasons.length; i++) {
-                            if (movie.seasons[i].season_number === seasonNum) {
-                                totalEpisodes = movie.seasons[i].episode_count || 0;
-                                break;
+                    // Текущий сезон и серии
+                    var lastEpisode = movie.last_episode_to_air;
+                    if (lastEpisode && lastEpisode.season_number) {
+                        var seasonNum = lastEpisode.season_number;
+                        var episodeNum = lastEpisode.episode_number || 0;
+
+                        // Ищем общее количество серий в сезоне
+                        var totalEpisodes = 0;
+                        if (movie.seasons && Array.isArray(movie.seasons)) {
+                            for (var i = 0; i < movie.seasons.length; i++) {
+                                if (movie.seasons[i].season_number === seasonNum) {
+                                    totalEpisodes = movie.seasons[i].episode_count || 0;
+                                    break;
+                                }
                             }
                         }
+
+                        var seasonText = 'Сезон ' + seasonNum;
+                        if (totalEpisodes > 0) {
+                            seasonText += ' · ' + episodeNum + '/' + totalEpisodes + ' серий';
+                        } else if (episodeNum > 0) {
+                            seasonText += ' · ' + episodeNum + ' серия';
+                        }
+
+                        infoParts.push(seasonText);
                     }
 
-                    var seasonText = 'Сезон ' + seasonNum;
-                    if (totalEpisodes > 0) {
-                        seasonText += ' · ' + episodeNum + '/' + totalEpisodes + ' серий';
-                    } else if (episodeNum > 0) {
-                        seasonText += ' · ' + episodeNum + ' серия';
+                    // Статус сериала
+                    if (movie.status) {
+                        var statusText = getStatusText(movie.status);
+                        var statusColor = getStatusColor(movie.status);
+                        infoParts.push(
+                            '<span class="applecation__status-info" style="background: ' + statusColor + '; padding: 0.15em 0.5em; border-radius: 0.3em; font-size: 0.85em; font-weight: 600; color: #fff;">' +
+                            statusText +
+                            '</span>'
+                        );
                     }
-
-                    infoParts.push(seasonText);
+                } else if (movie.runtime && movie.runtime > 0) {
+                    // Фильм
+                    var h = Math.floor(movie.runtime / 60);
+                    var mm = movie.runtime % 60;
+                    var th = Lampa.Lang.translate('time_h').replace('.', '');
+                    var tmm = Lampa.Lang.translate('time_m').replace('.', '');
+                    var timeStr = h > 0 ? (h + ' ' + th + ' ' + mm + ' ' + tmm) : (mm + ' ' + tmm);
+                    infoParts.push(timeStr);
                 }
 
-                // Статус сериала
-                if (movie.status) {
-                    var statusText = getStatusText(movie.status);
-                    var statusColor = getStatusColor(movie.status);
-                    infoParts.push(
-                        '<span class="applecation__status-info" style="background: ' + statusColor + '; padding: 0.15em 0.5em; border-radius: 0.3em; font-size: 0.85em; font-weight: 600; color: #fff;">' +
-                        statusText +
-                        '</span>'
-                    );
+                if (infoParts.length) {
+                    infoText.html(infoParts.join(' · '));
+                    render.find('.applecation__info').addClass('show');
                 }
-            } else if (movie.runtime && movie.runtime > 0) {
-                // Фильм
-                var h = Math.floor(movie.runtime / 60);
-                var mm = movie.runtime % 60;
-                var th = Lampa.Lang.translate('time_h').replace('.', '');
-                var tmm = Lampa.Lang.translate('time_m').replace('.', '');
-                var timeStr = h > 0 ? (h + ' ' + th + ' ' + mm + ' ' + tmm) : (mm + ' ' + tmm);
-                infoParts.push(timeStr);
             }
 
-            if (infoParts.length) {
-                infoText.html(infoParts.join(' · '));
-                render.find('.applecation__info').addClass('show');
+            // 7. Бейджи качества (всегда показываем)
+            var badgesContainer = render.find('.applecation__quality-badges');
+            if (badgesContainer.length) {
+                getBestJacred(movie, function(result) {
+                    try {
+                        if (!result || result.empty) {
+                            badgesContainer.hide();
+                            return;
+                        }
+
+                        badgesContainer.empty().show();
+                        var hasBadges = false;
+
+                        if (result.resolution && result.resolution !== 'SD') {
+                            var resClass = 'quality-badge--' + result.resolution.toLowerCase();
+                            var resLabel = result.resolution === '4K' ? '4K' :
+                                          result.resolution === 'FHD' ? 'FHD' :
+                                          result.resolution === 'HD' ? 'HD' : result.resolution;
+                            badgesContainer.append('<span class="quality-badge ' + resClass + '">' + resLabel + '</span>');
+                            hasBadges = true;
+                        }
+
+                        if (result.dolbyVision) {
+                            badgesContainer.append('<span class="quality-badge quality-badge--dv">Dolby Vision</span>');
+                            hasBadges = true;
+                        } else if (result.hdr) {
+                            badgesContainer.append('<span class="quality-badge quality-badge--hdr">HDR</span>');
+                            hasBadges = true;
+                        }
+
+                        if (result.sound) {
+                            badgesContainer.append('<span class="quality-badge quality-badge--sound">' + result.sound + '</span>');
+                            hasBadges = true;
+                        }
+
+                        if (result.dub) {
+                            badgesContainer.append('<span class="quality-badge quality-badge--dub">DUB</span>');
+                            hasBadges = true;
+                        }
+
+                        if (hasBadges) {
+                            badgesContainer.addClass('show');
+                        } else {
+                            badgesContainer.hide();
+                        }
+                    } catch (e) {
+                        badgesContainer.hide();
+                    }
+                });
             }
-        }
-
-        // 7. Бейджи качества (всегда показываем)
-        var badgesContainer = render.find('.applecation__quality-badges');
-        if (badgesContainer.length) {
-            getBestJacred(movie, function(result) {
-                if (!result || result.empty) {
-                    badgesContainer.hide();
-                    return;
-                }
-
-                badgesContainer.empty().show();
-                var hasBadges = false;
-
-                if (result.resolution && result.resolution !== 'SD') {
-                    var resClass = 'quality-badge--' + result.resolution.toLowerCase();
-                    var resLabel = result.resolution === '4K' ? '4K' :
-                                  result.resolution === 'FHD' ? 'FHD' :
-                                  result.resolution === 'HD' ? 'HD' : result.resolution;
-                    badgesContainer.append('<span class="quality-badge ' + resClass + '">' + resLabel + '</span>');
-                    hasBadges = true;
-                }
-
-                if (result.dolbyVision) {
-                    badgesContainer.append('<span class="quality-badge quality-badge--dv">Dolby Vision</span>');
-                    hasBadges = true;
-                } else if (result.hdr) {
-                    badgesContainer.append('<span class="quality-badge quality-badge--hdr">HDR</span>');
-                    hasBadges = true;
-                }
-
-                if (result.sound) {
-                    badgesContainer.append('<span class="quality-badge quality-badge--sound">' + result.sound + '</span>');
-                    hasBadges = true;
-                }
-
-                if (result.dub) {
-                    badgesContainer.append('<span class="quality-badge quality-badge--dub">DUB</span>');
-                    hasBadges = true;
-                }
-
-                if (hasBadges) {
-                    badgesContainer.addClass('show');
-                } else {
-                    badgesContainer.hide();
-                }
-            });
+        } catch (e) {
+            console.error('[AppleTV+] fillContent error:', e);
         }
     }
 
@@ -884,54 +1012,58 @@
     // =================================================================
 
     function showDescriptionOverlay(movie) {
-        var text = movie.overview || 'Описание отсутствует';
-        var title = movie.title || movie.name || '';
+        try {
+            var text = movie.overview || 'Описание отсутствует';
+            var title = movie.title || movie.name || '';
 
-        $('.applecation-description-overlay').remove();
+            $('.applecation-description-overlay').remove();
 
-        var overlay = $(`
-            <div class="applecation-description-overlay">
-                <div class="applecation-description-overlay__bg"></div>
-                <div class="applecation-description-overlay__content selector">
-                    <div class="applecation-description-overlay__logo"></div>
-                    <div class="applecation-description-overlay__title">${escapeHtml(title)}</div>
-                    <div class="applecation-description-overlay__text">${escapeHtml(text)}</div>
-                    <div class="applecation-description-overlay__details">
-                        <div class="applecation-description-overlay__info">
-                            <div class="applecation-description-overlay__info-name">Дата выхода</div>
-                            <div class="applecation-description-overlay__info-body">${movie.release_date || movie.first_air_date || '-'}</div>
-                        </div>
-                        <div class="applecation-description-overlay__info" ${!movie.budget || movie.budget === 0 ? 'style="display:none;"' : ''}>
-                            <div class="applecation-description-overlay__info-name">Бюджет</div>
-                            <div class="applecation-description-overlay__info-body">$${Lampa.Utils.numberWithSpaces(movie.budget || 0)}</div>
-                        </div>
-                        <div class="applecation-description-overlay__info" ${!movie.production_countries || !movie.production_countries.length ? 'style="display:none;"' : ''}>
-                            <div class="applecation-description-overlay__info-name">Страны</div>
-                            <div class="applecation-description-overlay__info-body">${(movie.production_countries || []).map(function(c) { return c.name; }).join(', ')}</div>
+            var overlay = $(`
+                <div class="applecation-description-overlay">
+                    <div class="applecation-description-overlay__bg"></div>
+                    <div class="applecation-description-overlay__content selector">
+                        <div class="applecation-description-overlay__logo"></div>
+                        <div class="applecation-description-overlay__title">${escapeHtml(title)}</div>
+                        <div class="applecation-description-overlay__text">${escapeHtml(text)}</div>
+                        <div class="applecation-description-overlay__details">
+                            <div class="applecation-description-overlay__info">
+                                <div class="applecation-description-overlay__info-name">Дата выхода</div>
+                                <div class="applecation-description-overlay__info-body">${movie.release_date || movie.first_air_date || '-'}</div>
+                            </div>
+                            <div class="applecation-description-overlay__info" ${!movie.budget || movie.budget === 0 ? 'style="display:none;"' : ''}>
+                                <div class="applecation-description-overlay__info-name">Бюджет</div>
+                                <div class="applecation-description-overlay__info-body">$${Lampa.Utils.numberWithSpaces(movie.budget || 0)}</div>
+                            </div>
+                            <div class="applecation-description-overlay__info" ${!movie.production_countries || !movie.production_countries.length ? 'style="display:none;"' : ''}>
+                                <div class="applecation-description-overlay__info-name">Страны</div>
+                                <div class="applecation-description-overlay__info-body">${(movie.production_countries || []).map(function(c) { return c.name; }).join(', ')}</div>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
-        `);
+            `);
 
-        $('body').append(overlay);
-        setTimeout(function() { overlay.addClass('show'); }, 10);
+            $('body').append(overlay);
+            setTimeout(function() { overlay.addClass('show'); }, 10);
 
-        var ctrl = {
-            toggle: function() {
-                Lampa.Controller.collectionSet(overlay);
-                Lampa.Controller.collectionFocus(overlay.find('.applecation-description-overlay__content'), overlay);
-            },
-            back: function() {
-                var ol = $('.applecation-description-overlay');
-                if (!ol.length) return;
-                ol.removeClass('show');
-                setTimeout(function() { Lampa.Controller.toggle('content'); }, 300);
-            }
-        };
+            var ctrl = {
+                toggle: function() {
+                    Lampa.Controller.collectionSet(overlay);
+                    Lampa.Controller.collectionFocus(overlay.find('.applecation-description-overlay__content'), overlay);
+                },
+                back: function() {
+                    var ol = $('.applecation-description-overlay');
+                    if (!ol.length) return;
+                    ol.removeClass('show');
+                    setTimeout(function() { Lampa.Controller.toggle('content'); }, 300);
+                }
+            };
 
-        Lampa.Controller.add('applecation_description', ctrl);
-        Lampa.Controller.toggle('applecation_description');
+            Lampa.Controller.add('applecation_description', ctrl);
+            Lampa.Controller.toggle('applecation_description');
+        } catch (e) {
+            console.error('[AppleTV+] showDescriptionOverlay error:', e);
+        }
     }
 
     // =================================================================
@@ -939,49 +1071,58 @@
     // =================================================================
 
     function loadLogo(render, movie) {
-        var logoImg = render.find('.applecation__logo');
-        var wrapper = render.find('.applecation__logo-wrapper');
-        var titleEl = render.find('.full-start-new__title');
+        try {
+            var logoImg = render.find('.applecation__logo');
+            var wrapper = render.find('.applecation__logo-wrapper');
+            var titleEl = render.find('.full-start-new__title');
 
-        if (!logoImg.length || !wrapper.length) return;
+            if (!logoImg.length || !wrapper.length) return;
 
-        fetchLogo(movie, function(logo) {
-            if (!logo) {
-                titleEl.show();
-                wrapper.addClass('loaded');
-                return;
-            }
+            fetchLogo(movie, function(logo) {
+                try {
+                    if (!logo) {
+                        titleEl.show();
+                        wrapper.addClass('loaded');
+                        return;
+                    }
 
-            var logoUrl = getLogoUrl(logo);
-            if (!logoUrl) {
-                titleEl.show();
-                wrapper.addClass('loaded');
-                return;
-            }
+                    var logoUrl = getLogoUrl(logo);
+                    if (!logoUrl) {
+                        titleEl.show();
+                        wrapper.addClass('loaded');
+                        return;
+                    }
 
-            var img = new Image();
-            img.onload = function() {
-                if (!render.closest('body').length) return;
-                logoImg.attr('src', logoUrl);
-                logoImg.show();
-                wrapper.addClass('loaded');
-                titleEl.hide();
+                    var img = new Image();
+                    img.onload = function() {
+                        if (!render.closest('body').length) return;
+                        logoImg.attr('src', logoUrl);
+                        logoImg.show();
+                        wrapper.addClass('loaded');
+                        titleEl.hide();
 
-                var overlay = $('.applecation-description-overlay');
-                if (overlay.length) {
-                    overlay.find('.applecation-description-overlay__logo')
-                        .html($('<img>').attr('src', logoUrl))
-                        .css('display', 'block');
-                    overlay.find('.applecation-description-overlay__title')
-                        .css('display', 'none');
+                        var overlay = $('.applecation-description-overlay');
+                        if (overlay.length) {
+                            overlay.find('.applecation-description-overlay__logo')
+                                .html($('<img>').attr('src', logoUrl))
+                                .css('display', 'block');
+                            overlay.find('.applecation-description-overlay__title')
+                                .css('display', 'none');
+                        }
+                    };
+                    img.onerror = function() {
+                        titleEl.show();
+                        wrapper.addClass('loaded');
+                    };
+                    img.src = logoUrl;
+                } catch (e) {
+                    titleEl.show();
+                    wrapper.addClass('loaded');
                 }
-            };
-            img.onerror = function() {
-                titleEl.show();
-                wrapper.addClass('loaded');
-            };
-            img.src = logoUrl;
-        });
+            });
+        } catch (e) {
+            console.error('[AppleTV+] loadLogo error:', e);
+        }
     }
 
     // =================================================================
@@ -989,28 +1130,32 @@
     // =================================================================
 
     function setupAnimations(render) {
-        setTimeout(function() {
-            if (!render.closest('body').length) return;
+        try {
+            setTimeout(function() {
+                if (!render.closest('body').length) return;
 
-            render.find('.applecation__meta, .applecation__studios, .applecation__ratings, .applecation__reactions, .applecation__description-wrapper, .applecation__info').each(function() {
-                $(this).addClass('show');
-            });
+                render.find('.applecation__meta, .applecation__studios, .applecation__ratings, .applecation__reactions, .applecation__description-wrapper, .applecation__info').each(function() {
+                    $(this).addClass('show');
+                });
 
-            render.find('.applecation__meta, .applecation__studios, .applecation__ratings, .applecation__reactions, .applecation__description-wrapper, .applecation__info').css('opacity', '1');
-        }, 350);
+                render.find('.applecation__meta, .applecation__studios, .applecation__ratings, .applecation__reactions, .applecation__description-wrapper, .applecation__info').css('opacity', '1');
+            }, 350);
 
-        var bg = render.find('.full-start__background:not(.applecation__overlay)');
-        if (bg.length) {
-            if (bg.hasClass('loaded')) {
-                bg.addClass('applecation-animated');
-            } else {
-                var interval = setInterval(function() {
-                    if (bg.hasClass('loaded')) {
-                        clearInterval(interval);
-                        bg.addClass('applecation-animated');
-                    }
-                }, 100);
+            var bg = render.find('.full-start__background:not(.applecation__overlay)');
+            if (bg.length) {
+                if (bg.hasClass('loaded')) {
+                    bg.addClass('applecation-animated');
+                } else {
+                    var interval = setInterval(function() {
+                        if (bg.hasClass('loaded')) {
+                            clearInterval(interval);
+                            bg.addClass('applecation-animated');
+                        }
+                    }, 100);
+                }
             }
+        } catch (e) {
+            console.error('[AppleTV+] setupAnimations error:', e);
         }
     }
 
@@ -1019,206 +1164,214 @@
     // =================================================================
 
     function injectStyles() {
-        $('#applecation_plus_css').remove();
+        try {
+            $('#applecation_plus_css').remove();
 
-        var css = `
-        .applecation { transition: all .3s !important; }
-        .applecation .full-start-new__body { height: 80vh !important; min-height: 400px !important; }
-        .applecation .full-start-new__right { display: flex !important; align-items: flex-end !important; padding: 0 2em 2em 2em !important; }
-        .applecation .full-start-new__left { display: none !important; }
-        .applecation .applecation__left { flex: 1 !important; width: 100% !important; }
-        .applecation .applecation__content-wrapper { font-size: 100% !important; max-width: 45vw !important; background: rgba(0,0,0,0.3) !important; backdrop-filter: blur(10px) !important; -webkit-backdrop-filter: blur(10px) !important; padding: 1.5em !important; border-radius: 1em !important; border: 1px solid rgba(255,255,255,0.05) !important; }
-        .applecation__logo-wrapper { margin-bottom: 0.5em !important; opacity: 0 !important; transform: translateY(20px) !important; transition: opacity 0.4s ease-out, transform 0.4s ease-out !important; }
-        .applecation__logo-wrapper.loaded { opacity: 1 !important; transform: translateY(0) !important; }
-        .applecation__logo { display: block !important; max-width: 30vw !important; max-height: 150px !important; width: auto !important; height: auto !important; object-fit: contain !important; object-position: left center !important; filter: drop-shadow(0 2px 10px rgba(0,0,0,0.5)) !important; }
-        .applecation .full-start-new__title { font-size: 2.5em !important; font-weight: 700 !important; line-height: 1.2 !important; margin-bottom: 0.3em !important; color: #fff !important; text-shadow: 0 2px 10px rgba(0,0,0,0.5) !important; }
-        .applecation__meta { display: flex !important; align-items: center !important; flex-wrap: wrap !important; color: #fff !important; font-size: 1em !important; margin-bottom: 0.5em !important; line-height: 1 !important; gap: 0.5em !important; opacity: 0 !important; transform: translateY(15px) !important; transition: opacity 0.4s ease-out, transform 0.4s ease-out !important; }
-        .applecation__meta.show { opacity: 1 !important; transform: translateY(0) !important; }
-        .applecation__meta-text { opacity: 0.85 !important; }
-        .applecation__age-rating { display: inline-flex !important; align-items: center !important; padding: 0.1em 0.4em !important; border-radius: 0.2em !important; border: 1px solid rgba(255,255,255,0.3) !important; font-size: 0.8em !important; font-weight: 700 !important; color: #fff !important; }
-        .applecation__studios { display: flex !important; align-items: center !important; flex-wrap: wrap !important; gap: 0.7em !important; margin: 0 0 0.5em 0 !important; opacity: 0 !important; transform: translateY(15px) !important; transition: opacity 0.4s ease-out, transform 0.4s ease-out !important; }
-        .applecation__studios.show { opacity: 1 !important; transform: translateY(0) !important; }
-        .applecation__studio { display: inline-flex !important; align-items: center !important; gap: 0.4em !important; background: rgba(255,255,255,0.08) !important; border: 1px solid rgba(255,255,255,0.1) !important; border-radius: 0.6em !important; padding: 0.25em 0.6em !important; transition: all 0.2s ease !important; cursor: pointer !important; }
-        .applecation__studio.focus { background: rgba(255,255,255,0.2) !important; border-color: #fff !important; transform: scale(1.05) !important; }
-        .applecation__studio img { height: 1.3em !important; max-width: 120px !important; width: auto !important; object-fit: contain !important; filter: brightness(0) invert(1) !important; }
-        .applecation__ratings { display: flex !important; align-items: center !important; flex-wrap: wrap !important; gap: 0.6em !important; margin-bottom: 0.5em !important; opacity: 0 !important; transform: translateY(15px) !important; transition: opacity 0.4s ease-out, transform 0.4s ease-out !important; }
-        .applecation__ratings.show { opacity: 1 !important; transform: translateY(0) !important; }
-        .applecation__rating-item { display: flex !important; align-items: center !important; gap: 0.35em !important; padding: 0.2em 0.6em !important; border-radius: 0.4em !important; background: rgba(0,0,0,0.5) !important; border: 1.5px solid rgba(255,255,255,0.15) !important; font-size: 0.85em !important; font-weight: 600 !important; color: #fff !important; line-height: 1 !important; }
-        .applecation__rating-item .rating-value { font-size: 1.1em !important; font-weight: 700 !important; }
-        .applecation__rating-item .rating-source { font-size: 0.75em !important; opacity: 0.7 !important; margin-left: 0.15em !important; }
-        .applecation__reactions { display: flex !important; align-items: center !important; flex-wrap: wrap !important; gap: 0.6em !important; margin-bottom: 0.5em !important; opacity: 0 !important; transform: translateY(15px) !important; transition: opacity 0.4s ease-out, transform 0.4s ease-out !important; }
-        .applecation__reactions.show { opacity: 1 !important; transform: translateY(0) !important; }
-        .applecation__reaction-item { display: flex !important; align-items: center !important; gap: 0.3em !important; padding: 0.15em 0.5em !important; border-radius: 0.4em !important; background: rgba(255,255,255,0.06) !important; border: 1px solid rgba(255,255,255,0.08) !important; font-size: 0.85em !important; color: #fff !important; line-height: 1 !important; }
-        .applecation__reaction-item .reaction-count { font-weight: 600 !important; font-size: 0.9em !important; }
-        .applecation__description-wrapper { background: transparent !important; padding: 0 !important; border-radius: 1em !important; width: fit-content !important; opacity: 0 !important; transform: translateY(15px) !important; transition: padding 0.25s ease, transform 0.25s ease, opacity 0.4s ease-out !important; cursor: pointer !important; }
-        .applecation__description-wrapper.show { opacity: 1 !important; transform: translateY(0) !important; }
-        .applecation__description-wrapper.focus { background: linear-gradient(135deg, rgba(255,255,255,0.28), rgba(255,255,255,0.18)) !important; padding: 0.15em 0.4em 0 0.7em !important; border-radius: 1em !important; width: fit-content !important; box-shadow: inset 0 1px 0 rgba(255,255,255,0.35) !important; transform: scale(1.07) translateY(0) !important; }
-        .applecation__description { color: rgba(255,255,255,0.6) !important; font-size: 0.95em !important; line-height: 1.5 !important; margin-bottom: 0.5em !important; max-width: 35vw !important; display: -webkit-box !important; -webkit-line-clamp: 4 !important; -webkit-box-orient: vertical !important; overflow: hidden !important; text-overflow: ellipsis !important; }
-        .focus .applecation__description { color: rgba(255,255,255,0.92) !important; }
-        .applecation__info { color: rgba(255,255,255,0.75) !important; font-size: 0.95em !important; line-height: 1.4 !important; margin-bottom: 0.5em !important; opacity: 0 !important; transform: translateY(15px) !important; transition: opacity 0.4s ease-out, transform 0.4s ease-out !important; display: flex !important; align-items: center !important; flex-wrap: wrap !important; gap: 0.5em !important; }
-        .applecation__info.show { opacity: 1 !important; transform: translateY(0) !important; }
-        .applecation__season-info { display: inline-flex !important; align-items: center !important; padding: 0.15em 0.5em !important; border-radius: 0.3em !important; background: rgba(231,76,60,0.85) !important; color: #fff !important; font-size: 0.85em !important; font-weight: 600 !important; line-height: 1.3 !important; }
-        .applecation__season-info.completed { background: rgba(46,204,113,0.85) !important; }
-        .applecation__status-info { display: inline-flex !important; align-items: center !important; padding: 0.15em 0.5em !important; border-radius: 0.3em !important; color: #fff !important; font-size: 0.85em !important; font-weight: 600 !important; line-height: 1.3 !important; }
-        .applecation__quality-badges { display: flex !important; align-items: center !important; flex-wrap: wrap !important; gap: 0.4em !important; margin-left: 0.6em !important; opacity: 0 !important; transform: translateY(10px) !important; transition: opacity 0.3s ease-out, transform 0.3s ease-out !important; }
-        .applecation__quality-badges.show { opacity: 1 !important; transform: translateY(0) !important; }
-        .quality-badge { display: inline-flex !important; align-items: center !important; justify-content: center !important; padding: 0.15em 0.5em !important; border-radius: 0.3em !important; font-size: 0.7em !important; font-weight: 700 !important; line-height: 1.3 !important; color: #fff !important; text-transform: uppercase !important; letter-spacing: 0.03em !important; border: 1px solid rgba(255,255,255,0.15) !important; background: rgba(0,0,0,0.5) !important; }
-        .quality-badge--4k { background: rgba(46,204,113,0.8) !important; border-color: rgba(46,204,113,0.4) !important; }
-        .quality-badge--fhd { background: rgba(52,152,219,0.8) !important; border-color: rgba(52,152,219,0.4) !important; }
-        .quality-badge--hd { background: rgba(243,156,18,0.8) !important; border-color: rgba(243,156,18,0.4) !important; }
-        .quality-badge--hdr { background: rgba(155,89,182,0.8) !important; border-color: rgba(155,89,182,0.4) !important; }
-        .quality-badge--dv { background: rgba(231,76,60,0.8) !important; border-color: rgba(231,76,60,0.4) !important; }
-        .quality-badge--dub { background: rgba(26,188,156,0.8) !important; border-color: rgba(26,188,156,0.4) !important; }
-        .quality-badge--sound { background: rgba(241,196,15,0.8) !important; border-color: rgba(241,196,15,0.4) !important; color: #000 !important; }
-        .applecation .full-start-new__buttons { display: flex !important; flex-direction: row !important; flex-wrap: wrap !important; gap: 0.6em !important; margin-top: 0.5em !important; }
-        .applecation .full-start__button { min-height: 2.6em !important; padding: 0.4em 1em !important; border-radius: 0.8em !important; background: rgba(255,255,255,0.08) !important; border: 1px solid rgba(255,255,255,0.12) !important; color: rgba(255,255,255,0.9) !important; font-size: 0.85em !important; font-weight: 600 !important; transition: all 0.25s ease !important; backdrop-filter: blur(10px) !important; -webkit-backdrop-filter: blur(10px) !important; }
-        .applecation .full-start__button.focus, .applecation .full-start__button.hover { background: rgba(255,255,255,0.18) !important; border-color: rgba(255,255,255,0.3) !important; transform: scale(1.05) !important; }
-        .applecation .full-start__button.button--play { background: linear-gradient(135deg, rgba(82,255,179,0.9), rgba(105,183,226,0.9)) !important; border-color: rgba(82,255,179,0.4) !important; color: #000 !important; }
-        .applecation .full-start-new__head, .applecation .full-start-new__details, .applecation .full-descr, .applecation .full-descr__title, .applecation .full-start__head, .applecation .full-start-new__reactions, .applecation .full-start-new__rate-line, .applecation .full-start-new__left { display: none !important; }
-        @media screen and (max-width: 720px) { .applecation .full-start-new__body { height: auto !important; min-height: 0 !important; } .applecation .full-start-new__right { display: block !important; padding: 0 1em 1em 1em !important; } .applecation .applecation__content-wrapper { max-width: 100% !important; padding: 1em !important; } .applecation .applecation__description { max-width: none !important; width: 100% !important; -webkit-line-clamp: 3 !important; } .applecation__logo { max-width: 60vw !important; max-height: 80px !important; } .applecation .full-start-new__title { font-size: 1.8em !important; } }
-        @media screen and (max-width: 480px) { .applecation .applecation__description { -webkit-line-clamp: 2 !important; } .applecation__logo { max-width: 70vw !important; max-height: 60px !important; } .applecation .full-start-new__title { font-size: 1.4em !important; } .applecation .applecation__meta { font-size: 0.85em !important; } .applecation .applecation__ratings { font-size: 0.8em !important; } }
-        `;
+            var css = `
+            .applecation { transition: all .3s !important; }
+            .applecation .full-start-new__body { height: 80vh !important; min-height: 400px !important; }
+            .applecation .full-start-new__right { display: flex !important; align-items: flex-end !important; padding: 0 2em 2em 2em !important; }
+            .applecation .full-start-new__left { display: none !important; }
+            .applecation .applecation__left { flex: 1 !important; width: 100% !important; }
+            .applecation .applecation__content-wrapper { font-size: 100% !important; max-width: 45vw !important; background: rgba(0,0,0,0.3) !important; backdrop-filter: blur(10px) !important; -webkit-backdrop-filter: blur(10px) !important; padding: 1.5em !important; border-radius: 1em !important; border: 1px solid rgba(255,255,255,0.05) !important; }
+            .applecation__logo-wrapper { margin-bottom: 0.5em !important; opacity: 0 !important; transform: translateY(20px) !important; transition: opacity 0.4s ease-out, transform 0.4s ease-out !important; }
+            .applecation__logo-wrapper.loaded { opacity: 1 !important; transform: translateY(0) !important; }
+            .applecation__logo { display: block !important; max-width: 30vw !important; max-height: 150px !important; width: auto !important; height: auto !important; object-fit: contain !important; object-position: left center !important; filter: drop-shadow(0 2px 10px rgba(0,0,0,0.5)) !important; }
+            .applecation .full-start-new__title { font-size: 2.5em !important; font-weight: 700 !important; line-height: 1.2 !important; margin-bottom: 0.3em !important; color: #fff !important; text-shadow: 0 2px 10px rgba(0,0,0,0.5) !important; }
+            .applecation__meta { display: flex !important; align-items: center !important; flex-wrap: wrap !important; color: #fff !important; font-size: 1em !important; margin-bottom: 0.5em !important; line-height: 1 !important; gap: 0.5em !important; opacity: 0 !important; transform: translateY(15px) !important; transition: opacity 0.4s ease-out, transform 0.4s ease-out !important; }
+            .applecation__meta.show { opacity: 1 !important; transform: translateY(0) !important; }
+            .applecation__meta-text { opacity: 0.85 !important; }
+            .applecation__age-rating { display: inline-flex !important; align-items: center !important; padding: 0.1em 0.4em !important; border-radius: 0.2em !important; border: 1px solid rgba(255,255,255,0.3) !important; font-size: 0.8em !important; font-weight: 700 !important; color: #fff !important; }
+            .applecation__studios { display: flex !important; align-items: center !important; flex-wrap: wrap !important; gap: 0.7em !important; margin: 0 0 0.5em 0 !important; opacity: 0 !important; transform: translateY(15px) !important; transition: opacity 0.4s ease-out, transform 0.4s ease-out !important; }
+            .applecation__studios.show { opacity: 1 !important; transform: translateY(0) !important; }
+            .applecation__studio { display: inline-flex !important; align-items: center !important; gap: 0.4em !important; background: rgba(255,255,255,0.08) !important; border: 1px solid rgba(255,255,255,0.1) !important; border-radius: 0.6em !important; padding: 0.25em 0.6em !important; transition: all 0.2s ease !important; cursor: pointer !important; }
+            .applecation__studio.focus { background: rgba(255,255,255,0.2) !important; border-color: #fff !important; transform: scale(1.05) !important; }
+            .applecation__studio img { height: 1.3em !important; max-width: 120px !important; width: auto !important; object-fit: contain !important; filter: brightness(0) invert(1) !important; }
+            .applecation__ratings { display: flex !important; align-items: center !important; flex-wrap: wrap !important; gap: 0.6em !important; margin-bottom: 0.5em !important; opacity: 0 !important; transform: translateY(15px) !important; transition: opacity 0.4s ease-out, transform 0.4s ease-out !important; }
+            .applecation__ratings.show { opacity: 1 !important; transform: translateY(0) !important; }
+            .applecation__rating-item { display: flex !important; align-items: center !important; gap: 0.35em !important; padding: 0.2em 0.6em !important; border-radius: 0.4em !important; background: rgba(0,0,0,0.5) !important; border: 1.5px solid rgba(255,255,255,0.15) !important; font-size: 0.85em !important; font-weight: 600 !important; color: #fff !important; line-height: 1 !important; }
+            .applecation__rating-item .rating-value { font-size: 1.1em !important; font-weight: 700 !important; }
+            .applecation__rating-item .rating-source { font-size: 0.75em !important; opacity: 0.7 !important; margin-left: 0.15em !important; }
+            .applecation__reactions { display: flex !important; align-items: center !important; flex-wrap: wrap !important; gap: 0.6em !important; margin-bottom: 0.5em !important; opacity: 0 !important; transform: translateY(15px) !important; transition: opacity 0.4s ease-out, transform 0.4s ease-out !important; }
+            .applecation__reactions.show { opacity: 1 !important; transform: translateY(0) !important; }
+            .applecation__reaction-item { display: flex !important; align-items: center !important; gap: 0.3em !important; padding: 0.15em 0.5em !important; border-radius: 0.4em !important; background: rgba(255,255,255,0.06) !important; border: 1px solid rgba(255,255,255,0.08) !important; font-size: 0.85em !important; color: #fff !important; line-height: 1 !important; }
+            .applecation__reaction-item .reaction-count { font-weight: 600 !important; font-size: 0.9em !important; }
+            .applecation__description-wrapper { background: transparent !important; padding: 0 !important; border-radius: 1em !important; width: fit-content !important; opacity: 0 !important; transform: translateY(15px) !important; transition: padding 0.25s ease, transform 0.25s ease, opacity 0.4s ease-out !important; cursor: pointer !important; }
+            .applecation__description-wrapper.show { opacity: 1 !important; transform: translateY(0) !important; }
+            .applecation__description-wrapper.focus { background: linear-gradient(135deg, rgba(255,255,255,0.28), rgba(255,255,255,0.18)) !important; padding: 0.15em 0.4em 0 0.7em !important; border-radius: 1em !important; width: fit-content !important; box-shadow: inset 0 1px 0 rgba(255,255,255,0.35) !important; transform: scale(1.07) translateY(0) !important; }
+            .applecation__description { color: rgba(255,255,255,0.6) !important; font-size: 0.95em !important; line-height: 1.5 !important; margin-bottom: 0.5em !important; max-width: 35vw !important; display: -webkit-box !important; -webkit-line-clamp: 4 !important; -webkit-box-orient: vertical !important; overflow: hidden !important; text-overflow: ellipsis !important; }
+            .focus .applecation__description { color: rgba(255,255,255,0.92) !important; }
+            .applecation__info { color: rgba(255,255,255,0.75) !important; font-size: 0.95em !important; line-height: 1.4 !important; margin-bottom: 0.5em !important; opacity: 0 !important; transform: translateY(15px) !important; transition: opacity 0.4s ease-out, transform 0.4s ease-out !important; display: flex !important; align-items: center !important; flex-wrap: wrap !important; gap: 0.5em !important; }
+            .applecation__info.show { opacity: 1 !important; transform: translateY(0) !important; }
+            .applecation__season-info { display: inline-flex !important; align-items: center !important; padding: 0.15em 0.5em !important; border-radius: 0.3em !important; background: rgba(231,76,60,0.85) !important; color: #fff !important; font-size: 0.85em !important; font-weight: 600 !important; line-height: 1.3 !important; }
+            .applecation__season-info.completed { background: rgba(46,204,113,0.85) !important; }
+            .applecation__status-info { display: inline-flex !important; align-items: center !important; padding: 0.15em 0.5em !important; border-radius: 0.3em !important; color: #fff !important; font-size: 0.85em !important; font-weight: 600 !important; line-height: 1.3 !important; }
+            .applecation__quality-badges { display: flex !important; align-items: center !important; flex-wrap: wrap !important; gap: 0.4em !important; margin-left: 0.6em !important; opacity: 0 !important; transform: translateY(10px) !important; transition: opacity 0.3s ease-out, transform 0.3s ease-out !important; }
+            .applecation__quality-badges.show { opacity: 1 !important; transform: translateY(0) !important; }
+            .quality-badge { display: inline-flex !important; align-items: center !important; justify-content: center !important; padding: 0.15em 0.5em !important; border-radius: 0.3em !important; font-size: 0.7em !important; font-weight: 700 !important; line-height: 1.3 !important; color: #fff !important; text-transform: uppercase !important; letter-spacing: 0.03em !important; border: 1px solid rgba(255,255,255,0.15) !important; background: rgba(0,0,0,0.5) !important; }
+            .quality-badge--4k { background: rgba(46,204,113,0.8) !important; border-color: rgba(46,204,113,0.4) !important; }
+            .quality-badge--fhd { background: rgba(52,152,219,0.8) !important; border-color: rgba(52,152,219,0.4) !important; }
+            .quality-badge--hd { background: rgba(243,156,18,0.8) !important; border-color: rgba(243,156,18,0.4) !important; }
+            .quality-badge--hdr { background: rgba(155,89,182,0.8) !important; border-color: rgba(155,89,182,0.4) !important; }
+            .quality-badge--dv { background: rgba(231,76,60,0.8) !important; border-color: rgba(231,76,60,0.4) !important; }
+            .quality-badge--dub { background: rgba(26,188,156,0.8) !important; border-color: rgba(26,188,156,0.4) !important; }
+            .quality-badge--sound { background: rgba(241,196,15,0.8) !important; border-color: rgba(241,196,15,0.4) !important; color: #000 !important; }
+            .applecation .full-start-new__buttons { display: flex !important; flex-direction: row !important; flex-wrap: wrap !important; gap: 0.6em !important; margin-top: 0.5em !important; }
+            .applecation .full-start__button { min-height: 2.6em !important; padding: 0.4em 1em !important; border-radius: 0.8em !important; background: rgba(255,255,255,0.08) !important; border: 1px solid rgba(255,255,255,0.12) !important; color: rgba(255,255,255,0.9) !important; font-size: 0.85em !important; font-weight: 600 !important; transition: all 0.25s ease !important; backdrop-filter: blur(10px) !important; -webkit-backdrop-filter: blur(10px) !important; }
+            .applecation .full-start__button.focus, .applecation .full-start__button.hover { background: rgba(255,255,255,0.18) !important; border-color: rgba(255,255,255,0.3) !important; transform: scale(1.05) !important; }
+            .applecation .full-start__button.button--play { background: linear-gradient(135deg, rgba(82,255,179,0.9), rgba(105,183,226,0.9)) !important; border-color: rgba(82,255,179,0.4) !important; color: #000 !important; }
+            .applecation .full-start-new__head, .applecation .full-start-new__details, .applecation .full-descr, .applecation .full-descr__title, .applecation .full-start__head, .applecation .full-start-new__reactions, .applecation .full-start-new__rate-line, .applecation .full-start-new__left { display: none !important; }
+            @media screen and (max-width: 720px) { .applecation .full-start-new__body { height: auto !important; min-height: 0 !important; } .applecation .full-start-new__right { display: block !important; padding: 0 1em 1em 1em !important; } .applecation .applecation__content-wrapper { max-width: 100% !important; padding: 1em !important; } .applecation .applecation__description { max-width: none !important; width: 100% !important; -webkit-line-clamp: 3 !important; } .applecation__logo { max-width: 60vw !important; max-height: 80px !important; } .applecation .full-start-new__title { font-size: 1.8em !important; } }
+            @media screen and (max-width: 480px) { .applecation .applecation__description { -webkit-line-clamp: 2 !important; } .applecation__logo { max-width: 70vw !important; max-height: 60px !important; } .applecation .full-start-new__title { font-size: 1.4em !important; } .applecation .applecation__meta { font-size: 0.85em !important; } .applecation .applecation__ratings { font-size: 0.8em !important; } }
+            `;
 
-        $('head').append('<style id="applecation_plus_css">' + css + '</style>');
-        console.log('[AppleTV+] Styles injected');
+            $('head').append('<style id="applecation_plus_css">' + css + '</style>');
+            console.log('[AppleTV+] Styles injected');
+        } catch (e) {
+            console.error('[AppleTV+] injectStyles error:', e);
+        }
     }
 
     function injectAdditionalStyles() {
-        $('#applecation_plus_extra_css').remove();
+        try {
+            $('#applecation_plus_extra_css').remove();
 
-        var css = `
-        /* Виньетка на фоне */
-        .applecation .applecation__overlay {
-            width: 90vw !important;
-            background: linear-gradient(to right,
-                rgba(0,0,0,0.85) 0%,
-                rgba(0,0,0,0.50) 25%,
-                rgba(0,0,0,0.25) 45%,
-                rgba(0,0,0,0.10) 55%,
-                rgba(0,0,0,0.04) 60%,
-                rgba(0,0,0,0) 65%
-            ) !important;
-            pointer-events: none !important;
-            z-index: 1 !important;
+            var css = `
+            /* Виньетка на фоне */
+            .applecation .applecation__overlay {
+                width: 90vw !important;
+                background: linear-gradient(to right,
+                    rgba(0,0,0,0.85) 0%,
+                    rgba(0,0,0,0.50) 25%,
+                    rgba(0,0,0,0.25) 45%,
+                    rgba(0,0,0,0.10) 55%,
+                    rgba(0,0,0,0.04) 60%,
+                    rgba(0,0,0,0) 65%
+                ) !important;
+                pointer-events: none !important;
+                z-index: 1 !important;
+            }
+
+            /* Четкий фон */
+            .applecation .full-start__background {
+                height: calc(100% + 6em) !important;
+                left: 0 !important;
+                opacity: 0 !important;
+                transition: opacity 0.6s ease-out, filter 0.3s ease-out !important;
+                animation: none !important;
+                transform: none !important;
+                will-change: opacity, filter !important;
+                image-rendering: auto !important;
+            }
+
+            .applecation .full-start__background.loaded:not(.dim) {
+                opacity: 1 !important;
+                image-rendering: auto !important;
+            }
+
+            .applecation .full-start__background.dim {
+                filter: blur(30px) !important;
+            }
+
+            .applecation .full-start__background.loaded.applecation-animated {
+                opacity: 1 !important;
+            }
+
+            /* Оверлей для описания */
+            .applecation-description-overlay {
+                position: fixed !important;
+                top: 0 !important;
+                left: 0 !important;
+                right: 0 !important;
+                bottom: 0 !important;
+                z-index: 9999 !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                opacity: 0 !important;
+                visibility: hidden !important;
+                pointer-events: none !important;
+                transition: opacity 0.3s ease, visibility 0.3s ease !important;
+            }
+
+            .applecation-description-overlay.show {
+                opacity: 1 !important;
+                visibility: visible !important;
+                pointer-events: all !important;
+            }
+
+            .applecation-description-overlay__bg {
+                position: absolute !important;
+                top: 0 !important;
+                left: 0 !important;
+                right: 0 !important;
+                bottom: 0 !important;
+                backdrop-filter: blur(100px) !important;
+                -webkit-backdrop-filter: blur(100px) !important;
+                background: rgba(0,0,0,0.6) !important;
+            }
+
+            .applecation-description-overlay__content {
+                position: relative !important;
+                z-index: 1 !important;
+                max-width: 60vw !important;
+                max-height: 90vh !important;
+                overflow-y: auto !important;
+                padding: 2em !important;
+                background: rgba(20,20,30,0.9) !important;
+                border-radius: 1.2em !important;
+                border: 1px solid rgba(255,255,255,0.1) !important;
+                box-shadow: 0 20px 60px rgba(0,0,0,0.5) !important;
+            }
+
+            .applecation-description-overlay__title {
+                font-size: 2em !important;
+                font-weight: 600 !important;
+                margin-bottom: 1em !important;
+                color: #fff !important;
+                text-align: center !important;
+            }
+
+            .applecation-description-overlay__text {
+                font-size: 1.2em !important;
+                line-height: 1.6 !important;
+                color: rgba(255,255,255,0.9) !important;
+                white-space: pre-wrap !important;
+                margin-bottom: 1.5em !important;
+            }
+
+            .applecation-description-overlay__details {
+                display: flex !important;
+                flex-wrap: wrap !important;
+                gap: 1.5em !important;
+            }
+
+            .applecation-description-overlay__info-name {
+                font-size: 0.9em !important;
+                opacity: 0.6 !important;
+                margin-bottom: 0.3em !important;
+            }
+
+            .applecation-description-overlay__info-body {
+                font-size: 1.1em !important;
+                opacity: 0.9 !important;
+            }
+
+            @keyframes applecation-fade-in {
+                from { opacity: 0; transform: translateY(20px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
+
+            .applecation .applecation-animate-in {
+                animation: applecation-fade-in 0.5s ease forwards !important;
+            }
+            `;
+
+            $('head').append('<style id="applecation_plus_extra_css">' + css + '</style>');
+            console.log('[AppleTV+] Extra styles injected');
+        } catch (e) {
+            console.error('[AppleTV+] injectAdditionalStyles error:', e);
         }
-
-        /* Четкий фон */
-        .applecation .full-start__background {
-            height: calc(100% + 6em) !important;
-            left: 0 !important;
-            opacity: 0 !important;
-            transition: opacity 0.6s ease-out, filter 0.3s ease-out !important;
-            animation: none !important;
-            transform: none !important;
-            will-change: opacity, filter !important;
-            image-rendering: auto !important;
-        }
-
-        .applecation .full-start__background.loaded:not(.dim) {
-            opacity: 1 !important;
-            image-rendering: auto !important;
-        }
-
-        .applecation .full-start__background.dim {
-            filter: blur(30px) !important;
-        }
-
-        .applecation .full-start__background.loaded.applecation-animated {
-            opacity: 1 !important;
-        }
-
-        /* Оверлей для описания */
-        .applecation-description-overlay {
-            position: fixed !important;
-            top: 0 !important;
-            left: 0 !important;
-            right: 0 !important;
-            bottom: 0 !important;
-            z-index: 9999 !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            opacity: 0 !important;
-            visibility: hidden !important;
-            pointer-events: none !important;
-            transition: opacity 0.3s ease, visibility 0.3s ease !important;
-        }
-
-        .applecation-description-overlay.show {
-            opacity: 1 !important;
-            visibility: visible !important;
-            pointer-events: all !important;
-        }
-
-        .applecation-description-overlay__bg {
-            position: absolute !important;
-            top: 0 !important;
-            left: 0 !important;
-            right: 0 !important;
-            bottom: 0 !important;
-            backdrop-filter: blur(100px) !important;
-            -webkit-backdrop-filter: blur(100px) !important;
-            background: rgba(0,0,0,0.6) !important;
-        }
-
-        .applecation-description-overlay__content {
-            position: relative !important;
-            z-index: 1 !important;
-            max-width: 60vw !important;
-            max-height: 90vh !important;
-            overflow-y: auto !important;
-            padding: 2em !important;
-            background: rgba(20,20,30,0.9) !important;
-            border-radius: 1.2em !important;
-            border: 1px solid rgba(255,255,255,0.1) !important;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.5) !important;
-        }
-
-        .applecation-description-overlay__title {
-            font-size: 2em !important;
-            font-weight: 600 !important;
-            margin-bottom: 1em !important;
-            color: #fff !important;
-            text-align: center !important;
-        }
-
-        .applecation-description-overlay__text {
-            font-size: 1.2em !important;
-            line-height: 1.6 !important;
-            color: rgba(255,255,255,0.9) !important;
-            white-space: pre-wrap !important;
-            margin-bottom: 1.5em !important;
-        }
-
-        .applecation-description-overlay__details {
-            display: flex !important;
-            flex-wrap: wrap !important;
-            gap: 1.5em !important;
-        }
-
-        .applecation-description-overlay__info-name {
-            font-size: 0.9em !important;
-            opacity: 0.6 !important;
-            margin-bottom: 0.3em !important;
-        }
-
-        .applecation-description-overlay__info-body {
-            font-size: 1.1em !important;
-            opacity: 0.9 !important;
-        }
-
-        @keyframes applecation-fade-in {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .applecation .applecation-animate-in {
-            animation: applecation-fade-in 0.5s ease forwards !important;
-        }
-        `;
-
-        $('head').append('<style id="applecation_plus_extra_css">' + css + '</style>');
-        console.log('[AppleTV+] Extra styles injected');
     }
 
     // =================================================================
@@ -1226,34 +1379,38 @@
     // =================================================================
 
     function addSettings() {
-        if (!Lampa.SettingsApi || !Lampa.SettingsApi.addComponent) return;
+        try {
+            if (!Lampa.SettingsApi || !Lampa.SettingsApi.addComponent) return;
 
-        Lampa.SettingsApi.addComponent({
-            component: 'applecation_plus',
-            name: 'AppleTV+',
-            icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect x="8" y="8" width="48" height="48" rx="14" fill="none" stroke="currentColor" stroke-width="4"/><path d="M22 18l20 12-10 2 2 10-12-24z" fill="currentColor"/><path d="M44 20l6-6" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg>',
-            after: 'interface'
-        });
+            Lampa.SettingsApi.addComponent({
+                component: 'applecation_plus',
+                name: 'AppleTV+',
+                icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect x="8" y="8" width="48" height="48" rx="14" fill="none" stroke="currentColor" stroke-width="4"/><path d="M22 18l20 12-10 2 2 10-12-24z" fill="currentColor"/><path d="M44 20l6-6" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg>',
+                after: 'interface'
+            });
 
-        Lampa.SettingsApi.addParam({
-            component: 'applecation_plus',
-            param: { name: 'applecation_poster_quality', type: 'select', values: {
-                '720p': '720p (HD)',
-                '1080p': '1080p (FHD)',
-                '4k': '4K (Ultra HD)',
-                '8k': '8K (Super Ultra HD)'
-            }, default: '4k' },
-            field: { name: 'Качество постера', description: 'Выберите качество изображений постеров и фона' },
-            onChange: function(value) {
-                Lampa.Storage.set('applecation_poster_quality', value);
-            }
-        });
+            Lampa.SettingsApi.addParam({
+                component: 'applecation_plus',
+                param: { name: 'applecation_poster_quality', type: 'select', values: {
+                    '720p': '720p (HD)',
+                    '1080p': '1080p (FHD)',
+                    '4k': '4K (Ultra HD)',
+                    '8k': '8K (Super Ultra HD)'
+                }, default: '4k' },
+                field: { name: 'Качество постера', description: 'Выберите качество изображений постеров и фона' },
+                onChange: function(value) {
+                    Lampa.Storage.set('applecation_poster_quality', value);
+                }
+            });
 
-        Lampa.SettingsApi.addParam({
-            component: 'applecation_plus',
-            param: { name: 'applecation_description_overlay', type: 'trigger', default: false },
-            field: { name: 'Описание в оверлее', description: 'Показывать описание в отдельном окне при нажатии' }
-        });
+            Lampa.SettingsApi.addParam({
+                component: 'applecation_plus',
+                param: { name: 'applecation_description_overlay', type: 'trigger', default: false },
+                field: { name: 'Описание в оверлее', description: 'Показывать описание в отдельном окне при нажатии' }
+            });
+        } catch (e) {
+            console.error('[AppleTV+] addSettings error:', e);
+        }
     }
 
     // =================================================================
