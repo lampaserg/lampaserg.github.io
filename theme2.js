@@ -1,5 +1,5 @@
 // @name AppleTV+
-// @version 3.4.0
+// @version 3.5.0
 // @author Your Name
 // @description Расширенная карточка фильма в стиле Apple TV+
 // @lampa-check Lampa.
@@ -11,7 +11,7 @@
     // CONFIGURATION
     // =================================================================
 
-    var PLUGIN_VERSION = '3.4.0';
+    var PLUGIN_VERSION = '3.5.0';
     var CACHE_TTL = 24 * 60 * 60 * 1000;
     var PROXY_TIMEOUT = 10000;
     var LAMPA_RATING_API = 'https://cubnotrip.top/api/reactions/get/';
@@ -22,7 +22,6 @@
         'https://thingproxy.freeboard.io/fetch/'
     ];
 
-    // Alloha API для получения информации о сезонах
     var ALLOHA_SERVERS = [
         { url: 'https://api.allohajr.workers.dev', token: 'alloha_public' },
         { url: 'https://api.apbugall.org', token: 'alloha_public' }
@@ -32,12 +31,22 @@
     if (LANG === 'ua') LANG = 'uk';
     if (['uk', 'ru', 'en', 'pl'].indexOf(LANG) === -1) LANG = 'en';
 
+    // Кэши
     var _jacredCache = {};
     var _ratingCache = {};
     var _logoCache = {};
     var _lampaRatingCache = {};
     var _seasonCache = {};
     var workingProxy = null;
+
+    // Ключи для хранения в Lampa.Storage
+    var STORAGE_KEYS = {
+        jacred_cache: 'applecation_jacred_cache',
+        rating_cache: 'applecation_rating_cache',
+        logo_cache: 'applecation_logo_cache',
+        lampa_rating_cache: 'applecation_lampa_rating_cache',
+        season_cache: 'applecation_season_cache'
+    };
 
     // =================================================================
     // UTILITY FUNCTIONS
@@ -133,6 +142,82 @@
     }
 
     // =================================================================
+    // CACHE MANAGEMENT
+    // =================================================================
+
+    function clearAllCache() {
+        try {
+            // Очищаем in-memory кэши
+            _jacredCache = {};
+            _ratingCache = {};
+            _logoCache = {};
+            _lampaRatingCache = {};
+            _seasonCache = {};
+
+            // Очищаем Storage кэши
+            var keys = Object.values(STORAGE_KEYS);
+            for (var i = 0; i < keys.length; i++) {
+                try {
+                    Lampa.Storage.set(keys[i], {});
+                } catch (e) {}
+            }
+
+            console.log('[AppleTV+] All cache cleared');
+            Lampa.Noty.show('Кэш AppleTV+ очищен');
+
+            // Перезагружаем страницу
+            setTimeout(function() {
+                try {
+                    if (Lampa.Activity && Lampa.Activity.active) {
+                        var active = Lampa.Activity.active();
+                        if (active && active.component === 'full') {
+                            Lampa.Activity.backward();
+                            setTimeout(function() {
+                                location.reload();
+                            }, 300);
+                            return;
+                        }
+                    }
+                    location.reload();
+                } catch (e) {
+                    location.reload();
+                }
+            }, 500);
+
+        } catch (e) {
+            console.error('[AppleTV+] clearAllCache error:', e);
+            Lampa.Noty.show('Ошибка очистки кэша');
+        }
+    }
+
+    function saveToStorage(key, data) {
+        try {
+            var storageKey = STORAGE_KEYS[key];
+            if (!storageKey) return;
+            var existing = Lampa.Storage.get(storageKey, {});
+            if (typeof existing !== 'object') existing = {};
+            for (var k in data) {
+                if (data.hasOwnProperty(k)) {
+                    existing[k] = data[k];
+                }
+            }
+            Lampa.Storage.set(storageKey, existing);
+        } catch (e) {}
+    }
+
+    function getFromStorage(key, subKey) {
+        try {
+            var storageKey = STORAGE_KEYS[key];
+            if (!storageKey) return null;
+            var data = Lampa.Storage.get(storageKey, {});
+            if (typeof data !== 'object') return null;
+            return data[subKey] || null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    // =================================================================
     // PARSE PG (возрастной рейтинг)
     // =================================================================
 
@@ -221,11 +306,13 @@
 
             var type = movie.name ? 'tv' : 'movie';
             var key = type + '_' + movie.id;
-            var cacheKey = 'lampa_rating_' + key;
-            var now = Date.now();
+            var cacheKey = key;
 
-            if (_lampaRatingCache[cacheKey] && (now - _lampaRatingCache[cacheKey]._ts < CACHE_TTL)) {
-                callback(_lampaRatingCache[cacheKey]);
+            // Проверяем кэш
+            var cached = getFromStorage('lampa_rating_cache', cacheKey);
+            if (cached && cached._ts && (Date.now() - cached._ts < CACHE_TTL)) {
+                _lampaRatingCache[cacheKey] = cached;
+                callback(cached);
                 return;
             }
 
@@ -240,9 +327,10 @@
                             rating: rating.rating,
                             medianReaction: rating.medianReaction,
                             reactions: data.result,
-                            _ts: now
+                            _ts: Date.now()
                         };
                         _lampaRatingCache[cacheKey] = result;
+                        saveToStorage('lampa_rating_cache', { [cacheKey]: result });
                         callback(result);
                     } else {
                         callback(null);
@@ -315,11 +403,13 @@
                 return;
             }
 
-            var cacheKey = 'season_info_' + movie.id;
-            var now = Date.now();
+            var cacheKey = 'season_' + movie.id;
 
-            if (_seasonCache[cacheKey] && (now - _seasonCache[cacheKey]._ts < CACHE_TTL)) {
-                callback(_seasonCache[cacheKey]);
+            // Проверяем кэш
+            var cached = getFromStorage('season_cache', cacheKey);
+            if (cached && cached._ts && (Date.now() - cached._ts < CACHE_TTL)) {
+                _seasonCache[cacheKey] = cached;
+                callback(cached);
                 return;
             }
 
@@ -338,9 +428,10 @@
                             lastSeason: data.data.last_season || 0,
                             lastEpisode: data.data.last_episode || 0,
                             totalEpisodesInSeason: data.data.total_episodes_in_season || 0,
-                            _ts: now
+                            _ts: Date.now()
                         };
                         _seasonCache[cacheKey] = info;
+                        saveToStorage('season_cache', { [cacheKey]: info });
                         callback(info);
                     } else {
                         callback(null);
@@ -406,22 +497,16 @@
 
     function getBestJacred(card, callback) {
         try {
-            var cacheKey = 'jacred_v4_' + (card.id || card.tmdb_id);
+            var cacheKey = 'jacred_' + (card.id || card.tmdb_id);
             var now = Date.now();
 
-            if (_jacredCache[cacheKey] && (now - _jacredCache[cacheKey]._ts < CACHE_TTL)) {
-                callback(_jacredCache[cacheKey]);
+            // Проверяем кэш
+            var cached = getFromStorage('jacred_cache', cacheKey);
+            if (cached && cached._ts && (now - cached._ts < CACHE_TTL)) {
+                _jacredCache[cacheKey] = cached;
+                callback(cached);
                 return;
             }
-
-            try {
-                var raw = Lampa.Storage.get(cacheKey, null);
-                if (raw && raw._ts && (now - raw._ts < CACHE_TTL)) {
-                    _jacredCache[cacheKey] = raw;
-                    callback(raw);
-                    return;
-                }
-            } catch (e) {}
 
             var title = (card.original_title || card.title || card.name || '').toLowerCase();
             var year = (card.release_date || card.first_air_date || '').substr(0, 4);
@@ -449,7 +534,7 @@
                     if (!results.length) {
                         var emptyData = { empty: true, _ts: now };
                         _jacredCache[cacheKey] = emptyData;
-                        try { Lampa.Storage.set(cacheKey, emptyData); } catch (e) {}
+                        saveToStorage('jacred_cache', { [cacheKey]: emptyData });
                         callback(null);
                         return;
                     }
@@ -505,7 +590,7 @@
 
                     best._ts = now;
                     _jacredCache[cacheKey] = best;
-                    try { Lampa.Storage.set(cacheKey, best); } catch (e) {}
+                    saveToStorage('jacred_cache', { [cacheKey]: best });
                     callback(best);
 
                 } catch (e) {
@@ -520,59 +605,108 @@
     }
 
     // =================================================================
-    // RATINGS (TMDB, IMDb, Kinopoisk)
+    // RATINGS (TMDB, IMDb, Kinopoisk) - как в Интерфейс Мод
     // =================================================================
 
     function getRatings(movie, callback) {
         try {
-            var cacheKey = 'ratings_' + (movie.id || movie.tmdb_id);
+            if (!movie || !movie.id) {
+                callback({ tmdb: 0, imdb: 0, kinopoisk: 0 });
+                return;
+            }
+
+            var cacheKey = 'ratings_' + movie.id;
             var now = Date.now();
 
-            if (_ratingCache[cacheKey] && (now - _ratingCache[cacheKey]._ts < CACHE_TTL)) {
-                callback(_ratingCache[cacheKey]);
+            // Проверяем кэш
+            var cached = getFromStorage('rating_cache', cacheKey);
+            if (cached && cached._ts && (now - cached._ts < CACHE_TTL)) {
+                _ratingCache[cacheKey] = cached;
+                callback(cached);
                 return;
             }
 
             var result = {
                 tmdb: movie.vote_average || 0,
                 imdb: 0,
-                kinopoisk: 0
+                kinopoisk: 0,
+                _ts: now
             };
 
-            // IMDb через external_ids
+            var pending = 0;
+            var isComplete = false;
+
+            function checkComplete() {
+                if (isComplete) return;
+                pending--;
+                if (pending <= 0) {
+                    isComplete = true;
+                    _ratingCache[cacheKey] = result;
+                    saveToStorage('rating_cache', { [cacheKey]: result });
+                    callback(result);
+                }
+            }
+
+            // IMDb
             var imdbId = movie.imdb_id || (movie.external_ids && movie.external_ids.imdb_id);
             if (imdbId) {
+                pending++;
                 var network = new Lampa.Reguest();
                 var omdbUrl = 'https://www.omdbapi.com/?apikey=73ff4450&i=' + imdbId;
                 network.silent(omdbUrl, function(data) {
                     if (data && data.imdbRating) {
                         result.imdb = parseFloat(data.imdbRating) || 0;
                     }
-                    // После получения IMDb, пробуем Кинопоиск
-                    getKinopoiskRatingWithImdb(movie, result, callback, cacheKey);
+                    checkComplete();
                 }, function() {
-                    getKinopoiskRatingWithImdb(movie, result, callback, cacheKey);
+                    checkComplete();
                 });
-            } else {
-                getKinopoiskRatingWithImdb(movie, result, callback, cacheKey);
             }
+
+            // Кинопоиск - как в Интерфейс Мод
+            var kpApiKey = Lampa.Storage.get('rating_kp_api_key', '') || Lampa.Storage.get('source_api_key', '');
+            if (kpApiKey) {
+                pending++;
+                getKinopoiskRatingLikeInterface(movie, function(kpRating) {
+                    if (kpRating > 0) {
+                        result.kinopoisk = kpRating;
+                    }
+                    checkComplete();
+                });
+            }
+
+            // Если нет запросов - завершаем
+            if (pending === 0) {
+                _ratingCache[cacheKey] = result;
+                saveToStorage('rating_cache', { [cacheKey]: result });
+                callback(result);
+            }
+
         } catch (e) {
             console.error('[AppleTV+] getRatings error:', e);
             callback({ tmdb: 0, imdb: 0, kinopoisk: 0 });
         }
     }
 
-    function getKinopoiskRatingWithImdb(movie, result, callback, cacheKey) {
+    function getKinopoiskRatingLikeInterface(movie, callback) {
         try {
             var kpApiKey = Lampa.Storage.get('rating_kp_api_key', '') || Lampa.Storage.get('source_api_key', '');
             if (!kpApiKey) {
-                finishRatings(result, callback, cacheKey);
+                callback(0);
                 return;
             }
 
             var network = new Lampa.Reguest();
-            
-            // Пробуем сначала через IMDb ID (если есть)
+            var title = movie.title || movie.name || '';
+            var year = (movie.release_date || movie.first_air_date || '').substr(0, 4);
+            var originalTitle = movie.original_title || movie.original_name || '';
+
+            if (!title) {
+                callback(0);
+                return;
+            }
+
+            // Сначала пробуем через IMDb ID
             var imdbId = movie.imdb_id || (movie.external_ids && movie.external_ids.imdb_id);
             if (imdbId) {
                 var urlById = 'https://kinopoiskapiunofficial.tech/api/v2.2/films?imdbId=' + imdbId;
@@ -580,66 +714,71 @@
                     if (data && data.items && data.items.length) {
                         var found = data.items[0];
                         if (found && found.ratingKinopoisk) {
-                            result.kinopoisk = parseFloat(found.ratingKinopoisk) || 0;
-                            finishRatings(result, callback, cacheKey);
+                            callback(parseFloat(found.ratingKinopoisk) || 0);
                             return;
                         }
                     }
-                    // Если не нашли по IMDb, пробуем по названию
-                    searchKinopoiskByTitle(movie, result, callback, cacheKey);
+                    // Если не нашли по IMDb, ищем по названию
+                    searchKinopoiskByTitle(title, year, originalTitle, callback);
                 }, function() {
-                    searchKinopoiskByTitle(movie, result, callback, cacheKey);
+                    searchKinopoiskByTitle(title, year, originalTitle, callback);
                 }, false, { headers: { 'X-API-KEY': kpApiKey } });
             } else {
-                searchKinopoiskByTitle(movie, result, callback, cacheKey);
+                searchKinopoiskByTitle(title, year, originalTitle, callback);
             }
+
         } catch (e) {
-            console.error('[AppleTV+] getKinopoiskRating error:', e);
-            finishRatings(result, callback, cacheKey);
+            console.error('[AppleTV+] getKinopoiskRatingLikeInterface error:', e);
+            callback(0);
         }
     }
 
-    function searchKinopoiskByTitle(movie, result, callback, cacheKey) {
+    function searchKinopoiskByTitle(title, year, originalTitle, callback) {
         try {
             var kpApiKey = Lampa.Storage.get('rating_kp_api_key', '') || Lampa.Storage.get('source_api_key', '');
             if (!kpApiKey) {
-                finishRatings(result, callback, cacheKey);
+                callback(0);
                 return;
             }
 
             var network = new Lampa.Reguest();
-            var title = movie.title || movie.name || '';
-            var year = (movie.release_date || movie.first_air_date || '').substr(0, 4);
-
-            if (!title) {
-                finishRatings(result, callback, cacheKey);
-                return;
-            }
-
             var searchUrl = 'https://kinopoiskapiunofficial.tech/api/v2.1/films/search-by-keyword?keyword=' + encodeURIComponent(title);
 
             network.silent(searchUrl, function(data) {
                 if (data && data.films && data.films.length) {
-                    // Ищем точное совпадение по названию и году
-                    var found = null;
+                    var results = data.films;
                     
-                    // Сначала ищем точное совпадение по году
-                    if (year) {
-                        found = data.films.find(function(f) {
-                            return f.year && String(f.year) === year;
-                        });
-                    }
-                    
-                    // Если не нашли по году, берем первый с максимальным рейтингом
-                    if (!found) {
-                        var sorted = data.films.slice().sort(function(a, b) {
+                    // Функция для поиска лучшего совпадения
+                    function findBestMatch() {
+                        // Сначала ищем точное совпадение по году
+                        if (year) {
+                            var yearMatch = results.filter(function(f) {
+                                return f.year && String(f.year) === year;
+                            });
+                            if (yearMatch.length > 0) {
+                                return yearMatch[0];
+                            }
+                        }
+                        
+                        // Затем ищем по оригинальному названию
+                        if (originalTitle) {
+                            var titleMatch = results.filter(function(f) {
+                                return f.nameOriginal && f.nameOriginal.toLowerCase() === originalTitle.toLowerCase();
+                            });
+                            if (titleMatch.length > 0) {
+                                return titleMatch[0];
+                            }
+                        }
+                        
+                        // Затем берем первый с максимальным рейтингом
+                        var sorted = results.slice().sort(function(a, b) {
                             return (parseFloat(b.rating) || 0) - (parseFloat(a.rating) || 0);
                         });
-                        found = sorted[0];
+                        return sorted[0];
                     }
-                    
-                    // Если нашли и есть рейтинг
-                    if (found && found.rating) {
+
+                    var found = findBestMatch();
+                    if (found) {
                         // Пробуем получить детальный рейтинг
                         var filmId = found.filmId || found.kinopoiskId;
                         if (filmId) {
@@ -647,35 +786,30 @@
                             var detailNetwork = new Lampa.Reguest();
                             detailNetwork.silent(detailUrl, function(detailData) {
                                 if (detailData && detailData.ratingKinopoisk) {
-                                    result.kinopoisk = parseFloat(detailData.ratingKinopoisk) || 0;
+                                    callback(parseFloat(detailData.ratingKinopoisk) || 0);
                                 } else {
-                                    result.kinopoisk = parseFloat(found.rating) || 0;
+                                    callback(parseFloat(found.rating) || 0);
                                 }
-                                finishRatings(result, callback, cacheKey);
                             }, function() {
-                                result.kinopoisk = parseFloat(found.rating) || 0;
-                                finishRatings(result, callback, cacheKey);
+                                callback(parseFloat(found.rating) || 0);
                             }, false, { headers: { 'X-API-KEY': kpApiKey } });
                             return;
                         }
-                        result.kinopoisk = parseFloat(found.rating) || 0;
+                        callback(parseFloat(found.rating) || 0);
+                    } else {
+                        callback(0);
                     }
+                } else {
+                    callback(0);
                 }
-                finishRatings(result, callback, cacheKey);
             }, function() {
-                finishRatings(result, callback, cacheKey);
+                callback(0);
             }, false, { headers: { 'X-API-KEY': kpApiKey } });
 
         } catch (e) {
             console.error('[AppleTV+] searchKinopoiskByTitle error:', e);
-            finishRatings(result, callback, cacheKey);
+            callback(0);
         }
-    }
-
-    function finishRatings(result, callback, cacheKey) {
-        result._ts = Date.now();
-        _ratingCache[cacheKey] = result;
-        callback(result);
     }
 
     // =================================================================
@@ -693,8 +827,11 @@
             var cacheKey = type + '_' + movie.id + '_logo';
             var now = Date.now();
 
-            if (_logoCache[cacheKey] && (now - _logoCache[cacheKey]._ts < CACHE_TTL)) {
-                callback(_logoCache[cacheKey]);
+            // Проверяем кэш
+            var cached = getFromStorage('logo_cache', cacheKey);
+            if (cached && cached._ts && (now - cached._ts < CACHE_TTL)) {
+                _logoCache[cacheKey] = cached;
+                callback(cached);
                 return;
             }
 
@@ -714,6 +851,7 @@
                     if (logo) {
                         var result = { file_path: logo.file_path, _ts: now };
                         _logoCache[cacheKey] = result;
+                        saveToStorage('logo_cache', { [cacheKey]: result });
                         callback(result);
                         return;
                     }
@@ -725,6 +863,7 @@
                         if (logo) {
                             var result = { file_path: logo.file_path, _ts: now };
                             _logoCache[cacheKey] = result;
+                            saveToStorage('logo_cache', { [cacheKey]: result });
                             callback(result);
                             return;
                         }
@@ -793,6 +932,12 @@
                     pending--;
                     if (pending === 0) {
                         fillContent(render, movie, ratingsData, lampaData, seasonData);
+                        // Устанавливаем фокус на первую кнопку
+                        setTimeout(function() {
+                            try {
+                                focusFirstButton(render);
+                            } catch (err) {}
+                        }, 500);
                     }
                 }
 
@@ -832,6 +977,47 @@
         });
 
         console.log('[AppleTV+] Initialized successfully');
+    }
+
+    // =================================================================
+    // FOCUS FIRST BUTTON
+    // =================================================================
+
+    function focusFirstButton(render) {
+        try {
+            // Ищем первую кнопку в контейнере
+            var buttons = render.find('.full-start-new__buttons .full-start__button:not(.hidden)');
+            if (!buttons.length) return;
+
+            var firstButton = buttons.first();
+            
+            // Проверяем, что это не кнопка редактирования
+            if (firstButton.hasClass('button--edit-order')) {
+                var nextButton = buttons.eq(1);
+                if (nextButton.length) {
+                    firstButton = nextButton;
+                } else {
+                    return;
+                }
+            }
+
+            // Устанавливаем фокус
+            if (Lampa.Controller && typeof Lampa.Controller.collectionFocus === 'function') {
+                // Пробуем через collectionFocus
+                Lampa.Controller.collectionFocus(firstButton[0], render.find('.full-start-new__buttons')[0]);
+            } else if (typeof firstButton.focus === 'function') {
+                // Fallback на native focus
+                firstButton.focus();
+            }
+
+            // Добавляем класс focus
+            firstButton.addClass('focus');
+
+            console.log('[AppleTV+] Focus set on first button');
+
+        } catch (e) {
+            console.warn('[AppleTV+] focusFirstButton error:', e);
+        }
     }
 
     // =================================================================
@@ -1108,14 +1294,12 @@
                 reactionsContainer.empty();
                 var hasReactions = false;
 
-                // Показываем реакции из lampaData
                 if (lampaData && lampaData.reactions && Array.isArray(lampaData.reactions) && lampaData.reactions.length > 0) {
                     var emojiMap = {
                         'fire': '🔥', 'nice': '👍', 'think': '🤔',
                         'bore': '😴', 'shit': '💩', 'like': '❤️', 'dislike': '👎'
                     };
 
-                    // Сортируем по популярности
                     var sorted = lampaData.reactions.slice().sort(function(a, b) {
                         return (parseInt(b.counter) || 0) - (parseInt(a.counter) || 0);
                     });
@@ -1134,55 +1318,7 @@
                     });
                 }
 
-                // Fallback: пытаемся получить реакции через стандартный API
-                if (!hasReactions && window.Lampa && Lampa.Api && Lampa.Api.sources && Lampa.Api.sources.cub) {
-                    var type = movie.name ? 'tv' : 'movie';
-                    try {
-                        Lampa.Api.sources.cub.reactionsGet({ method: type, id: movie.id }, function(data) {
-                            try {
-                                if (!data || !data.result || !Array.isArray(data.result) || !data.result.length) {
-                                    reactionsContainer.hide();
-                                    return;
-                                }
-
-                                reactionsContainer.empty().show();
-                                var reactions = data.result;
-                                reactions.sort(function(a, b) {
-                                    return (parseInt(b.counter) || 0) - (parseInt(a.counter) || 0);
-                                });
-
-                                var emojiMap = {
-                                    'fire': '🔥', 'nice': '👍', 'think': '🤔',
-                                    'bore': '😴', 'shit': '💩', 'like': '❤️', 'dislike': '👎'
-                                };
-
-                                reactions.forEach(function(reaction) {
-                                    var count = parseInt(reaction.counter) || 0;
-                                    if (count === 0) return;
-                                    var emoji = emojiMap[reaction.type] || '⭐';
-                                    reactionsContainer.append(
-                                        '<div class="applecation__reaction-item">' +
-                                        '<span>' + emoji + '</span>' +
-                                        '<span class="reaction-count">' + count + '</span>' +
-                                        '</div>'
-                                    );
-                                });
-
-                                if (reactionsContainer.children().length > 0) {
-                                    reactionsContainer.addClass('show');
-                                } else {
-                                    reactionsContainer.hide();
-                                }
-                            } catch (e) {
-                                reactionsContainer.hide();
-                            }
-                        }, function() {
-                            reactionsContainer.hide();
-                        });
-                    } catch (e) {
-                        reactionsContainer.hide();
-                    }
-                } else if (hasReactions) {
+                if (hasReactions) {
                     reactionsContainer.addClass('show');
                 } else {
                     reactionsContainer.hide();
@@ -1213,7 +1349,7 @@
                 descWrapper.addClass('show');
             }
 
-            // 6. Информация о сезонах (Alloha + TMDB)
+            // 6. Информация о сезонах
             var infoText = render.find('.applecation__info-text');
             if (infoText.length) {
                 var infoParts = [];
@@ -1780,6 +1916,28 @@
                 param: { name: 'applecation_description_overlay', type: 'trigger', default: false },
                 field: { name: 'Описание в оверлее', description: 'Показывать описание в отдельном окне при нажатии' }
             });
+
+            // Кнопка очистки кэша
+            Lampa.SettingsApi.addParam({
+                component: 'applecation_plus',
+                param: { name: 'applecation_clear_cache', type: 'trigger', default: false },
+                field: { 
+                    name: 'Очистить кэш AppleTV+', 
+                    description: 'Очистить все кэшированные данные (рейтинги, информация о сезонах, реакции) и перезагрузить страницу' 
+                },
+                onChange: function(value) {
+                    if (value === true || value === 'true' || value === 1 || value === '1') {
+                        clearAllCache();
+                        // Сбрасываем значение, чтобы кнопка не оставалась включенной
+                        setTimeout(function() {
+                            try {
+                                Lampa.Storage.set('applecation_clear_cache', false);
+                            } catch (e) {}
+                        }, 100);
+                    }
+                }
+            });
+
         } catch (e) {
             console.error('[AppleTV+] addSettings error:', e);
         }
