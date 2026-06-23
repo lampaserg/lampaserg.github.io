@@ -1,5 +1,5 @@
 // @name AppleTV+
-// @version 3.9.5
+// @version 3.9.6
 // @author Your Name
 // @description Расширенная карточка фильма в стиле Apple TV+ с полными метаданными
 // @lampa-check Lampa.
@@ -11,7 +11,7 @@
     // CONFIGURATION
     // =================================================================
 
-    var PLUGIN_VERSION = '3.9.5';
+    var PLUGIN_VERSION = '3.9.6';
     var CACHE_TTL = 24 * 60 * 60 * 1000;
     var PROXY_TIMEOUT = 15000;
     var LAMPA_RATING_API = 'https://cubnotrip.top/api/reactions/get/';
@@ -26,27 +26,26 @@
     if (LANG === 'ua') LANG = 'uk';
     if (['uk', 'ru', 'en', 'pl'].indexOf(LANG) === -1) LANG = 'en';
 
-    // API ключи для Кинопоиска
     var KP_API_KEYS = (window.RATINGS_PLUGIN_TOKENS && window.RATINGS_PLUGIN_TOKENS.KP_API_KEYS) || ['5178ab83-699c-4422-937e-f8a759f872ef'];
     var OMDB_API_KEYS = (window.RATINGS_PLUGIN_TOKENS && window.RATINGS_PLUGIN_TOKENS.OMDB_API_KEYS) || ['73ff4450'];
 
-    // Кэши
     var _jacredCache = {};
     var _ratingCache = {};
     var _logoCache = {};
     var _lampaRatingCache = {};
+    var _episodesCache = {};
     var workingProxy = null;
 
-    // Ключи для хранения в Lampa.Storage
     var STORAGE_KEYS = {
         jacred_cache: 'applecation_jacred_cache',
         rating_cache: 'applecation_rating_cache',
         logo_cache: 'applecation_logo_cache',
-        lampa_rating_cache: 'applecation_lampa_rating_cache'
+        lampa_rating_cache: 'applecation_lampa_rating_cache',
+        episodes_cache: 'applecation_episodes_cache'
     };
 
     // =================================================================
-    // SVG ИКОНКИ ДЛЯ МЕТАДАННЫХ
+    // SVG ИКОНКИ
     // =================================================================
 
     var QUALITY_ICONS = {
@@ -92,12 +91,9 @@
     function getRatingBackgroundColor(value, isTotal) {
         var v = parseFloat(String(value).replace(',', '.'));
         if (isNaN(v) || v <= 0) return 'rgba(0,0,0,0.7)';
-        
-        // Для "Итог" используем золотой цвет с меньшей прозрачностью
         if (isTotal) {
             return 'rgba(255,215,0,0.85)';
         }
-        
         if (v <= 3) return 'rgba(231,76,60,0.8)';
         if (v < 6) return 'rgba(243,156,18,0.8)';
         if (v < 8) return 'rgba(52,152,219,0.8)';
@@ -154,6 +150,7 @@
             _ratingCache = {};
             _logoCache = {};
             _lampaRatingCache = {};
+            _episodesCache = {};
 
             var keys = Object.values(STORAGE_KEYS);
             for (var i = 0; i < keys.length; i++) {
@@ -929,6 +926,75 @@
     }
 
     // =================================================================
+    // ЗАГРУЗКА ДАННЫХ ЭПИЗОДОВ (как в studios.js)
+    // =================================================================
+
+    function fetchEpisodesData(movie, callback) {
+        try {
+            if (!movie || !movie.id) {
+                callback(null);
+                return;
+            }
+
+            var type = movie.name ? 'tv' : 'movie';
+            if (type !== 'tv') {
+                callback(null);
+                return;
+            }
+
+            var cacheKey = 'episodes_' + movie.id;
+            var now = Date.now();
+
+            var cached = getFromStorage('episodes_cache', cacheKey);
+            if (cached && cached._ts && (now - cached._ts < CACHE_TTL)) {
+                _episodesCache[cacheKey] = cached;
+                callback(cached);
+                return;
+            }
+
+            // Определяем последний сезон
+            var season = 1;
+            if (movie.seasons && Array.isArray(movie.seasons)) {
+                var maxSeason = 0;
+                movie.seasons.forEach(function(s) {
+                    if (s.season_number > maxSeason) {
+                        maxSeason = s.season_number;
+                    }
+                });
+                if (maxSeason > 0) {
+                    season = maxSeason;
+                }
+            }
+
+            // Загружаем данные сезона
+            var url = Lampa.TMDB.api('tv/' + movie.id + '/season/' + season + '?api_key=' + getTmdbKey() + '&language=' + LANG);
+            var network = new Lampa.Reguest();
+            network.timeout(PROXY_TIMEOUT);
+
+            network.silent(url, function(data) {
+                if (data && data.episodes && Array.isArray(data.episodes)) {
+                    var result = {
+                        season: season,
+                        episodes: data.episodes,
+                        _ts: now
+                    };
+                    _episodesCache[cacheKey] = result;
+                    saveToStorage('episodes_cache', { [cacheKey]: result });
+                    callback(result);
+                } else {
+                    callback(null);
+                }
+            }, function() {
+                callback(null);
+            });
+
+        } catch (e) {
+            console.error('[AppleTV+] fetchEpisodesData error:', e);
+            callback(null);
+        }
+    }
+
+    // =================================================================
     // OVERRIDE IMAGE API
     // =================================================================
 
@@ -1008,7 +1074,6 @@
 
             render.find('.full-start-new__head, .full-start-new__details, .full-descr, .full-descr__title, .full-start__head, .full-start-new__reactions').hide();
 
-            // Получаем настройки фона
             var bgEnabled = Lampa.Storage.get('applecation_content_bg', true);
             var scale = parseFloat(Lampa.Storage.get('applecation_content_scale', '100')) / 100;
 
@@ -1033,13 +1098,11 @@
                 left.append(contentWrapper);
             }
 
-            // Применяем масштаб
             if (scale !== 1) {
                 contentWrapper.css('transform', 'scale(' + scale + ')');
                 contentWrapper.css('transform-origin', 'left bottom');
             }
 
-            // Управление фоном
             if (!bgEnabled) {
                 contentWrapper.css('background', 'none');
                 contentWrapper.css('backdrop-filter', 'none');
@@ -1241,7 +1304,6 @@
                     allRatings.push(ratings.kinopoisk);
                 }
 
-                // ИТОГ - с улучшенным фоном
                 if (allRatings.length > 1) {
                     var sum = 0;
                     for (var i = 0; i < allRatings.length; i++) {
@@ -1450,8 +1512,14 @@
             // 8. Длительность серии
             addEpisodeRuntime(render, movie);
 
-            // 9. Обработка эпизодов - описание при наведении
-            processEpisodes(render, movie);
+            // 9. Обработка эпизодов - ЗАГРУЗКА ДАННЫХ КАК В STUDIOS.JS
+            if (isTv) {
+                fetchEpisodesData(movie, function(episodesData) {
+                    if (episodesData && episodesData.episodes) {
+                        processEpisodesWithData(render, episodesData);
+                    }
+                });
+            }
 
         } catch (e) {
             console.error('[AppleTV+] fillContent error:', e);
@@ -1515,12 +1583,12 @@
     }
 
     // =================================================================
-    // ОБРАБОТКА ЭПИЗОДОВ - описание при наведении (как в studios.js)
+    // ОБРАБОТКА ЭПИЗОДОВ С ДАННЫМИ (как в studios.js)
     // =================================================================
 
-    function processEpisodes(render, movie) {
+    function processEpisodesWithData(render, episodesData) {
         try {
-            if (!movie || !movie.seasons) {
+            if (!episodesData || !episodesData.episodes) {
                 return;
             }
 
@@ -1529,18 +1597,12 @@
                 return;
             }
 
-            // Собираем все данные по эпизодам в карту для быстрого доступа
+            // Создаем карту эпизодов для быстрого доступа
             var episodesMap = {};
-            if (movie.seasons && Array.isArray(movie.seasons)) {
-                movie.seasons.forEach(function(season) {
-                    if (season.episodes && Array.isArray(season.episodes)) {
-                        season.episodes.forEach(function(ep) {
-                            var key = 's' + season.season_number + '_e' + ep.episode_number;
-                            episodesMap[key] = ep;
-                        });
-                    }
-                });
-            }
+            episodesData.episodes.forEach(function(ep) {
+                var key = 'e' + ep.episode_number;
+                episodesMap[key] = ep;
+            });
 
             episodes.each(function() {
                 var ep = $(this);
@@ -1550,55 +1612,29 @@
                     return;
                 }
 
-                // Ищем данные эпизода
+                // Ищем номер эпизода
                 var numEl = ep.find('.full-episode__num');
-                var nameEl = ep.find('.full-episode__name');
-                
-                if (!numEl.length || !nameEl.length) {
+                if (!numEl.length) {
                     return;
                 }
 
-                // Парсим номер эпизода из текста (S1:E5 или Эпизод 5)
                 var numText = numEl.text().trim();
-                var seasonNum = 0;
-                var episodeNum = 0;
-                
-                var match = numText.match(/S(\d+):E(\d+)/i);
-                if (match) {
-                    seasonNum = parseInt(match[1], 10);
-                    episodeNum = parseInt(match[2], 10);
-                } else {
-                    match = numText.match(/Эпизод\s*(\d+)/i);
-                    if (match) {
-                        episodeNum = parseInt(match[1], 10);
-                        var seasonMatch = numText.match(/Сезон\s*(\d+)/i);
-                        if (seasonMatch) {
-                            seasonNum = parseInt(seasonMatch[1], 10);
-                        } else {
-                            // Пытаемся определить сезон из контекста (первая серия = сезон 1)
-                            seasonNum = 1;
-                        }
-                    }
+                var match = numText.match(/Эпизод\s*(\d+)/i) || numText.match(/E(\d+)/i);
+                if (!match) {
+                    return;
                 }
 
-                if (!seasonNum || !episodeNum) {
+                var episodeNum = parseInt(match[1], 10);
+                if (!episodeNum) {
                     return;
                 }
 
                 // Ищем описание в карте
-                var key = 's' + seasonNum + '_e' + episodeNum;
+                var key = 'e' + episodeNum;
                 var epData = episodesMap[key];
                 var overview = epData && epData.overview ? epData.overview : '';
 
-                // Если описание не найдено - пробуем найти в данных эпизода из DOM
-                if (!overview) {
-                    var existingDesc = ep.find('.full-episode__overview');
-                    if (existingDesc.length && existingDesc.text().trim()) {
-                        overview = existingDesc.text().trim();
-                    }
-                }
-
-                // Если все еще нет описания - пропускаем
+                // Если описание не найдено - пропускаем
                 if (!overview) {
                     return;
                 }
@@ -1664,7 +1700,7 @@
             });
 
         } catch (e) {
-            console.error('[AppleTV+] processEpisodes error:', e);
+            console.error('[AppleTV+] processEpisodesWithData error:', e);
         }
     }
 
@@ -1676,7 +1712,6 @@
             container.empty();
             var hasBadges = false;
 
-            // Качество видео
             if (qualityData.resolution) {
                 var icon = QUALITY_ICONS[qualityData.resolution];
                 if (icon) {
@@ -1685,7 +1720,6 @@
                 }
             }
 
-            // Dolby Vision
             if (qualityData.dolbyVision) {
                 var dvIcon = QUALITY_ICONS['Dolby Vision'];
                 if (dvIcon) {
@@ -1694,7 +1728,6 @@
                 }
             }
             
-            // HDR
             if (qualityData.hdr && !qualityData.dolbyVision) {
                 var hdrIcon = QUALITY_ICONS['HDR'];
                 if (hdrIcon) {
@@ -1709,7 +1742,6 @@
                 }
             }
 
-            // Звук
             if (qualityData.sound) {
                 var soundIcon = QUALITY_ICONS[qualityData.sound];
                 if (soundIcon) {
@@ -1718,7 +1750,6 @@
                 }
             }
 
-            // DUB
             if (qualityData.dub) {
                 var dubIcon = QUALITY_ICONS['DUB'];
                 if (dubIcon) {
@@ -2338,10 +2369,11 @@
                 render.addClass('applecation');
                 modifyCardDOM(render, movie);
 
-                var pending = 3;
+                var pending = 4;
                 var ratingsData = { tmdb: 0, imdb: 0, kinopoisk: 0 };
                 var lampaData = null;
                 var qualityData = null;
+                var episodesData = null;
                 var isComplete = false;
 
                 function checkComplete() {
@@ -2372,6 +2404,17 @@
                     qualityData = data;
                     checkComplete();
                 });
+
+                // Загружаем данные эпизодов для сериалов
+                if (movie.name || movie.original_name || movie.first_air_date || movie.number_of_seasons) {
+                    fetchEpisodesData(movie, function(data) {
+                        episodesData = data;
+                        checkComplete();
+                    });
+                } else {
+                    pending--;
+                    checkComplete();
+                }
 
                 loadLogo(render, movie);
                 setupAnimations(render);
