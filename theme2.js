@@ -1,5 +1,5 @@
 // @name AppleTV+
-// @version 3.9.3
+// @version 3.9.4
 // @author Your Name
 // @description Расширенная карточка фильма в стиле Apple TV+ с полными метаданными
 // @lampa-check Lampa.
@@ -11,7 +11,7 @@
     // CONFIGURATION
     // =================================================================
 
-    var PLUGIN_VERSION = '3.9.3';
+    var PLUGIN_VERSION = '3.9.4';
     var CACHE_TTL = 24 * 60 * 60 * 1000;
     var PROXY_TIMEOUT = 15000;
     var LAMPA_RATING_API = 'https://cubnotrip.top/api/reactions/get/';
@@ -394,7 +394,7 @@
     }
 
     // =================================================================
-    // JACRED QUALITY - ПОЛНАЯ КОПИЯ ИЗ studios.js
+    // JACRED QUALITY - ПОЛНАЯ КОПИЯ ИЗ STUDIOS.JS
     // =================================================================
 
     function fetchWithProxy(url, callback) {
@@ -467,7 +467,7 @@
                 return;
             }
 
-            // ИСПОЛЬЗУЕМ НОВЫЙ API v2.0 КАК В STUDIOS.JS
+            // Используем API v2.0 как в studios.js
             var uniqueId = Lampa.Storage.get('lampac_unic_id', '');
             var requestUrl = 'https://jr.maxvol.pro/api/v2.0/indexers/all/results?apikey=&uid=' + uniqueId + '&year=' + year;
             
@@ -533,12 +533,21 @@
 
                         var currentRes = 'SD';
                         
-                        if (quality >= 2160) currentRes = '4K';
-                        else if (quality >= 1440) currentRes = '2K';
-                        else if (quality >= 1080) currentRes = 'FHD';
-                        else if (quality >= 720) currentRes = 'HD';
-                        
-                        if (currentRes === 'SD') {
+                        // Сначала проверяем на низкое качество (TS/CAM)
+                        if (titleLower.indexOf('cam') >= 0 || titleLower.indexOf('ts') >= 0 || 
+                            titleLower.indexOf('tc') >= 0 || titleLower.indexOf('telesync') >= 0 ||
+                            titleLower.indexOf('telecine') >= 0 || titleLower.indexOf('camrip') >= 0) {
+                            currentRes = 'TS';
+                        } else if (quality >= 2160) {
+                            currentRes = '4K';
+                        } else if (quality >= 1440) {
+                            currentRes = '2K';
+                        } else if (quality >= 1080) {
+                            currentRes = 'FHD';
+                        } else if (quality >= 720) {
+                            currentRes = 'HD';
+                        } else {
+                            // Fallback по названию
                             if (titleLower.indexOf('2160') >= 0 || titleLower.indexOf('4k') >= 0) {
                                 currentRes = '4K';
                             } else if (titleLower.indexOf('1440') >= 0 || titleLower.indexOf('2k') >= 0) {
@@ -547,12 +556,16 @@
                                 currentRes = 'FHD';
                             } else if (titleLower.indexOf('720') >= 0 || titleLower.indexOf('hd') >= 0) {
                                 currentRes = 'HD';
-                            } else if (titleLower.indexOf('cam') >= 0 || titleLower.indexOf('ts') >= 0 || titleLower.indexOf('tc') >= 0) {
-                                currentRes = 'TS';
                             }
                         }
 
-                        if (resOrder.indexOf(currentRes) > resOrder.indexOf(best.resolution)) {
+                        // Обновляем best.resolution только если текущее качество выше
+                        if (currentRes === 'TS') {
+                            // Если есть TS и нет другого качества - оставляем TS
+                            if (best.resolution !== 'TS' && resOrder.indexOf(currentRes) > resOrder.indexOf(best.resolution)) {
+                                best.resolution = currentRes;
+                            }
+                        } else if (resOrder.indexOf(currentRes) > resOrder.indexOf(best.resolution)) {
                             best.resolution = currentRes;
                         }
 
@@ -1441,11 +1454,76 @@
                 }
             }
 
-            // 8. Обработка эпизодов - добавляем описание при наведении
+            // 8. Длительность серии (из Movie Enhancer)
+            addEpisodeRuntime(render, movie);
+
+            // 9. Обработка эпизодов - добавляем описание при наведении
             processEpisodes(render, movie);
 
         } catch (e) {
             console.error('[AppleTV+] fillContent error:', e);
+        }
+    }
+
+    // =================================================================
+    // ДЛИТЕЛЬНОСТЬ СЕРИИ (из Movie Enhancer)
+    // =================================================================
+
+    function addEpisodeRuntime(render, movie) {
+        try {
+            // Проверяем, включена ли настройка
+            if (!Lampa.Storage.get('lme_averageRuntime', false)) return;
+            
+            // Только для сериалов
+            if (!movie.name && !movie.original_name && !movie.first_air_date) return;
+            
+            var imdbId = movie.imdb_id || (movie.external_ids && movie.external_ids.imdb_id);
+            if (!imdbId) {
+                // Пробуем получить через TMDB
+                var type = movie.name ? 'tv' : 'movie';
+                var url = Lampa.TMDB.api(type + '/' + movie.id + '/external_ids?api_key=' + getTmdbKey());
+                var network = new Lampa.Reguest();
+                network.silent(url, function(data) {
+                    if (data && data.imdb_id) {
+                        fetchAverageRuntime(data.imdb_id, render);
+                    }
+                });
+                return;
+            }
+            
+            fetchAverageRuntime(imdbId, render);
+            
+        } catch (e) {
+            console.warn('[AppleTV+] addEpisodeRuntime error:', e);
+        }
+    }
+
+    function fetchAverageRuntime(imdbId, render) {
+        try {
+            var network = new Lampa.Reguest();
+            var url = 'https://api.tvmaze.com/lookup/shows?imdb=' + imdbId;
+            
+            network.silent(url, function(response) {
+                if (response && response.averageRuntime) {
+                    var avgRuntime = response.averageRuntime;
+                    var hours = Math.floor(avgRuntime / 60);
+                    var minutes = avgRuntime % 60;
+                    var formattedRuntime = hours > 0 ? 
+                        hours + 'ч ' + minutes + 'м' : 
+                        minutes + 'м';
+                    
+                    var infoText = render.find('.applecation__info-text');
+                    if (infoText.length) {
+                        var runtimeHtml = '<span class="applecation__runtime-info" style="background: rgba(155,89,182,0.6); padding: 0.15em 0.5em; border-radius: 0.3em; color: #fff; font-size: 0.8em; font-weight: 600; line-height: 1.3;">⏱ ' + formattedRuntime + '</span>';
+                        infoText.append(' · ' + runtimeHtml);
+                    }
+                }
+            }, function() {
+                // Тишина
+            });
+            
+        } catch (e) {
+            console.warn('[AppleTV+] fetchAverageRuntime error:', e);
         }
     }
 
@@ -1460,6 +1538,19 @@
             var episodes = render.find('.full-episode');
             if (!episodes.length) return;
 
+            // Собираем все данные по эпизодам в карту для быстрого доступа
+            var episodesMap = {};
+            if (movie.seasons && Array.isArray(movie.seasons)) {
+                movie.seasons.forEach(function(season) {
+                    if (season.episodes && Array.isArray(season.episodes)) {
+                        season.episodes.forEach(function(ep) {
+                            var key = 's' + season.season_number + '_e' + ep.episode_number;
+                            episodesMap[key] = ep;
+                        });
+                    }
+                });
+            }
+
             episodes.each(function() {
                 var ep = $(this);
                 
@@ -1472,33 +1563,46 @@
                 
                 if (!numEl.length || !nameEl.length) return;
 
-                // Парсим номер эпизода
+                // Парсим номер эпизода из текста (S1:E5 или Эпизод 5)
                 var numText = numEl.text().trim();
-                var match = numText.match(/S(\d+):E(\d+)/i) || numText.match(/Эпизод\s*(\d+)/i);
-                if (!match) return;
-
-                var seasonNum = parseInt(match[1], 10);
-                var episodeNum = parseInt(match[2], 10);
-
-                if (isNaN(seasonNum) || isNaN(episodeNum)) return;
-
-                // Ищем описание эпизода в данных фильма
-                var overview = '';
-                if (movie.seasons && Array.isArray(movie.seasons)) {
-                    var season = movie.seasons.find(function(s) {
-                        return s.season_number === seasonNum;
-                    });
-                    if (season && season.episodes && Array.isArray(season.episodes)) {
-                        var epData = season.episodes.find(function(e) {
-                            return e.episode_number === episodeNum;
-                        });
-                        if (epData && epData.overview) {
-                            overview = epData.overview;
+                var seasonNum = 0;
+                var episodeNum = 0;
+                
+                var match = numText.match(/S(\d+):E(\d+)/i);
+                if (match) {
+                    seasonNum = parseInt(match[1], 10);
+                    episodeNum = parseInt(match[2], 10);
+                } else {
+                    match = numText.match(/Эпизод\s*(\d+)/i);
+                    if (match) {
+                        episodeNum = parseInt(match[1], 10);
+                        // Пытаемся определить сезон из контекста
+                        var seasonMatch = numText.match(/Сезон\s*(\d+)/i);
+                        if (seasonMatch) {
+                            seasonNum = parseInt(seasonMatch[1], 10);
+                        } else {
+                            // Если сезон не указан, используем 1
+                            seasonNum = 1;
                         }
                     }
                 }
 
-                // Если описание не найдено - пропускаем
+                if (!seasonNum || !episodeNum) return;
+
+                // Ищем описание в карте
+                var key = 's' + seasonNum + '_e' + episodeNum;
+                var epData = episodesMap[key];
+                var overview = epData && epData.overview ? epData.overview : '';
+
+                // Если описание не найдено - пробуем найти в данных эпизода из DOM
+                if (!overview) {
+                    var existingDesc = ep.find('.full-episode__overview');
+                    if (existingDesc.length && existingDesc.text().trim()) {
+                        overview = existingDesc.text().trim();
+                    }
+                }
+
+                // Если все еще нет описания - пропускаем
                 if (!overview) return;
 
                 // Создаем блок с описанием
@@ -1508,41 +1612,50 @@
                 
                 overlay.css({
                     'position': 'absolute',
-                    'bottom': '100%',
+                    'bottom': 'calc(100% + 8px)',
                     'left': '50%',
                     'transform': 'translateX(-50%)',
-                    'background': 'rgba(0,0,0,0.85)',
+                    'background': 'rgba(0,0,0,0.92)',
                     'color': '#fff',
-                    'padding': '0.8em 1em',
+                    'padding': '0.7em 1em',
                     'border-radius': '0.6em',
                     'font-size': '0.8em',
                     'line-height': '1.4',
-                    'max-width': '18em',
-                    'min-width': '10em',
+                    'max-width': '20em',
+                    'min-width': '12em',
                     'white-space': 'normal',
                     'word-wrap': 'break-word',
                     'z-index': '100',
                     'display': 'none',
                     'pointer-events': 'none',
-                    'backdrop-filter': 'blur(10px)',
-                    'border': '1px solid rgba(255,255,255,0.1)',
-                    'box-shadow': '0 8px 32px rgba(0,0,0,0.5)',
-                    'text-align': 'center'
+                    'backdrop-filter': 'blur(12px)',
+                    'border': '1px solid rgba(255,255,255,0.08)',
+                    'box-shadow': '0 8px 32px rgba(0,0,0,0.6)',
+                    'text-align': 'center',
+                    'font-family': 'inherit'
                 });
 
                 ep.css('position', 'relative');
                 ep.append(overlay);
 
-                // Показываем описание при наведении
+                // Показываем/скрываем описание при наведении
+                var isHovered = false;
+                
                 ep.on('hover:enter', function() {
+                    isHovered = true;
                     overlay.show();
                 });
 
                 ep.on('hover:leave', function() {
-                    overlay.hide();
+                    isHovered = false;
+                    setTimeout(function() {
+                        if (!isHovered) {
+                            overlay.hide();
+                        }
+                    }, 100);
                 });
 
-                // Для фокуса
+                // Для фокуса (клавиатура)
                 ep.on('hover:focus', function() {
                     overlay.show();
                 });
@@ -1571,21 +1684,27 @@
                 if (icon) {
                     container.append('<span class="quality-badge quality-badge--icon">' + icon + '</span>');
                     hasBadges = true;
-                } else {
-                    var resClass = 'quality-badge--' + qualityData.resolution.toLowerCase().replace(/ /g, '');
-                    container.append('<span class="quality-badge ' + resClass + '">' + qualityData.resolution + '</span>');
-                    hasBadges = true;
                 }
             }
 
-            // Dolby Vision
+            // Dolby Vision - ВСЕГДА показываем отдельно
             if (qualityData.dolbyVision) {
                 var dvIcon = QUALITY_ICONS['Dolby Vision'];
                 if (dvIcon) {
                     container.append('<span class="quality-badge quality-badge--icon">' + dvIcon + '</span>');
                     hasBadges = true;
                 }
-            } else if (qualityData.hdr) {
+            }
+            
+            // HDR - показываем отдельно, если нет Dolby Vision или показываем оба
+            if (qualityData.hdr && !qualityData.dolbyVision) {
+                var hdrIcon = QUALITY_ICONS['HDR'];
+                if (hdrIcon) {
+                    container.append('<span class="quality-badge quality-badge--icon">' + hdrIcon + '</span>');
+                    hasBadges = true;
+                }
+            } else if (qualityData.hdr && qualityData.dolbyVision) {
+                // Если есть и HDR и Dolby Vision - показываем оба
                 var hdrIcon = QUALITY_ICONS['HDR'];
                 if (hdrIcon) {
                     container.append('<span class="quality-badge quality-badge--icon">' + hdrIcon + '</span>');
@@ -1598,9 +1717,6 @@
                 var soundIcon = QUALITY_ICONS[qualityData.sound];
                 if (soundIcon) {
                     container.append('<span class="quality-badge quality-badge--icon">' + soundIcon + '</span>');
-                    hasBadges = true;
-                } else {
-                    container.append('<span class="quality-badge quality-badge--sound">' + qualityData.sound + '</span>');
                     hasBadges = true;
                 }
             }
@@ -1781,6 +1897,67 @@
     }
 
     // =================================================================
+    // POSTER SCROLL HANDLER - жесткий блюр как в studios.js
+    // =================================================================
+
+    function setupPosterScrollHandler(render) {
+        try {
+            var poster = render.find('.full-start__background:not(.applecation__overlay)');
+            if (!poster.length) return;
+
+            var scrollBody = render.find('.scroll__body');
+            if (!scrollBody.length) return;
+
+            // Добавляем оверлей для затемнения
+            var overlay = render.find('.applecation__overlay');
+            if (!overlay.length) {
+                overlay = $('<div class="full-start__background loaded applecation__overlay"></div>');
+                poster.after(overlay);
+            }
+
+            var threshold = 80; // пикселей до затемнения
+
+            scrollBody.on('scroll.applecation', function() {
+                var scrollTop = $(this).scrollTop();
+                
+                if (scrollTop > threshold) {
+                    // Жесткий блюр + затемнение как в studios.js
+                    poster.css({
+                        'filter': 'blur(30px)',
+                        'opacity': '0.6',
+                        'transition': 'filter 0.4s ease-out, opacity 0.4s ease-out'
+                    });
+                    overlay.css({
+                        'background': 'linear-gradient(to bottom, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.5) 50%, rgba(0,0,0,0.9) 100%)',
+                        'opacity': '1',
+                        'transition': 'opacity 0.4s ease-out'
+                    });
+                } else {
+                    // Возвращаем в нормальное состояние
+                    poster.css({
+                        'filter': 'none',
+                        'opacity': '1',
+                        'transition': 'filter 0.4s ease-out, opacity 0.4s ease-out'
+                    });
+                    overlay.css({
+                        'background': 'linear-gradient(to right, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.50) 25%, rgba(0,0,0,0.25) 45%, rgba(0,0,0,0.10) 55%, rgba(0,0,0,0.04) 60%, rgba(0,0,0,0) 65%)',
+                        'opacity': '1',
+                        'transition': 'opacity 0.4s ease-out'
+                    });
+                }
+            });
+
+            // При выходе со страницы убираем обработчик
+            render.on('remove.applecation', function() {
+                scrollBody.off('scroll.applecation');
+            });
+
+        } catch (e) {
+            console.warn('[AppleTV+] setupPosterScrollHandler error:', e);
+        }
+    }
+
+    // =================================================================
     // STYLES
     // =================================================================
 
@@ -1849,12 +2026,12 @@
             /* Стили для описания эпизодов */
             .applecation-episode-overview {
                 position: absolute !important;
-                bottom: calc(100% + 10px) !important;
+                bottom: calc(100% + 8px) !important;
                 left: 50% !important;
                 transform: translateX(-50%) !important;
-                background: rgba(0,0,0,0.9) !important;
+                background: rgba(0,0,0,0.92) !important;
                 color: #fff !important;
-                padding: 0.8em 1em !important;
+                padding: 0.7em 1em !important;
                 border-radius: 0.6em !important;
                 font-size: 0.8em !important;
                 line-height: 1.4 !important;
@@ -1865,8 +2042,8 @@
                 z-index: 100 !important;
                 display: none !important;
                 pointer-events: none !important;
-                backdrop-filter: blur(10px) !important;
-                border: 1px solid rgba(255,255,255,0.1) !important;
+                backdrop-filter: blur(12px) !important;
+                border: 1px solid rgba(255,255,255,0.08) !important;
                 box-shadow: 0 8px 32px rgba(0,0,0,0.6) !important;
                 text-align: center !important;
             }
@@ -1883,6 +2060,17 @@
             
             .full-episode.hover .applecation-episode-overview {
                 display: block !important;
+            }
+            
+            /* Стили для длительности серии */
+            .applecation__runtime-info {
+                background: rgba(155,89,182,0.6) !important;
+                padding: 0.15em 0.5em !important;
+                border-radius: 0.3em !important;
+                color: #fff !important;
+                font-size: 0.8em !important;
+                font-weight: 600 !important;
+                line-height: 1.3 !important;
             }
             
             @media screen and (max-width: 720px) { 
@@ -2179,7 +2367,7 @@
                     } catch (err) {}
                 }, 300);
 
-                // Обработка скролла - скрываем постер при прокрутке вниз
+                // Обработка скролла - жесткий блюр постера
                 setupPosterScrollHandler(render);
 
             } catch (err) {
@@ -2188,53 +2376,6 @@
         });
 
         console.log('[AppleTV+] Initialized successfully');
-    }
-
-    // =================================================================
-    // POSTER SCROLL HANDLER - скрываем постер при прокрутке вниз
-    // =================================================================
-
-    function setupPosterScrollHandler(render) {
-        try {
-            var poster = render.find('.full-start__background:not(.applecation__overlay)');
-            if (!poster.length) return;
-
-            var scrollBody = render.find('.scroll__body');
-            if (!scrollBody.length) return;
-
-            var isPosterVisible = true;
-
-            scrollBody.on('scroll.applecation', function() {
-                var scrollTop = $(this).scrollTop();
-                var threshold = 50; // пикселей до скрытия
-
-                if (scrollTop > threshold) {
-                    if (isPosterVisible) {
-                        isPosterVisible = false;
-                        poster.css({
-                            'opacity': '0',
-                            'transition': 'opacity 0.4s ease-out'
-                        });
-                    }
-                } else {
-                    if (!isPosterVisible) {
-                        isPosterVisible = true;
-                        poster.css({
-                            'opacity': '1',
-                            'transition': 'opacity 0.4s ease-out'
-                        });
-                    }
-                }
-            });
-
-            // При выходе со страницы убираем обработчик
-            render.on('remove.applecation', function() {
-                scrollBody.off('scroll.applecation');
-            });
-
-        } catch (e) {
-            console.warn('[AppleTV+] setupPosterScrollHandler error:', e);
-        }
     }
 
     // =================================================================
