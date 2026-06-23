@@ -1,5 +1,5 @@
 // @name AppleTV+
-// @version 3.9.7
+// @version 3.9.8
 // @author Your Name
 // @description Расширенная карточка фильма в стиле Apple TV+ с полными метаданными
 // @lampa-check Lampa.
@@ -11,7 +11,7 @@
     // CONFIGURATION
     // =================================================================
 
-    var PLUGIN_VERSION = '3.9.7';
+    var PLUGIN_VERSION = '3.9.8';
     var CACHE_TTL = 24 * 60 * 60 * 1000;
     var PROXY_TIMEOUT = 15000;
     var LAMPA_RATING_API = 'https://cubnotrip.top/api/reactions/get/';
@@ -33,7 +33,7 @@
     var _ratingCache = {};
     var _logoCache = {};
     var _lampaRatingCache = {};
-    var _episodesDataCache = {};
+    var _episodesCache = {};
     var workingProxy = null;
 
     var STORAGE_KEYS = {
@@ -43,46 +43,6 @@
         lampa_rating_cache: 'applecation_lampa_rating_cache',
         episodes_cache: 'applecation_episodes_cache'
     };
-
-    // =================================================================
-    // ПЕРЕХВАТ ДАННЫХ ЭПИЗОДОВ ИЗ ЯДРА CUB
-    // =================================================================
-
-    var episodesData = {};
-
-    function interceptCubEpisodes() {
-        try {
-            // Сохраняем оригинальный метод full из Api.sources.cub
-            var cubSource = Lampa.Api.sources.cub;
-            if (!cubSource) return;
-
-            var originalFull = cubSource.full;
-
-            cubSource.full = function(params, oncomplite, onerror) {
-                // Создаем обертку для oncomplite
-                var wrappedOnComplite = function(data) {
-                    // Сохраняем данные эпизодов, если они есть
-                    if (data && data.episodes) {
-                        episodesData[params.method + '_' + params.id] = data.episodes;
-                    }
-                    // Вызываем оригинальный oncomplite
-                    if (oncomplite) oncomplite(data);
-                };
-
-                // Вызываем оригинальный метод с оберткой
-                originalFull.call(cubSource, params, wrappedOnComplite, onerror);
-            };
-
-            console.log('[AppleTV+] Intercepted CUB episodes data');
-        } catch (e) {
-            console.warn('[AppleTV+] Failed to intercept CUB episodes:', e);
-        }
-    }
-
-    function getEpisodesForMovie(method, id) {
-        var key = method + '_' + id;
-        return episodesData[key] || null;
-    }
 
     // =================================================================
     // SVG ИКОНКИ
@@ -190,8 +150,7 @@
             _ratingCache = {};
             _logoCache = {};
             _lampaRatingCache = {};
-            _episodesDataCache = {};
-            episodesData = {};
+            _episodesCache = {};
 
             var keys = Object.values(STORAGE_KEYS);
             for (var i = 0; i < keys.length; i++) {
@@ -1004,14 +963,53 @@
     }
 
     // =================================================================
-    // ПОЛУЧЕНИЕ ДАННЫХ ЭПИЗОДОВ
+    // ПОЛУЧЕНИЕ ДАННЫХ ЭПИЗОДОВ ИЗ СОБЫТИЯ FULL
     // =================================================================
+
+    var _episodesData = {};
+
+    function captureEpisodesFromFull(e) {
+        try {
+            // Проверяем, есть ли данные эпизодов в событии
+            if (e.data && e.data.episodes) {
+                var key = e.object.method + '_' + e.object.id;
+                _episodesData[key] = e.data.episodes;
+                console.log('[AppleTV+] Captured episodes data for:', key, e.data.episodes.episodes ? e.data.episodes.episodes.length : 0);
+                return true;
+            }
+            
+            // Проверяем в movie
+            if (e.data && e.data.movie && e.data.movie.seasons) {
+                var key = e.object.method + '_' + e.object.id;
+                // Собираем все эпизоды из сезонов
+                var allEpisodes = [];
+                if (e.data.movie.seasons && Array.isArray(e.data.movie.seasons)) {
+                    e.data.movie.seasons.forEach(function(season) {
+                        if (season.episodes && Array.isArray(season.episodes)) {
+                            allEpisodes = allEpisodes.concat(season.episodes);
+                        }
+                    });
+                }
+                if (allEpisodes.length > 0) {
+                    _episodesData[key] = { episodes: allEpisodes };
+                    console.log('[AppleTV+] Captured episodes from seasons for:', key, allEpisodes.length);
+                    return true;
+                }
+            }
+            
+            return false;
+        } catch (e) {
+            console.warn('[AppleTV+] captureEpisodesFromFull error:', e);
+            return false;
+        }
+    }
 
     function getEpisodesData(movie) {
         if (!movie) return null;
         var type = movie.name ? 'tv' : 'movie';
         if (type !== 'tv') return null;
-        return getEpisodesForMovie(type, movie.id);
+        var key = type + '_' + movie.id;
+        return _episodesData[key] || null;
     }
 
     // =================================================================
@@ -1058,7 +1056,7 @@
             render.find('.full-start-new__head, .full-start-new__details, .full-descr, .full-descr__title, .full-start__head, .full-start-new__reactions').hide();
 
             var bgEnabled = Lampa.Storage.get('applecation_content_bg', true);
-            var scale = parseFloat(Lampa.Storage.get('applecation_content_scale', '100')) / 100;
+            var scalePercent = parseFloat(Lampa.Storage.get('applecation_content_scale', '100'));
 
             var right = render.find('.full-start-new__right');
             if (!right.length) return;
@@ -1081,31 +1079,38 @@
                 left.append(contentWrapper);
             }
 
-            // Применяем масштаб в реальном времени
-            var scalePercent = parseFloat(Lampa.Storage.get('applecation_content_scale', '100'));
+            // Фиксируем позицию контента
+            contentWrapper.css('position', 'relative');
+            contentWrapper.css('z-index', '10');
+
+            // Применяем масштаб
             var scaleValue = scalePercent / 100;
-            
             contentWrapper.css('transform', 'scale(' + scaleValue + ')');
             contentWrapper.css('transform-origin', 'left bottom');
             
             // При увеличении масштаба поднимаем логотип
             if (scaleValue > 1) {
-                var logoOffset = (scaleValue - 1) * 100;
+                var logoOffset = (scaleValue - 1) * 80;
                 logoWrapper.css('margin-bottom', (0.5 - logoOffset * 0.005) + 'em');
+                logoWrapper.css('transform', 'translateY(-' + (logoOffset * 0.3) + 'px)');
             } else {
                 logoWrapper.css('margin-bottom', '0.5em');
+                logoWrapper.css('transform', 'translateY(0)');
             }
 
+            // Управление фоном
             if (!bgEnabled) {
                 contentWrapper.css('background', 'none');
                 contentWrapper.css('backdrop-filter', 'none');
                 contentWrapper.css('-webkit-backdrop-filter', 'none');
                 contentWrapper.css('border', 'none');
+                contentWrapper.css('box-shadow', 'none');
             } else {
                 contentWrapper.css('background', 'rgba(0,0,0,0.3)');
                 contentWrapper.css('backdrop-filter', 'blur(10px)');
                 contentWrapper.css('-webkit-backdrop-filter', 'blur(10px)');
                 contentWrapper.css('border', '1px solid rgba(255,255,255,0.05)');
+                contentWrapper.css('box-shadow', '0 4px 20px rgba(0,0,0,0.3)');
             }
 
             var title = render.find('.full-start-new__title');
@@ -1169,6 +1174,23 @@
             if (bg.length && !bg.next('.applecation__overlay').length) {
                 bg.after('<div class="full-start__background loaded applecation__overlay"></div>');
             }
+            
+            // Удаляем старые элементы слоган
+            $('.applecation__tagline').remove();
+            
+            // Добавляем слоган, если есть
+            if (movie.tagline) {
+                var tagline = $('<div class="applecation__tagline" style="position:absolute; right:-30vw; top:2em; font-size:1.2em; color:rgba(255,255,255,0.3); font-style:italic; max-width:25vw; text-align:right; pointer-events:none; white-space:nowrap; text-overflow:ellipsis; overflow:hidden;">' + escapeHtml(movie.tagline) + '</div>');
+                // Для длинных слоганов
+                if (movie.tagline.length > 40) {
+                    tagline.css('font-size', '0.9em');
+                }
+                if (movie.tagline.length > 60) {
+                    tagline.css('font-size', '0.7em');
+                }
+                contentWrapper.append(tagline);
+            }
+            
         } catch (e) {
             console.error('[AppleTV+] modifyCardDOM error:', e);
         }
@@ -1193,10 +1215,12 @@
             var logoWrapper = render.find('.applecation__logo-wrapper');
             if (logoWrapper.length) {
                 if (scaleValue > 1) {
-                    var logoOffset = (scaleValue - 1) * 100;
+                    var logoOffset = (scaleValue - 1) * 80;
                     logoWrapper.css('margin-bottom', (0.5 - logoOffset * 0.005) + 'em');
+                    logoWrapper.css('transform', 'translateY(-' + (logoOffset * 0.3) + 'px)');
                 } else {
                     logoWrapper.css('margin-bottom', '0.5em');
+                    logoWrapper.css('transform', 'translateY(0)');
                 }
             }
 
@@ -1207,12 +1231,28 @@
                 contentWrapper.css('backdrop-filter', 'none');
                 contentWrapper.css('-webkit-backdrop-filter', 'none');
                 contentWrapper.css('border', 'none');
+                contentWrapper.css('box-shadow', 'none');
             } else {
                 contentWrapper.css('background', 'rgba(0,0,0,0.3)');
                 contentWrapper.css('backdrop-filter', 'blur(10px)');
                 contentWrapper.css('-webkit-backdrop-filter', 'blur(10px)');
                 contentWrapper.css('border', '1px solid rgba(255,255,255,0.05)');
+                contentWrapper.css('box-shadow', '0 4px 20px rgba(0,0,0,0.3)');
             }
+            
+            // Обновляем слоган
+            var tagline = render.find('.applecation__tagline');
+            if (tagline.length) {
+                if (scaleValue > 1) {
+                    var taglineOffset = (scaleValue - 1) * 50;
+                    tagline.css('right', '-30vw');
+                    tagline.css('top', (2 - taglineOffset * 0.02) + 'em');
+                } else {
+                    tagline.css('right', '-30vw');
+                    tagline.css('top', '2em');
+                }
+            }
+            
         } catch (e) {
             console.warn('[AppleTV+] updateContentScale error:', e);
         }
@@ -1553,14 +1593,26 @@
             // 8. Длительность серии
             addEpisodeRuntime(render, movie);
 
-            // 9. Обработка эпизодов - используем перехваченные данные
+            // 9. Обработка эпизодов - ИСПОЛЬЗУЕМ ДАННЫЕ ИЗ СОБЫТИЯ
             if (isTv) {
-                var episodes = getEpisodesData(movie);
-                if (episodes && episodes.episodes) {
-                    processEpisodesWithData(render, episodes);
+                var episodesData = getEpisodesData(movie);
+                if (episodesData && episodesData.episodes && episodesData.episodes.length > 0) {
+                    console.log('[AppleTV+] Processing episodes from captured data:', episodesData.episodes.length);
+                    processEpisodesWithData(render, episodesData);
                 } else {
-                    // Пробуем получить данные через API
-                    fetchEpisodesDataFallback(movie, render);
+                    console.log('[AppleTV+] No episodes data found, trying fallback');
+                    // Fallback - пробуем получить из movie.seasons
+                    if (movie.seasons && Array.isArray(movie.seasons)) {
+                        var allEpisodes = [];
+                        movie.seasons.forEach(function(season) {
+                            if (season.episodes && Array.isArray(season.episodes)) {
+                                allEpisodes = allEpisodes.concat(season.episodes);
+                            }
+                        });
+                        if (allEpisodes.length > 0) {
+                            processEpisodesWithData(render, { episodes: allEpisodes });
+                        }
+                    }
                 }
             }
 
@@ -1569,63 +1621,6 @@
 
         } catch (e) {
             console.error('[AppleTV+] fillContent error:', e);
-        }
-    }
-
-    // =================================================================
-    // FALLBACK ДЛЯ ЭПИЗОДОВ
-    // =================================================================
-
-    function fetchEpisodesDataFallback(movie, render) {
-        try {
-            if (!movie || !movie.id) return;
-            var type = movie.name ? 'tv' : 'movie';
-            if (type !== 'tv') return;
-
-            var cacheKey = 'episodes_' + movie.id;
-            var now = Date.now();
-
-            var cached = getFromStorage('episodes_cache', cacheKey);
-            if (cached && cached._ts && (now - cached._ts < CACHE_TTL)) {
-                _episodesDataCache[cacheKey] = cached;
-                if (cached.episodes) {
-                    processEpisodesWithData(render, cached);
-                }
-                return;
-            }
-
-            // Определяем последний сезон
-            var season = 1;
-            if (movie.seasons && Array.isArray(movie.seasons)) {
-                var maxSeason = 0;
-                movie.seasons.forEach(function(s) {
-                    if (s.season_number > maxSeason) {
-                        maxSeason = s.season_number;
-                    }
-                });
-                if (maxSeason > 0) {
-                    season = maxSeason;
-                }
-            }
-
-            var url = Lampa.TMDB.api('tv/' + movie.id + '/season/' + season + '?api_key=' + getTmdbKey() + '&language=' + LANG);
-            var network = new Lampa.Reguest();
-            network.timeout(PROXY_TIMEOUT);
-
-            network.silent(url, function(data) {
-                if (data && data.episodes && Array.isArray(data.episodes)) {
-                    var result = {
-                        season: season,
-                        episodes: data.episodes,
-                        _ts: now
-                    };
-                    _episodesDataCache[cacheKey] = result;
-                    saveToStorage('episodes_cache', { [cacheKey]: result });
-                    processEpisodesWithData(render, result);
-                }
-            }, function() {});
-        } catch (e) {
-            console.warn('[AppleTV+] fetchEpisodesDataFallback error:', e);
         }
     }
 
@@ -1691,20 +1686,26 @@
 
     function processEpisodesWithData(render, episodesData) {
         try {
-            if (!episodesData || !episodesData.episodes) {
+            if (!episodesData || !episodesData.episodes || !episodesData.episodes.length) {
+                console.log('[AppleTV+] No episodes data to process');
                 return;
             }
 
             var episodes = render.find('.full-episode');
             if (!episodes.length) {
+                console.log('[AppleTV+] No episode elements found');
                 return;
             }
 
-            // Создаем карту эпизодов для быстрого доступа
+            console.log('[AppleTV+] Processing ' + episodes.length + ' episode elements with ' + episodesData.episodes.length + ' episodes data');
+
+            // Создаем карту эпизодов для быстрого доступа по номеру
             var episodesMap = {};
             episodesData.episodes.forEach(function(ep) {
-                var key = 'e' + ep.episode_number;
-                episodesMap[key] = ep;
+                var epNum = parseInt(ep.episode_number, 10);
+                if (epNum > 0) {
+                    episodesMap[epNum] = ep;
+                }
             });
 
             episodes.each(function() {
@@ -1722,22 +1723,51 @@
                 }
 
                 var numText = numEl.text().trim();
-                var match = numText.match(/Эпизод\s*(\d+)/i) || numText.match(/E(\d+)/i);
-                if (!match) {
-                    return;
+                var episodeNum = 0;
+                
+                // Парсим номер - может быть "08", "Эпизод 8", "E8", "S1:E8"
+                var match = numText.match(/Эпизод\s*(\d+)/i);
+                if (match) {
+                    episodeNum = parseInt(match[1], 10);
+                } else {
+                    match = numText.match(/E(\d+)/i);
+                    if (match) {
+                        episodeNum = parseInt(match[1], 10);
+                    } else {
+                        match = numText.match(/S\d+[:\s]*E?(\d+)/i);
+                        if (match) {
+                            episodeNum = parseInt(match[1], 10);
+                        } else {
+                            // Пробуем просто число
+                            var num = parseInt(numText, 10);
+                            if (!isNaN(num) && num > 0 && num < 100) {
+                                episodeNum = num;
+                            }
+                        }
+                    }
                 }
 
-                var episodeNum = parseInt(match[1], 10);
                 if (!episodeNum) {
                     return;
                 }
 
                 // Ищем описание в карте
-                var key = 'e' + episodeNum;
-                var epData = episodesMap[key];
+                var epData = episodesMap[episodeNum];
                 var overview = epData && epData.overview ? epData.overview : '';
 
-                // Если описание не найдено - пропускаем
+                // Если описание не найдено - пробуем найти через data-id
+                if (!overview) {
+                    var epId = ep.data('id') || ep.attr('data-id');
+                    if (epId) {
+                        var idNum = parseInt(epId, 10);
+                        if (idNum > 0) {
+                            epData = episodesMap[idNum];
+                            overview = epData && epData.overview ? epData.overview : '';
+                        }
+                    }
+                }
+
+                // Если все еще нет описания - пропускаем
                 if (!overview) {
                     return;
                 }
@@ -1792,7 +1822,7 @@
                     }, 100);
                 });
 
-                // Для фокуса (клавиатура)
+                // Для фокуса (клавиатура) - как в studios.js
                 ep.on('hover:focus', function() {
                     overlay.show();
                 });
@@ -1800,6 +1830,9 @@
                 ep.on('hover:blur', function() {
                     overlay.hide();
                 });
+                
+                // Добавляем класс для стилей
+                ep.addClass('applecation-episode-has-overview');
             });
 
         } catch (e) {
@@ -2097,8 +2130,8 @@
             .applecation .full-start-new__body { height: 80vh !important; min-height: 400px !important; }
             .applecation .full-start-new__right { display: flex !important; align-items: flex-end !important; padding: 0 2em 2em 2em !important; }
             .applecation .full-start-new__left { display: none !important; }
-            .applecation .applecation__left { flex: 1 !important; width: 100% !important; }
-            .applecation .applecation__content-wrapper { font-size: 100% !important; max-width: 45vw !important; background: rgba(0,0,0,0.3) !important; backdrop-filter: blur(10px) !important; -webkit-backdrop-filter: blur(10px) !important; padding: 1.5em !important; border-radius: 1em !important; border: 1px solid rgba(255,255,255,0.05) !important; }
+            .applecation .applecation__left { flex: 1 !important; width: 100% !important; position: relative !important; }
+            .applecation .applecation__content-wrapper { font-size: 100% !important; max-width: 45vw !important; background: rgba(0,0,0,0.3) !important; backdrop-filter: blur(10px) !important; -webkit-backdrop-filter: blur(10px) !important; padding: 1.5em !important; border-radius: 1em !important; border: 1px solid rgba(255,255,255,0.05) !important; box-shadow: 0 4px 20px rgba(0,0,0,0.3) !important; position: relative !important; z-index: 10 !important; }
             .applecation__logo-wrapper { margin-bottom: 0.5em !important; opacity: 0 !important; transform: translateY(20px) !important; transition: opacity 0.4s ease-out, transform 0.4s ease-out !important; }
             .applecation__logo-wrapper.loaded { opacity: 1 !important; transform: translateY(0) !important; }
             .applecation__logo { display: block !important; max-width: 30vw !important; max-height: 150px !important; width: auto !important; height: auto !important; object-fit: contain !important; object-position: left center !important; filter: drop-shadow(0 2px 10px rgba(0,0,0,0.5)) !important; }
@@ -2200,6 +2233,23 @@
                 line-height: 1.3 !important;
             }
             
+            .applecation__tagline {
+                position: absolute !important;
+                right: -30vw !important;
+                top: 2em !important;
+                font-size: 1.2em !important;
+                color: rgba(255,255,255,0.3) !important;
+                font-style: italic !important;
+                max-width: 25vw !important;
+                text-align: right !important;
+                pointer-events: none !important;
+                white-space: nowrap !important;
+                text-overflow: ellipsis !important;
+                overflow: hidden !important;
+                z-index: 5 !important;
+                line-height: 1.4 !important;
+            }
+            
             @media screen and (max-width: 720px) { 
                 .applecation .full-start-new__body { height: auto !important; min-height: 0 !important; } 
                 .applecation .full-start-new__right { display: block !important; padding: 0 1em 1em 1em !important; } 
@@ -2208,6 +2258,7 @@
                 .applecation__logo { max-width: 60vw !important; max-height: 80px !important; } 
                 .applecation .full-start-new__title { font-size: 1.8em !important; }
                 .applecation-episode-overview { max-width: 14em !important; min-width: 8em !important; font-size: 0.7em !important; }
+                .applecation__tagline { display: none !important; }
             }
             @media screen and (max-width: 480px) { 
                 .applecation .applecation__description { -webkit-line-clamp: 2 !important; } 
@@ -2216,6 +2267,7 @@
                 .applecation .applecation__meta { font-size: 0.85em !important; } 
                 .applecation .applecation__ratings { font-size: 0.8em !important; }
                 .applecation-episode-overview { max-width: 10em !important; min-width: 6em !important; font-size: 0.6em !important; }
+                .applecation__tagline { display: none !important; }
             }
             `;
 
@@ -2385,7 +2437,6 @@
                 param: { name: 'applecation_content_bg', type: 'trigger', default: true },
                 field: { name: 'Фон контента', description: 'Показывать затемненный фон за блоком информации' },
                 onChange: function(value) {
-                    // Применяем изменения в реальном времени
                     var render = getActiveFullRender();
                     if (render) {
                         updateContentScale(render);
@@ -2411,7 +2462,6 @@
                 },
                 field: { name: 'Масштаб контента', description: 'Размер блока с информацией и кнопками' },
                 onChange: function(value) {
-                    // Применяем изменения в реальном времени
                     var render = getActiveFullRender();
                     if (render) {
                         updateContentScale(render);
@@ -2460,8 +2510,7 @@
         }
     }
 
-    // =================================================================
-    // MAIN PLUGIN INIT
+    // =================================================================    // MAIN PLUGIN INIT
     // =================================================================
 
     function initPlugin() {
@@ -2474,9 +2523,6 @@
         injectAdditionalStyles();
 
         overrideImageApi();
-
-        // Перехватываем данные эпизодов из ядра CUB
-        interceptCubEpisodes();
 
         Lampa.Listener.follow('full', function(e) {
             if (e.type !== 'complite') return;
@@ -2493,6 +2539,9 @@
 
                 var movie = e.data && e.data.movie;
                 if (!movie) return;
+
+                // Захватываем данные эпизодов из события
+                captureEpisodesFromFull(e);
 
                 console.log('[AppleTV+] Processing card for:', movie.title || movie.name);
 
@@ -2547,7 +2596,6 @@
 
                 setupPosterScrollHandler(render);
 
-                // Обновляем масштаб после загрузки
                 setTimeout(function() {
                     updateContentScale(render);
                 }, 100);
