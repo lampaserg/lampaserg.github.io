@@ -1,5 +1,5 @@
 // @name Тема от SERG
-// @version 4.3
+// @version 4.4
 // @author SERG
 // @description Расширенная карточка фильма/сериала с полными метаданными
 // @lampa-check Lampa.
@@ -11,7 +11,7 @@
     // CONFIGURATION
     // =================================================================
 
-    var PLUGIN_VERSION = '4.3';
+    var PLUGIN_VERSION = '4.4';
     var CACHE_TTL = 24 * 60 * 60 * 1000;
     var PROXY_TIMEOUT = 15000;
     var LAMPA_RATING_API = 'https://cubnotrip.top/api/reactions/get/';
@@ -59,7 +59,7 @@
         applecation_ratings_position: 'left',
         applecation_show_quality_badges: true,
         applecation_studios_mode: 'button',
-        applecation_center_content: 'none'
+        applecation_info_position: 'left'
     };
 
     function resetToDefaultSettings() {
@@ -1112,15 +1112,18 @@
     }
 
     // =================================================================
-    // СТУДИИ - отдельная строка вверху (как было), кнопка с Select
+    // СТУДИИ - кнопка в ряду с кнопками
     // =================================================================
 
-    function renderStudios(render, movie) {
+    function renderStudiosBtn(render, movie) {
         try {
+            var container = render.find('.full-start-new__buttons');
+            if (!container.length) return;
+
             var studiosMode = Lampa.Storage.get('applecation_studios_mode', 'button');
             
-            // Удаляем старые студии
-            render.find('.applecation__studios').remove();
+            // Удаляем старую кнопку
+            container.find('.button--studios').remove();
 
             // Получаем студии
             var companies = (movie && movie.production_companies && movie.production_companies.length) ?
@@ -1130,62 +1133,21 @@
 
             if (studiosMode === 'hide') return;
 
-            // Создаем контейнер для студий (отдельная строка вверху)
-            var studiosContainer = $('<div class="applecation__studios"></div>');
-            studiosContainer.css({
-                'display': 'flex',
-                'align-items': 'center',
-                'flex-wrap': 'wrap',
-                'gap': '0.7em',
-                'margin': '0 0 0.5em 0',
-                'opacity': '0',
-                'transform': 'translateY(15px)',
-                'transition': 'opacity 0.4s ease-out, transform 0.4s ease-out'
-            });
-
-            // Находим место для вставки (после логотипа, перед мета)
-            var logoWrapper = render.find('.applecation__logo-wrapper');
-            var contentWrapper = render.find('.applecation__content-wrapper');
-            var contentGroup = render.find('.applecation__content-group');
-            
-            if (contentGroup.length) {
-                contentGroup.prepend(studiosContainer);
-            } else if (contentWrapper.length) {
-                contentWrapper.prepend(studiosContainer);
-            } else if (logoWrapper.length) {
-                logoWrapper.after(studiosContainer);
-            } else {
-                var left = render.find('.applecation__left');
-                if (left.length) {
-                    var firstChild = left.children().first();
-                    if (firstChild.length) {
-                        firstChild.before(studiosContainer);
-                    } else {
-                        left.prepend(studiosContainer);
-                    }
-                }
-            }
-
             if (studiosMode === 'button') {
-                // Кнопка "Студии" с Select
-                var btn = $('<div class="applecation__studio-btn selector"></div>');
-                btn.css({
-                    'display': 'inline-flex',
-                    'align-items': 'center',
-                    'gap': '0.4em',
-                    'background': 'rgba(255,255,255,0.08)',
-                    'border': '1px solid rgba(255,255,255,0.1)',
-                    'border-radius': '0.6em',
-                    'padding': '0.25em 0.6em',
-                    'cursor': 'pointer',
-                    'color': '#ffffff'
-                });
+                // Кнопка "Студии" как в Platforms
+                var btn = $('<div class="full-start__button selector button--studios"></div>');
                 btn.html(
-                    '<span>🎬 Студии</span>' +
-                    '<span style="color:rgba(255,255,255,0.5); font-size:0.7em;">(' + companies.length + ')</span>'
+                    '<svg viewBox="0 0 24 24" fill="currentColor" style="width:1.2em;height:1.2em;">' +
+                        '<path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>' +
+                    '</svg>' +
+                    '<span>Студии</span>'
                 );
+                
+                btn.css({
+                    'height': $('.full-start__button', render).first().outerHeight() + 'px'
+                });
 
-                btn.on('hover:enter click', function() {
+                btn.on('hover:enter', function() {
                     var controllerName = Lampa.Controller.enabled().name;
                     Lampa.Select.show({
                         title: 'Студии',
@@ -1214,9 +1176,61 @@
                     });
                 });
 
-                studiosContainer.append(btn);
-                studiosContainer.addClass('show');
-            } else if (studiosMode === 'show') {
+                container.append(btn);
+            }
+        } catch (e) {
+            console.warn('[Тема от SERG] Ошибка рендера студий:', e);
+        }
+    }
+
+    // =================================================================
+    // СТУДИИ - отдельная строка между meta и ratings
+    // =================================================================
+
+    function renderStudiosLine(render, movie) {
+        try {
+            var studiosMode = Lampa.Storage.get('applecation_studios_mode', 'button');
+            
+            // Удаляем старые студии
+            render.find('.applecation__studios').remove();
+
+            // Получаем студии
+            var companies = (movie && movie.production_companies && movie.production_companies.length) ?
+                movie.production_companies : [];
+
+            if (!companies.length) return;
+
+            if (studiosMode === 'hide') return;
+
+            // Создаем контейнер для студий
+            var studiosContainer = $('<div class="applecation__studios"></div>');
+            studiosContainer.css({
+                'display': 'flex',
+                'align-items': 'center',
+                'flex-wrap': 'wrap',
+                'gap': '0.7em',
+                'margin': '0 0 0.5em 0',
+                'opacity': '0',
+                'transform': 'translateY(15px)',
+                'transition': 'opacity 0.4s ease-out, transform 0.4s ease-out'
+            });
+
+            // Находим место для вставки (между meta и ratings)
+            var contentGroup = render.find('.applecation__content-group');
+            var meta = contentGroup.find('.applecation__meta');
+            
+            if (meta.length) {
+                meta.after(studiosContainer);
+            } else {
+                var firstChild = contentGroup.children().first();
+                if (firstChild.length) {
+                    firstChild.after(studiosContainer);
+                } else {
+                    contentGroup.prepend(studiosContainer);
+                }
+            }
+
+            if (studiosMode === 'show') {
                 // Показываем до 3-х студий
                 var limited = companies.slice(0, 3);
                 limited.forEach(function(co) {
@@ -1258,6 +1272,7 @@
                 });
                 studiosContainer.addClass('show');
             }
+            // Для режима 'button' студии в строке не показываем, только кнопка в buttons
 
         } catch (e) {
             console.warn('[Тема от SERG] Ошибка рендера студий:', e);
@@ -1279,7 +1294,6 @@
 
             var bgEnabled = Lampa.Storage.get('applecation_content_bg', true);
             var scalePercent = parseFloat(Lampa.Storage.get('applecation_content_scale', '100'));
-            var centerContent = Lampa.Storage.get('applecation_center_content', 'none');
 
             var right = render.find('.full-start-new__right');
             if (!right.length) return;
@@ -1302,10 +1316,17 @@
                 left.append(contentWrapper);
             }
 
-            // Обертка для масштабирования
+            // Обертка для масштабирования ВСЕГО (включая логотип)
             var wrapper = $('<div class="applecation__wrapper"></div>');
-            contentWrapper.wrap(wrapper);
-            wrapper = contentWrapper.parent('.applecation__wrapper');
+            var logoHtml = logoWrapper.detach();
+            var contentHtml = contentWrapper.detach();
+            wrapper.append(logoHtml);
+            wrapper.append(contentHtml);
+            left.append(wrapper);
+            
+            wrapper = left.find('.applecation__wrapper');
+            logoWrapper = wrapper.find('.applecation__logo-wrapper');
+            contentWrapper = wrapper.find('.applecation__content-wrapper');
 
             wrapper.css({
                 'transform-origin': 'left bottom',
@@ -1317,22 +1338,9 @@
             contentWrapper.css('z-index', '10');
             contentWrapper.css('max-width', '50vw');
 
-            // Центрирование всех блоков внутри фона
             var contentGroup = $('<div class="applecation__content-group"></div>');
             contentWrapper.wrapInner(contentGroup);
             contentGroup = contentWrapper.find('.applecation__content-group');
-
-            if (centerContent === 'all') {
-                contentGroup.css('text-align', 'center');
-                contentGroup.css('display', 'flex');
-                contentGroup.css('flex-direction', 'column');
-                contentGroup.css('align-items', 'center');
-            } else {
-                contentGroup.css('text-align', '');
-                contentGroup.css('display', '');
-                contentGroup.css('flex-direction', '');
-                contentGroup.css('align-items', '');
-            }
 
             var scaleValue = scalePercent / 100;
             
@@ -1431,14 +1439,7 @@
     function updateContentScale(render) {
         try {
             var wrapper = render.find('.applecation__wrapper');
-            if (!wrapper.length) {
-                var contentWrapper = render.find('.applecation__content-wrapper');
-                if (!contentWrapper.length) return;
-                
-                wrapper = $('<div class="applecation__wrapper"></div>');
-                contentWrapper.wrap(wrapper);
-                wrapper = contentWrapper.parent('.applecation__wrapper');
-            }
+            if (!wrapper.length) return;
 
             var scalePercent = parseFloat(Lampa.Storage.get('applecation_content_scale', '100'));
             var scaleValue = scalePercent / 100;
@@ -1447,7 +1448,7 @@
             wrapper.css('transform', 'scale(' + scaleValue + ')');
             
             // Сдвиг лого вверх
-            var logoWrapper = render.find('.applecation__logo-wrapper');
+            var logoWrapper = wrapper.find('.applecation__logo-wrapper');
             if (logoWrapper.length) {
                 var logoOffset = (scaleValue - 1) * 100;
                 logoWrapper.css({
@@ -1456,25 +1457,21 @@
                 });
             }
 
-            // Центрирование
-            var centerContent = Lampa.Storage.get('applecation_center_content', 'none');
-            var contentGroup = render.find('.applecation__content-group');
-            if (contentGroup.length) {
-                if (centerContent === 'all') {
-                    contentGroup.css('text-align', 'center');
-                    contentGroup.css('display', 'flex');
-                    contentGroup.css('flex-direction', 'column');
-                    contentGroup.css('align-items', 'center');
-                } else {
-                    contentGroup.css('text-align', '');
-                    contentGroup.css('display', '');
-                    contentGroup.css('flex-direction', '');
-                    contentGroup.css('align-items', '');
-                }
-            }
-
             var contentWrapper = render.find('.applecation__content-wrapper');
             contentWrapper.css('max-width', '50vw');
+
+            // Позиция info
+            var infoPosition = Lampa.Storage.get('applecation_info_position', 'left');
+            var info = render.find('.applecation__info');
+            if (info.length) {
+                if (infoPosition === 'center') {
+                    info.css('align-items', 'center');
+                    info.css('text-align', 'center');
+                } else {
+                    info.css('align-items', 'flex-start');
+                    info.css('text-align', 'left');
+                }
+            }
 
             // Обновляем фон
             var bgEnabled = Lampa.Storage.get('applecation_content_bg', true);
@@ -1592,7 +1589,10 @@
                 meta.addClass('show');
             }
 
-            // 2. РЕЙТИНГИ
+            // 2. СТУДИИ - между meta и ratings
+            renderStudiosLine(render, movie);
+
+            // 3. РЕЙТИНГИ
             var ratingsContainer = contentGroup.find('.applecation__ratings');
             if (ratingsContainer.length) {
                 ratingsContainer.empty();
@@ -1713,7 +1713,7 @@
                 }
             }
 
-            // 3. РЕАКЦИИ
+            // 4. РЕАКЦИИ
             var reactionsContainer = contentGroup.find('.applecation__reactions');
             if (reactionsContainer.length) {
                 reactionsContainer.empty();
@@ -1757,7 +1757,7 @@
                 }
             }
 
-            // 4. ОПИСАНИЕ
+            // 5. ОПИСАНИЕ
             var descWrapper = contentGroup.find('.applecation__description-wrapper');
             var description = contentGroup.find('.applecation__description');
             if (descWrapper.length && description.length) {
@@ -1782,7 +1782,7 @@
                 descWrapper.addClass('show');
             }
 
-            // 5. ИНФОРМАЦИЯ О СЕЗОНАХ
+            // 6. ИНФОРМАЦИЯ О СЕЗОНАХ
             var info = contentGroup.find('.applecation__info');
             if (info.length) {
                 var infoText = info.find('.applecation__info-text');
@@ -1858,38 +1858,59 @@
                     infoText.html(infoParts.join(' '));
                 }
 
-                // БЕЙДЖИ КАЧЕСТВА - с возможностью отключения в реальном времени
+                // БЕЙДЖИ КАЧЕСТВА - с перерисовкой при изменении настройки
                 var showQualityBadges = Lampa.Storage.get('applecation_show_quality_badges', true);
                 var badgesContainer = info.find('.applecation__quality-badges');
                 
+                if (!badgesContainer.length) {
+                    badgesContainer = $('<span class="applecation__quality-badges"></span>');
+                    info.append(badgesContainer);
+                }
+                
                 if (!showQualityBadges) {
+                    badgesContainer.empty();
                     badgesContainer.hide();
-                } else if (badgesContainer.length) {
+                    console.log('[Тема от SERG] Бейджи качества выключены');
+                } else {
                     if (qualityData && !qualityData.empty) {
                         renderBadges(badgesContainer, qualityData);
                         badgesContainer.show();
+                        console.log('[Тема от SERG] Бейджи качества показаны из данных');
                     } else {
                         getBestJacred(movie, function(data) {
                             if (data && !data.empty && data.resolution) {
                                 renderBadges(badgesContainer, data);
                                 badgesContainer.show();
+                                console.log('[Тема от SERG] Бейджи качества показаны из Jacred');
                             } else {
+                                badgesContainer.empty();
                                 badgesContainer.hide();
+                                console.log('[Тема от SERG] Бейджи качества: данные не найдены');
                             }
                         });
                     }
                 }
 
+                // Позиция info
+                var infoPosition = Lampa.Storage.get('applecation_info_position', 'left');
+                if (infoPosition === 'center') {
+                    info.css('align-items', 'center');
+                    info.css('text-align', 'center');
+                } else {
+                    info.css('align-items', 'flex-start');
+                    info.css('text-align', 'left');
+                }
+
                 info.addClass('show');
             }
 
-            // 6. СТУДИИ - отдельная строка вверху
-            renderStudios(render, movie);
+            // 7. СТУДИИ - кнопка в ряду с кнопками
+            renderStudiosBtn(render, movie);
 
-            // 7. Длительность серии
+            // 8. Длительность серии
             addEpisodeRuntime(render, movie);
 
-            // 8. Обработка эпизодов
+            // 9. Обработка эпизодов
             if (isTv) {
                 var episodesData = getEpisodesData(movie);
                 if (episodesData && episodesData.episodes && episodesData.episodes.length > 0) {
@@ -2443,6 +2464,11 @@
             .applecation__meta { display: flex !important; flex-wrap: wrap !important; gap: 0.5em !important; margin-bottom: 0.7em !important; padding: 0.3em 0 !important; font-size: 1.0em !important; line-height: 1.4 !important; opacity: 0 !important; transform: translateY(15px) !important; transition: opacity 0.4s ease-out, transform 0.4s ease-out !important; }
             .applecation__meta.show { opacity: 1 !important; transform: translateY(0) !important; }
             .applecation__meta-item { color: #ffffff !important; display: inline-block !important; }
+            .applecation__studios { display: flex !important; align-items: center !important; flex-wrap: wrap !important; gap: 0.7em !important; margin: 0 0 0.5em 0 !important; opacity: 0 !important; transform: translateY(15px) !important; transition: opacity 0.4s ease-out, transform 0.4s ease-out !important; }
+            .applecation__studios.show { opacity: 1 !important; transform: translateY(0) !important; }
+            .applecation__studio { display: inline-flex !important; align-items: center !important; gap: 0.4em !important; background: rgba(255,255,255,0.08) !important; border: 1px solid rgba(255,255,255,0.1) !important; border-radius: 0.6em !important; padding: 0.25em 0.6em !important; transition: all 0.2s ease !important; cursor: pointer !important; color: #ffffff !important; }
+            .applecation__studio.focus { background: rgba(255,255,255,0.2) !important; border-color: #fff !important; transform: scale(1.05) !important; }
+            .applecation__studio img { height: 1.3em !important; max-width: 120px !important; width: auto !important; object-fit: contain !important; filter: brightness(0) invert(1) !important; }
             .applecation__ratings { display: flex !important; align-items: center !important; flex-wrap: wrap !important; gap: 0.5em !important; margin-bottom: 0.5em !important; opacity: 0 !important; transform: translateY(15px) !important; transition: opacity 0.4s ease-out, transform 0.4s ease-out !important; }
             .applecation__ratings.show { opacity: 1 !important; transform: translateY(0) !important; }
             .applecation__rating-item { display: flex !important; align-items: center !important; gap: 0.35em !important; padding: 0.2em 0.6em !important; border-radius: 0.4em !important; background: rgba(0,0,0,0.5) !important; border: 1.5px solid rgba(255,255,255,0.15) !important; font-size: 0.8em !important; font-weight: 600 !important; color: #ffffff !important; line-height: 1 !important; }
@@ -2461,8 +2487,10 @@
             .applecation__description-wrapper.focus { background: linear-gradient(135deg, rgba(255,255,255,0.28), rgba(255,255,255,0.18)) !important; padding: 0.15em 0.4em 0 0.7em !important; border-radius: 1em !important; width: fit-content !important; box-shadow: inset 0 1px 0 rgba(255,255,255,0.35) !important; transform: scale(1.07) translateY(0) !important; }
             .applecation__description { color: #ffffff !important; font-size: 0.95em !important; line-height: 1.5 !important; margin-bottom: 0.5em !important; max-width: 35vw !important; display: -webkit-box !important; -webkit-line-clamp: 4 !important; -webkit-box-orient: vertical !important; overflow: hidden !important; text-overflow: ellipsis !important; }
             .focus .applecation__description { color: #ffffff !important; }
-            .applecation__info { color: #ffffff !important; font-size: 0.95em !important; line-height: 1.4 !important; margin-bottom: 0.5em !important; opacity: 0 !important; transform: translateY(15px) !important; transition: opacity 0.4s ease-out, transform 0.4s ease-out !important; display: flex !important; align-items: center !important; flex-wrap: wrap !important; gap: 0.5em !important; flex-direction: column !important; }
+            .applecation__info { color: #ffffff !important; font-size: 0.95em !important; line-height: 1.4 !important; margin-bottom: 0.5em !important; opacity: 0 !important; transform: translateY(15px) !important; transition: opacity 0.4s ease-out, transform 0.4s ease-out !important; display: flex !important; flex-direction: column !important; gap: 0.5em !important; }
             .applecation__info.show { opacity: 1 !important; transform: translateY(0) !important; }
+            .applecation__info.align-center { align-items: center !important; text-align: center !important; }
+            .applecation__info.align-left { align-items: flex-start !important; text-align: left !important; }
             .applecation__season-info { color: #ffffff !important; }
             .applecation__status-info { color: #ffffff !important; }
             .applecation__quality-badges { display: flex !important; align-items: center !important; flex-wrap: wrap !important; gap: 0.3em !important; margin-top: 0.3em !important; opacity: 0 !important; transform: translateY(10px) !important; transition: opacity 0.3s ease-out, transform 0.3s ease-out !important; }
@@ -2518,58 +2546,12 @@
                 display: none !important;
             }
             
-            .applecation__studios {
-                display: flex !important;
-                align-items: center !important;
-                flex-wrap: wrap !important;
-                gap: 0.7em !important;
-                margin: 0 0 0.5em 0 !important;
-                opacity: 0 !important;
-                transform: translateY(15px) !important;
-                transition: opacity 0.4s ease-out, transform 0.4s ease-out !important;
-            }
-            .applecation__studios.show {
-                opacity: 1 !important;
-                transform: translateY(0) !important;
-            }
-            .applecation__studio {
-                display: inline-flex !important;
-                align-items: center !important;
-                gap: 0.4em !important;
-                background: rgba(255,255,255,0.08) !important;
-                border: 1px solid rgba(255,255,255,0.1) !important;
-                border-radius: 0.6em !important;
-                padding: 0.25em 0.6em !important;
-                transition: all 0.2s ease !important;
+            .button--studios {
                 cursor: pointer !important;
-                color: #ffffff !important;
             }
-            .applecation__studio.focus {
-                background: rgba(255,255,255,0.2) !important;
-                border-color: #fff !important;
-                transform: scale(1.05) !important;
-            }
-            .applecation__studio img {
-                height: 1.3em !important;
-                max-width: 120px !important;
-                width: auto !important;
-                object-fit: contain !important;
-                filter: brightness(0) invert(1) !important;
-            }
-            .applecation__studio-btn {
-                display: inline-flex !important;
-                align-items: center !important;
-                gap: 0.4em !important;
-                background: rgba(255,255,255,0.08) !important;
-                border: 1px solid rgba(255,255,255,0.1) !important;
-                border-radius: 0.6em !important;
-                padding: 0.25em 0.6em !important;
-                cursor: pointer !important;
-                color: #ffffff !important;
-            }
-            .applecation__studio-btn.focus {
-                background: rgba(255,255,255,0.2) !important;
-                border-color: #fff !important;
+            .button--studios.focus {
+                background: rgba(255,255,255,0.18) !important;
+                border-color: rgba(255,255,255,0.3) !important;
                 transform: scale(1.05) !important;
             }
             
@@ -2878,17 +2860,17 @@
                 }
             });
 
-            // Центрирование контента
+            // Позиция applecation__info
             Lampa.SettingsApi.addParam({
                 component: 'applecation_plus',
-                param: { name: 'applecation_center_content', type: 'select',
+                param: { name: 'applecation_info_position', type: 'select',
                     values: {
-                        'none': 'По умолчанию (слева)',
-                        'all': 'Центрировать всё'
+                        'left': 'Слева',
+                        'center': 'По центру'
                     },
-                    default: 'none'
+                    default: 'left'
                 },
-                field: { name: 'Центрирование контента', description: 'Центрировать все блоки контента внутри фона' },
+                field: { name: 'Позиция информации', description: 'Расположение блока с информацией о сезонах' },
                 onChange: function(value) {
                     var render = getActiveFullRender();
                     if (render) {
@@ -2936,7 +2918,8 @@
                     if (render) {
                         var movie = render.data('movie');
                         if (movie) {
-                            renderStudios(render, movie);
+                            renderStudiosBtn(render, movie);
+                            renderStudiosLine(render, movie);
                         }
                     }
                 }
