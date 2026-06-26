@@ -1,5 +1,5 @@
 // @name Тема от SERG
-// @version 4.1
+// @version 4.2
 // @author SERG
 // @description Расширенная карточка фильма/сериала с полными метаданными
 // @lampa-check Lampa.
@@ -11,7 +11,7 @@
     // CONFIGURATION
     // =================================================================
 
-    var PLUGIN_VERSION = '4.1';
+    var PLUGIN_VERSION = '4.2';
     var CACHE_TTL = 24 * 60 * 60 * 1000;
     var PROXY_TIMEOUT = 15000;
     var LAMPA_RATING_API = 'https://cubnotrip.top/api/reactions/get/';
@@ -1149,48 +1149,55 @@
                 left.append(contentWrapper);
             }
 
-            // Позиция контента относительно фона
-            var contentGroup = $('<div class="applecation__content-group"></div>');
-            contentWrapper.wrapInner(contentGroup);
-            contentGroup = contentWrapper.find('.applecation__content-group');
-
-            contentWrapper.css('position', 'relative');
-            contentWrapper.css('z-index', '10');
-
-            // Применяем позицию контента
-            if (contentPosition === 'center') {
-                contentWrapper.css('margin-left', 'auto');
-                contentWrapper.css('margin-right', 'auto');
-            } else if (contentPosition === 'right') {
-                contentWrapper.css('margin-left', 'auto');
-                contentWrapper.css('margin-right', '0');
-            } else {
-                contentWrapper.css('margin-left', '0');
-                contentWrapper.css('margin-right', 'auto');
-            }
-
-            var scaleValue = scalePercent / 100;
-            
-            // Масштабируем ВСЁ: контент, фон и логотип
+            // Обертка для масштабирования ВСЕГО: контент + фон
             var wrapper = $('<div class="applecation__wrapper"></div>');
             contentWrapper.wrap(wrapper);
             wrapper = contentWrapper.parent('.applecation__wrapper');
-            
+
             wrapper.css({
-                'transform': 'scale(' + scaleValue + ')',
                 'transform-origin': 'left bottom',
                 'transition': 'transform 0.3s ease',
                 'width': '100%'
             });
+
+            // Применяем позицию контента внутри фона
+            if (contentPosition === 'center') {
+                left.css('display', 'flex');
+                left.css('justify-content', 'center');
+                left.css('align-items', 'flex-end');
+                wrapper.css('width', 'auto');
+                wrapper.css('min-width', '50%');
+            } else if (contentPosition === 'right') {
+                left.css('display', 'flex');
+                left.css('justify-content', 'flex-end');
+                left.css('align-items', 'flex-end');
+                wrapper.css('width', 'auto');
+                wrapper.css('min-width', '50%');
+            } else {
+                left.css('display', 'block');
+                left.css('justify-content', '');
+                left.css('align-items', '');
+                wrapper.css('width', '100%');
+                wrapper.css('min-width', '');
+            }
+
+            contentWrapper.css('position', 'relative');
+            contentWrapper.css('z-index', '10');
+            contentWrapper.css('max-width', '50vw');
+
+            var scaleValue = scalePercent / 100;
             
-            // Сдвиг лого вместе с контентом
+            // Масштабируем ВСЁ через wrapper
+            wrapper.css('transform', 'scale(' + scaleValue + ')');
+            
+            // Сдвиг лого вверх при масштабировании
             var logoOffset = (scaleValue - 1) * 100;
             logoWrapper.css({
                 'transform': 'translateY(-' + (logoOffset * 0.5) + 'px)',
                 'transition': 'transform 0.3s ease'
             });
 
-            // Фон контента масштабируется вместе с wrapper
+            // Фон контента
             if (!bgEnabled) {
                 contentWrapper.css('background', 'transparent');
                 contentWrapper.css('backdrop-filter', 'none');
@@ -1206,6 +1213,10 @@
                 contentWrapper.css('box-shadow', '0 4px 20px rgba(0,0,0,0.3)');
                 contentWrapper.css('background-color', 'rgba(0,0,0,0.3)');
             }
+
+            var contentGroup = $('<div class="applecation__content-group"></div>');
+            contentWrapper.wrapInner(contentGroup);
+            contentGroup = contentWrapper.find('.applecation__content-group');
 
             var title = render.find('.full-start-new__title');
             if (title.length) {
@@ -1282,7 +1293,6 @@
         try {
             var wrapper = render.find('.applecation__wrapper');
             if (!wrapper.length) {
-                // Если wrapper нет, создаем его
                 var contentWrapper = render.find('.applecation__content-wrapper');
                 if (!contentWrapper.length) return;
                 
@@ -1295,13 +1305,9 @@
             var scaleValue = scalePercent / 100;
             
             // Масштабируем ВСЁ
-            wrapper.css({
-                'transform': 'scale(' + scaleValue + ')',
-                'transform-origin': 'left bottom',
-                'transition': 'transform 0.3s ease'
-            });
+            wrapper.css('transform', 'scale(' + scaleValue + ')');
             
-            // Сдвиг лого вместе с контентом
+            // Сдвиг лого вверх
             var logoWrapper = render.find('.applecation__logo-wrapper');
             if (logoWrapper.length) {
                 var logoOffset = (scaleValue - 1) * 100;
@@ -1311,21 +1317,32 @@
                 });
             }
 
-            // Обновляем позицию контента
+            // Обновляем позицию контента внутри фона
             var contentPosition = Lampa.Storage.get('applecation_content_position', 'left');
+            var left = render.find('.applecation__left');
             var contentWrapper = render.find('.applecation__content-wrapper');
-            if (contentWrapper.length) {
-                if (contentPosition === 'center') {
-                    contentWrapper.css('margin-left', 'auto');
-                    contentWrapper.css('margin-right', 'auto');
-                } else if (contentPosition === 'right') {
-                    contentWrapper.css('margin-left', 'auto');
-                    contentWrapper.css('margin-right', '0');
-                } else {
-                    contentWrapper.css('margin-left', '0');
-                    contentWrapper.css('margin-right', 'auto');
-                }
+            
+            if (contentPosition === 'center') {
+                left.css('display', 'flex');
+                left.css('justify-content', 'center');
+                left.css('align-items', 'flex-end');
+                wrapper.css('width', 'auto');
+                wrapper.css('min-width', '50%');
+            } else if (contentPosition === 'right') {
+                left.css('display', 'flex');
+                left.css('justify-content', 'flex-end');
+                left.css('align-items', 'flex-end');
+                wrapper.css('width', 'auto');
+                wrapper.css('min-width', '50%');
+            } else {
+                left.css('display', 'block');
+                left.css('justify-content', '');
+                left.css('align-items', '');
+                wrapper.css('width', '100%');
+                wrapper.css('min-width', '');
             }
+
+            contentWrapper.css('max-width', '50vw');
 
             // Обновляем фон
             var bgEnabled = Lampa.Storage.get('applecation_content_bg', true);
@@ -1347,6 +1364,105 @@
             
         } catch (e) {
             console.warn('[Тема от SERG] Ошибка обновления масштаба:', e);
+        }
+    }
+
+    // =================================================================
+    // СТУДИИ - как в плагине Platforms
+    // =================================================================
+
+    function renderStudiosBtn(render, movie) {
+        try {
+            var container = render.find('.full-start-new__buttons');
+            if (!container.length) return;
+
+            var studiosMode = Lampa.Storage.get('applecation_studios_mode', 'show');
+            
+            // Удаляем старую кнопку
+            container.find('.button--studios').remove();
+
+            // Получаем студии
+            var companies = (movie && movie.production_companies && movie.production_companies.length) ?
+                movie.production_companies : [];
+
+            if (!companies.length) return;
+
+            if (studiosMode === 'hide') return;
+
+            if (studiosMode === 'button') {
+                // Кнопка "Студии" как в Platforms
+                var btn = $('<div class="full-start__button selector button--studios"></div>');
+                btn.html(
+                    '<svg viewBox="0 0 24 24" fill="currentColor" style="width:1.2em;height:1.2em;">' +
+                        '<path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>' +
+                    '</svg>' +
+                    '<span>Студии</span>'
+                );
+                
+                btn.css({
+                    'height': $('.full-start__button', render).first().outerHeight() + 'px'
+                });
+
+                btn.on('hover:enter', function() {
+                    var controllerName = Lampa.Controller.enabled().name;
+                    Lampa.Select.show({
+                        title: 'Студии',
+                        items: companies.map(function(studio) { 
+                            return { 
+                                title: studio.name || 'Неизвестно', 
+                                studio: studio 
+                            } 
+                        }),
+                        onBack: function() {
+                            Lampa.Controller.toggle(controllerName);
+                            Lampa.Controller.collectionFocus(btn, render);
+                        },
+                        onSelect: function(action) {
+                            if (action.studio && action.studio.id) {
+                                Lampa.Activity.push({
+                                    url: 'movie',
+                                    id: action.studio.id,
+                                    title: action.studio.name || '',
+                                    component: 'company',
+                                    source: 'tmdb',
+                                    page: 1
+                                });
+                            }
+                        }
+                    });
+                });
+
+                container.append(btn);
+            } else if (studiosMode === 'show') {
+                // Показываем до 3-х студий в строке с кнопками
+                var limited = companies.slice(0, 3);
+                limited.forEach(function(co) {
+                    if (!co || !co.id) return;
+                    var btn = $('<div class="full-start__button selector button--studio"></div>');
+                    
+                    if (co.logo_path) {
+                        var imgUrl = Lampa.Api.img(co.logo_path, 'h100');
+                        btn.html('<img src="' + imgUrl + '" style="height:1.2em;width:auto;object-fit:contain;" />');
+                    } else {
+                        btn.html('<span style="font-size:0.8em;">' + (co.name || '') + '</span>');
+                    }
+                    
+                    btn.on('hover:enter', function() {
+                        Lampa.Activity.push({
+                            url: 'movie',
+                            id: co.id,
+                            title: co.name || '',
+                            component: 'company',
+                            source: 'tmdb',
+                            page: 1
+                        });
+                    });
+                    
+                    container.append(btn);
+                });
+            }
+        } catch (e) {
+            console.warn('[Тема от SERG] Ошибка рендера студий:', e);
         }
     }
 
@@ -1443,106 +1559,7 @@
                 meta.addClass('show');
             }
 
-            // 2. Студии
-            var studiosMode = Lampa.Storage.get('applecation_studios_mode', 'show');
-            var studiosContainer = contentGroup.find('.applecation__studios');
-            
-            if (studiosMode === 'hide') {
-                studiosContainer.hide();
-            } else if (studiosMode === 'button') {
-                // Режим кнопки "Студии"
-                var companies = (movie && movie.production_companies && movie.production_companies.length) ?
-                    movie.production_companies : [];
-                
-                if (companies.length) {
-                    studiosContainer.empty().show();
-                    
-                    var studiosBtn = $('<div class="applecation__studio-btn selector" style="display:inline-flex; align-items:center; gap:0.4em; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.1); border-radius:0.6em; padding:0.25em 0.6em; cursor:pointer;">' +
-                        '<span style="color:#ffffff;">🎬 Студии</span>' +
-                        '<span style="color:rgba(255,255,255,0.5); font-size:0.7em;">(' + companies.length + ')</span>' +
-                        '</div>');
-                    
-                    studiosBtn.on('hover:enter click', function() {
-                        var list = $('<div style="display:flex;flex-direction:column;gap:0.5em;padding:0.5em;"></div>');
-                        companies.forEach(function(co) {
-                            if (!co || !co.id) return;
-                            var item = $('<div class="selector" style="display:flex;align-items:center;gap:0.8em;padding:0.5em 0.8em;border-radius:0.5em;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);cursor:pointer;">' +
-                                '<span style="color:#ffffff;font-size:0.9em;">' + (co.name || '') + '</span>' +
-                                '</div>');
-                            item.on('hover:enter click', function() {
-                                var id = co.id;
-                                if (!id) return;
-                                Lampa.Modal.close();
-                                Lampa.Activity.push({
-                                    url: 'movie',
-                                    id: id,
-                                    title: co.name || '',
-                                    component: 'company',
-                                    source: 'tmdb',
-                                    page: 1
-                                });
-                            });
-                            list.append(item);
-                        });
-                        
-                        Lampa.Modal.open({
-                            title: 'Студии',
-                            html: list,
-                            size: 'medium',
-                            scroll_to_center: true,
-                            onBack: function() {
-                                Lampa.Modal.close();
-                            }
-                        });
-                    });
-                    
-                    studiosContainer.append(studiosBtn);
-                    studiosContainer.addClass('show');
-                } else {
-                    studiosContainer.hide();
-                }
-            } else {
-                // Обычный режим (show) - показываем до 3 студий
-                if (studiosContainer.length) {
-                    var companies = (movie && movie.production_companies && movie.production_companies.length) ?
-                        movie.production_companies.slice(0, 3) : [];
-
-                    if (companies.length) {
-                        studiosContainer.empty().show();
-                        companies.forEach(function(co) {
-                            if (!co || !co.id) return;
-                            var node = $('<div class="applecation__studio selector" data-id="' + co.id + '" data-name="' + (co.name || '') + '"></div>');
-
-                            if (co.logo_path) {
-                                var imgUrl = Lampa.Api.img(co.logo_path, 'h100');
-                                node.append('<img src="' + imgUrl + '" title="' + (co.name || '') + '" />');
-                            } else {
-                                node.append('<span class="applecation__studio-name">' + (co.name || '') + '</span>');
-                            }
-
-                            node.on('hover:enter click', function() {
-                                var id = $(this).data('id');
-                                if (!id) return;
-                                Lampa.Activity.push({
-                                    url: 'movie',
-                                    id: id,
-                                    title: $(this).data('name') || '',
-                                    component: 'company',
-                                    source: 'tmdb',
-                                    page: 1
-                                });
-                            });
-
-                            studiosContainer.append(node);
-                        });
-                        studiosContainer.addClass('show');
-                    } else {
-                        studiosContainer.hide();
-                    }
-                }
-            }
-
-            // 3. Рейтинги
+            // 2. РЕЙТИНГИ
             var ratingsContainer = contentGroup.find('.applecation__ratings');
             if (ratingsContainer.length) {
                 ratingsContainer.empty();
@@ -1663,7 +1680,7 @@
                 }
             }
 
-            // 4. Реакции Lampa
+            // 3. РЕАКЦИИ
             var reactionsContainer = contentGroup.find('.applecation__reactions');
             if (reactionsContainer.length) {
                 reactionsContainer.empty();
@@ -1707,7 +1724,7 @@
                 }
             }
 
-            // 5. Описание
+            // 4. ОПИСАНИЕ
             var descWrapper = contentGroup.find('.applecation__description-wrapper');
             var description = contentGroup.find('.applecation__description');
             if (descWrapper.length && description.length) {
@@ -1732,7 +1749,7 @@
                 descWrapper.addClass('show');
             }
 
-            // 6. Информация о сезонах и статусе + бейджи качества
+            // 5. ИНФОРМАЦИЯ О СЕЗОНАХ
             var info = contentGroup.find('.applecation__info');
             if (info.length) {
                 var infoText = info.find('.applecation__info-text');
@@ -1808,7 +1825,7 @@
                     infoText.html(infoParts.join(' '));
                 }
 
-                // Бейджи качества - в info (с возможностью отключения в реальном времени)
+                // БЕЙДЖИ КАЧЕСТВА - с возможностью отключения в реальном времени
                 var showQualityBadges = Lampa.Storage.get('applecation_show_quality_badges', true);
                 var badgesContainer = info.find('.applecation__quality-badges');
                 
@@ -1833,10 +1850,13 @@
                 info.addClass('show');
             }
 
-            // 8. Длительность серии
+            // 6. СТУДИИ - кнопка в ряду с кнопками
+            renderStudiosBtn(render, movie);
+
+            // 7. Длительность серии
             addEpisodeRuntime(render, movie);
 
-            // 9. Обработка эпизодов
+            // 8. Обработка эпизодов
             if (isTv) {
                 var episodesData = getEpisodesData(movie);
                 if (episodesData && episodesData.episodes && episodesData.episodes.length > 0) {
@@ -1858,7 +1878,7 @@
                 }
             }
 
-            // Обновляем масштаб в реальном времени
+            // Обновляем масштаб
             updateContentScale(render);
 
         } catch (e) {
@@ -2390,13 +2410,6 @@
             .applecation__meta { display: flex !important; flex-wrap: wrap !important; gap: 0.5em !important; margin-bottom: 0.7em !important; padding: 0.3em 0 !important; font-size: 1.0em !important; line-height: 1.4 !important; opacity: 0 !important; transform: translateY(15px) !important; transition: opacity 0.4s ease-out, transform 0.4s ease-out !important; }
             .applecation__meta.show { opacity: 1 !important; transform: translateY(0) !important; }
             .applecation__meta-item { color: #ffffff !important; display: inline-block !important; }
-            .applecation__studios { display: flex !important; align-items: center !important; flex-wrap: wrap !important; gap: 0.7em !important; margin: 0 0 0.5em 0 !important; opacity: 0 !important; transform: translateY(15px) !important; transition: opacity 0.4s ease-out, transform 0.4s ease-out !important; }
-            .applecation__studios.show { opacity: 1 !important; transform: translateY(0) !important; }
-            .applecation__studio { display: inline-flex !important; align-items: center !important; gap: 0.4em !important; background: rgba(255,255,255,0.08) !important; border: 1px solid rgba(255,255,255,0.1) !important; border-radius: 0.6em !important; padding: 0.25em 0.6em !important; transition: all 0.2s ease !important; cursor: pointer !important; }
-            .applecation__studio.focus { background: rgba(255,255,255,0.2) !important; border-color: #fff !important; transform: scale(1.05) !important; }
-            .applecation__studio img { height: 1.3em !important; max-width: 120px !important; width: auto !important; object-fit: contain !important; filter: brightness(0) invert(1) !important; }
-            .applecation__studio-btn { color: #ffffff !important; }
-            .applecation__studio-btn.focus { background: rgba(255,255,255,0.2) !important; border-color: #fff !important; transform: scale(1.05) !important; }
             .applecation__ratings { display: flex !important; align-items: center !important; flex-wrap: wrap !important; gap: 0.5em !important; margin-bottom: 0.5em !important; opacity: 0 !important; transform: translateY(15px) !important; transition: opacity 0.4s ease-out, transform 0.4s ease-out !important; }
             .applecation__ratings.show { opacity: 1 !important; transform: translateY(0) !important; }
             .applecation__rating-item { display: flex !important; align-items: center !important; gap: 0.35em !important; padding: 0.2em 0.6em !important; border-radius: 0.4em !important; background: rgba(0,0,0,0.5) !important; border: 1.5px solid rgba(255,255,255,0.15) !important; font-size: 0.8em !important; font-weight: 600 !important; color: #ffffff !important; line-height: 1 !important; }
@@ -2470,6 +2483,15 @@
             
             .full-start-new__tagline, .full-start__tagline, .tagline, [class*="tagline"] {
                 display: none !important;
+            }
+            
+            .button--studios, .button--studio {
+                cursor: pointer !important;
+            }
+            .button--studios.focus, .button--studio.focus {
+                background: rgba(255,255,255,0.18) !important;
+                border-color: rgba(255,255,255,0.3) !important;
+                transform: scale(1.05) !important;
             }
             
             @media screen and (max-width: 720px) { 
@@ -2836,13 +2858,7 @@
                     if (render) {
                         var movie = render.data('movie');
                         if (movie) {
-                            getRatings(movie, function(ratings) {
-                                getLampaRating(movie, function(lampaData) {
-                                    getBestJacred(movie, function(qualityData) {
-                                        fillContent(render, movie, ratings, lampaData, qualityData);
-                                    });
-                                });
-                            });
+                            fillContent(render, movie, null, null, null);
                         }
                     }
                 }
