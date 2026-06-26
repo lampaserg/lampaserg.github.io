@@ -1,5 +1,5 @@
 // @name Тема от SERG
-// @version 4.0
+// @version 4.1
 // @author SERG
 // @description Расширенная карточка фильма/сериала с полными метаданными
 // @lampa-check Lampa.
@@ -11,7 +11,7 @@
     // CONFIGURATION
     // =================================================================
 
-    var PLUGIN_VERSION = '4.0';
+    var PLUGIN_VERSION = '4.1';
     var CACHE_TTL = 24 * 60 * 60 * 1000;
     var PROXY_TIMEOUT = 15000;
     var LAMPA_RATING_API = 'https://cubnotrip.top/api/reactions/get/';
@@ -1149,24 +1149,7 @@
                 left.append(contentWrapper);
             }
 
-            // Позиция контента
-            if (contentPosition === 'center') {
-                left.css('display', 'flex');
-                left.css('justify-content', 'center');
-                left.css('align-items', 'flex-end');
-            } else if (contentPosition === 'right') {
-                left.css('display', 'flex');
-                left.css('justify-content', 'flex-end');
-                left.css('align-items', 'flex-end');
-            } else {
-                left.css('display', 'block');
-                left.css('justify-content', '');
-                left.css('align-items', '');
-            }
-
-            // Ширина блока 50%
-            contentWrapper.css('max-width', '50vw');
-
+            // Позиция контента относительно фона
             var contentGroup = $('<div class="applecation__content-group"></div>');
             contentWrapper.wrapInner(contentGroup);
             contentGroup = contentWrapper.find('.applecation__content-group');
@@ -1174,19 +1157,40 @@
             contentWrapper.css('position', 'relative');
             contentWrapper.css('z-index', '10');
 
+            // Применяем позицию контента
+            if (contentPosition === 'center') {
+                contentWrapper.css('margin-left', 'auto');
+                contentWrapper.css('margin-right', 'auto');
+            } else if (contentPosition === 'right') {
+                contentWrapper.css('margin-left', 'auto');
+                contentWrapper.css('margin-right', '0');
+            } else {
+                contentWrapper.css('margin-left', '0');
+                contentWrapper.css('margin-right', 'auto');
+            }
+
             var scaleValue = scalePercent / 100;
             
-            // Масштабируем группу контента
-            contentGroup.css('transform', 'scale(' + scaleValue + ')');
-            contentGroup.css('transform-origin', 'left bottom');
-            contentGroup.css('transition', 'transform 0.3s ease');
+            // Масштабируем ВСЁ: контент, фон и логотип
+            var wrapper = $('<div class="applecation__wrapper"></div>');
+            contentWrapper.wrap(wrapper);
+            wrapper = contentWrapper.parent('.applecation__wrapper');
+            
+            wrapper.css({
+                'transform': 'scale(' + scaleValue + ')',
+                'transform-origin': 'left bottom',
+                'transition': 'transform 0.3s ease',
+                'width': '100%'
+            });
             
             // Сдвиг лого вместе с контентом
             var logoOffset = (scaleValue - 1) * 100;
-            logoWrapper.css('transform', 'translateY(-' + (logoOffset * 0.5) + 'px)');
-            logoWrapper.css('transition', 'transform 0.3s ease');
+            logoWrapper.css({
+                'transform': 'translateY(-' + (logoOffset * 0.5) + 'px)',
+                'transition': 'transform 0.3s ease'
+            });
 
-            // Фон контента - масштабируется вместе с контентом
+            // Фон контента масштабируется вместе с wrapper
             if (!bgEnabled) {
                 contentWrapper.css('background', 'transparent');
                 contentWrapper.css('backdrop-filter', 'none');
@@ -1271,31 +1275,59 @@
     }
 
     // =================================================================
-    // ОБНОВЛЕНИЕ МАСШТАБА
+    // ОБНОВЛЕНИЕ МАСШТАБА В РЕАЛЬНОМ ВРЕМЕНИ
     // =================================================================
 
     function updateContentScale(render) {
         try {
-            var contentWrapper = render.find('.applecation__content-wrapper');
-            if (!contentWrapper.length) return;
-
-            var contentGroup = contentWrapper.find('.applecation__content-group');
-            if (!contentGroup.length) return;
+            var wrapper = render.find('.applecation__wrapper');
+            if (!wrapper.length) {
+                // Если wrapper нет, создаем его
+                var contentWrapper = render.find('.applecation__content-wrapper');
+                if (!contentWrapper.length) return;
+                
+                wrapper = $('<div class="applecation__wrapper"></div>');
+                contentWrapper.wrap(wrapper);
+                wrapper = contentWrapper.parent('.applecation__wrapper');
+            }
 
             var scalePercent = parseFloat(Lampa.Storage.get('applecation_content_scale', '100'));
             var scaleValue = scalePercent / 100;
             
-            contentGroup.css('transform', 'scale(' + scaleValue + ')');
-            contentGroup.css('transform-origin', 'left bottom');
-            contentGroup.css('transition', 'transform 0.3s ease');
+            // Масштабируем ВСЁ
+            wrapper.css({
+                'transform': 'scale(' + scaleValue + ')',
+                'transform-origin': 'left bottom',
+                'transition': 'transform 0.3s ease'
+            });
             
+            // Сдвиг лого вместе с контентом
             var logoWrapper = render.find('.applecation__logo-wrapper');
             if (logoWrapper.length) {
                 var logoOffset = (scaleValue - 1) * 100;
-                logoWrapper.css('transform', 'translateY(-' + (logoOffset * 0.5) + 'px)');
-                logoWrapper.css('transition', 'transform 0.3s ease');
+                logoWrapper.css({
+                    'transform': 'translateY(-' + (logoOffset * 0.5) + 'px)',
+                    'transition': 'transform 0.3s ease'
+                });
             }
 
+            // Обновляем позицию контента
+            var contentPosition = Lampa.Storage.get('applecation_content_position', 'left');
+            var contentWrapper = render.find('.applecation__content-wrapper');
+            if (contentWrapper.length) {
+                if (contentPosition === 'center') {
+                    contentWrapper.css('margin-left', 'auto');
+                    contentWrapper.css('margin-right', 'auto');
+                } else if (contentPosition === 'right') {
+                    contentWrapper.css('margin-left', 'auto');
+                    contentWrapper.css('margin-right', '0');
+                } else {
+                    contentWrapper.css('margin-left', '0');
+                    contentWrapper.css('margin-right', 'auto');
+                }
+            }
+
+            // Обновляем фон
             var bgEnabled = Lampa.Storage.get('applecation_content_bg', true);
             if (!bgEnabled) {
                 contentWrapper.css('background', 'transparent');
@@ -1411,28 +1443,26 @@
                 meta.addClass('show');
             }
 
-            // 2. Студии - режим отображения
+            // 2. Студии
             var studiosMode = Lampa.Storage.get('applecation_studios_mode', 'show');
             var studiosContainer = contentGroup.find('.applecation__studios');
             
             if (studiosMode === 'hide') {
                 studiosContainer.hide();
             } else if (studiosMode === 'button') {
-                // Режим кнопки "Студии" - показываем все студии в отдельном окне
+                // Режим кнопки "Студии"
                 var companies = (movie && movie.production_companies && movie.production_companies.length) ?
                     movie.production_companies : [];
                 
                 if (companies.length) {
                     studiosContainer.empty().show();
                     
-                    // Создаем кнопку "Студии"
                     var studiosBtn = $('<div class="applecation__studio-btn selector" style="display:inline-flex; align-items:center; gap:0.4em; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.1); border-radius:0.6em; padding:0.25em 0.6em; cursor:pointer;">' +
                         '<span style="color:#ffffff;">🎬 Студии</span>' +
                         '<span style="color:rgba(255,255,255,0.5); font-size:0.7em;">(' + companies.length + ')</span>' +
                         '</div>');
                     
                     studiosBtn.on('hover:enter click', function() {
-                        // Показываем все студии в модальном окне
                         var list = $('<div style="display:flex;flex-direction:column;gap:0.5em;padding:0.5em;"></div>');
                         companies.forEach(function(co) {
                             if (!co || !co.id) return;
@@ -1778,7 +1808,7 @@
                     infoText.html(infoParts.join(' '));
                 }
 
-                // Бейджи качества - в info (с возможностью отключения)
+                // Бейджи качества - в info (с возможностью отключения в реальном времени)
                 var showQualityBadges = Lampa.Storage.get('applecation_show_quality_badges', true);
                 var badgesContainer = info.find('.applecation__quality-badges');
                 
@@ -1828,6 +1858,7 @@
                 }
             }
 
+            // Обновляем масштаб в реальном времени
             updateContentScale(render);
 
         } catch (e) {
@@ -2351,6 +2382,7 @@
             .applecation .full-start-new__left { display: none !important; }
             .applecation .applecation__left { flex: 1 !important; width: 100% !important; position: relative !important; }
             .applecation .applecation__content-wrapper { font-size: 100% !important; max-width: 50vw !important; padding: 1.5em !important; border-radius: 1em !important; position: relative !important; z-index: 10 !important; }
+            .applecation__wrapper { transform-origin: left bottom; transition: transform 0.3s ease; width: 100%; }
             .applecation__logo-wrapper { margin-bottom: 0.5em !important; opacity: 0 !important; transform: translateY(20px) !important; transition: opacity 0.4s ease-out, transform 0.4s ease-out !important; }
             .applecation__logo-wrapper.loaded { opacity: 1 !important; transform: translateY(0) !important; }
             .applecation__logo { display: block !important; max-width: 30vw !important; max-height: 150px !important; width: auto !important; height: auto !important; object-fit: contain !important; object-position: left center !important; filter: drop-shadow(0 2px 10px rgba(0,0,0,0.5)) !important; }
@@ -2760,16 +2792,7 @@
                 onChange: function(value) {
                     var render = getActiveFullRender();
                     if (render) {
-                        var movie = render.data('movie');
-                        if (movie) {
-                            getRatings(movie, function(ratings) {
-                                getLampaRating(movie, function(lampaData) {
-                                    getBestJacred(movie, function(qualityData) {
-                                        fillContent(render, movie, ratings, lampaData, qualityData);
-                                    });
-                                });
-                            });
-                        }
+                        updateContentScale(render);
                     }
                 }
             });
