@@ -1,7 +1,7 @@
-// @name AppleTV+
-// @version 3.9.12
-// @author Your Name
-// @description Расширенная карточка фильма в стиле Apple TV+ с полными метаданными
+// @name Тема от SERG
+// @version 4.0
+// @author SERG
+// @description Расширенная карточка фильма/сериала с полными метаданными
 // @lampa-check Lampa.
 
 (function() {
@@ -11,7 +11,7 @@
     // CONFIGURATION
     // =================================================================
 
-    var PLUGIN_VERSION = '3.9.12';
+    var PLUGIN_VERSION = '4.0';
     var CACHE_TTL = 24 * 60 * 60 * 1000;
     var PROXY_TIMEOUT = 15000;
     var LAMPA_RATING_API = 'https://cubnotrip.top/api/reactions/get/';
@@ -56,7 +56,10 @@
         applecation_content_scale: '100',
         applecation_description_overlay: true,
         applecation_rating_icons: false,
-        applecation_ratings_position: 'left'
+        applecation_ratings_position: 'left',
+        applecation_content_position: 'left',
+        applecation_show_quality_badges: true,
+        applecation_studios_mode: 'show'
     };
 
     function resetToDefaultSettings() {
@@ -66,7 +69,7 @@
                     Lampa.Storage.set(key, DEFAULT_SETTINGS[key]);
                 }
             }
-            Lampa.Noty.show('Настройки AppleTV+ сброшены до заводских');
+            Lampa.Noty.show('Настройки темы сброшены до заводских');
             
             setTimeout(function() {
                 try {
@@ -86,7 +89,7 @@
                 }
             }, 500);
         } catch (e) {
-            console.error('[AppleTV+] resetToDefaultSettings error:', e);
+            console.error('[Тема от SERG] Ошибка сброса настроек:', e);
             Lampa.Noty.show('Ошибка сброса настроек');
         }
     }
@@ -213,8 +216,8 @@
                 } catch (e) {}
             }
 
-            console.log('[AppleTV+] All cache cleared');
-            Lampa.Noty.show('Кэш AppleTV+ очищен');
+            console.log('[Тема от SERG] Весь кэш очищен');
+            Lampa.Noty.show('Кэш темы очищен');
 
             setTimeout(function() {
                 try {
@@ -235,7 +238,7 @@
             }, 500);
 
         } catch (e) {
-            console.error('[AppleTV+] clearAllCache error:', e);
+            console.error('[Тема от SERG] Ошибка очистки кэша:', e);
             Lampa.Noty.show('Ошибка очистки кэша');
         }
     }
@@ -313,7 +316,7 @@
             return pg;
             
         } catch (e) {
-            console.warn('[AppleTV+] Error parsing PG:', e);
+            console.warn('[Тема от SERG] Ошибка парсинга PG:', e);
             return null;
         }
     }
@@ -392,7 +395,7 @@
             }, false, { timeout: PROXY_TIMEOUT });
 
         } catch (e) {
-            console.error('[AppleTV+] getLampaRating error:', e);
+            console.error('[Тема от SERG] Ошибка получения рейтинга Lampa:', e);
             callback(null);
         }
     }
@@ -462,7 +465,7 @@
 
         function tryProxy(index) {
             if (index >= proxyList.length) {
-                callback(new Error('No proxy worked'));
+                callback(new Error('Ни один прокси не сработал'));
                 return;
             }
             var p = proxyList[index];
@@ -533,7 +536,7 @@
                 return;
             }
 
-            console.log('[AppleTV+] Jacred v2: Fetching quality for:', title, year);
+            console.log('[Тема от SERG] Jacred v2: Получение качества для:', title, year);
 
             fetchWithProxy(requestUrl, function(err, data) {
                 if (err || !data) {
@@ -667,17 +670,17 @@
                     _jacredCache[cacheKey] = best;
                     saveToStorage('jacred_cache', { [cacheKey]: best });
                     
-                    console.log('[AppleTV+] Jacred result:', best);
+                    console.log('[Тема от SERG] Результат Jacred:', best);
                     callback(best);
 
                 } catch (e) {
-                    console.error('[AppleTV+] Jacred parse error:', e);
+                    console.error('[Тема от SERG] Ошибка парсинга Jacred:', e);
                     callback(null);
                 }
             });
 
         } catch (e) {
-            console.error('[AppleTV+] getBestJacred error:', e);
+            console.error('[Тема от SERG] Ошибка getBestJacred:', e);
             callback(null);
         }
     }
@@ -761,7 +764,7 @@
             }
 
         } catch (e) {
-            console.error('[AppleTV+] getRatings error:', e);
+            console.error('[Тема от SERG] Ошибка получения рейтингов:', e);
             callback({ tmdb: 0, imdb: 0, kinopoisk: 0 });
         }
     }
@@ -807,7 +810,7 @@
             }
 
         } catch (e) {
-            console.error('[AppleTV+] getKinopoiskRating error:', e);
+            console.error('[Тема от SERG] Ошибка получения рейтинга Кинопоиска:', e);
             callback(0);
         }
     }
@@ -898,7 +901,7 @@
             }, false, { headers: { 'X-API-KEY': kpApiKey } });
 
         } catch (e) {
-            console.error('[AppleTV+] searchKinopoiskByTitle error:', e);
+            console.error('[Тема от SERG] Ошибка поиска на Кинопоиске:', e);
             callback(0);
         }
     }
@@ -967,7 +970,7 @@
                 callback(null);
             });
         } catch (e) {
-            console.error('[AppleTV+] fetchLogo error:', e);
+            console.error('[Тема от SERG] Ошибка получения логотипа:', e);
             callback(null);
         }
     }
@@ -1022,9 +1025,9 @@
                 return originalImg.call(source, path, size);
             };
 
-            console.log('[AppleTV+] Image API overridden with quality setting:', getImageQuality());
+            console.log('[Тема от SERG] API изображений переопределен с качеством:', getImageQuality());
         } catch (e) {
-            console.error('[AppleTV+] overrideImageApi error:', e);
+            console.error('[Тема от SERG] Ошибка переопределения API изображений:', e);
         }
     }
 
@@ -1039,7 +1042,7 @@
             if (e.data && e.data.episodes) {
                 var key = e.object.method + '_' + e.object.id;
                 _episodesData[key] = e.data.episodes;
-                console.log('[AppleTV+] Captured episodes data for:', key, e.data.episodes.episodes ? e.data.episodes.episodes.length : 0);
+                console.log('[Тема от SERG] Захвачены данные эпизодов для:', key, e.data.episodes.episodes ? e.data.episodes.episodes.length : 0);
                 return true;
             }
             
@@ -1055,14 +1058,14 @@
                 }
                 if (allEpisodes.length > 0) {
                     _episodesData[key] = { episodes: allEpisodes };
-                    console.log('[AppleTV+] Captured episodes from seasons for:', key, allEpisodes.length);
+                    console.log('[Тема от SERG] Захвачены эпизоды из сезонов для:', key, allEpisodes.length);
                     return true;
                 }
             }
             
             return false;
         } catch (e) {
-            console.warn('[AppleTV+] captureEpisodesFromFull error:', e);
+            console.warn('[Тема от SERG] Ошибка захвата эпизодов:', e);
             return false;
         }
     }
@@ -1104,7 +1107,7 @@
             firstButton.addClass('focus');
 
         } catch (e) {
-            console.warn('[AppleTV+] focusFirstButton error:', e);
+            console.warn('[Тема от SERG] Ошибка фокуса первой кнопки:', e);
         }
     }
 
@@ -1123,6 +1126,7 @@
 
             var bgEnabled = Lampa.Storage.get('applecation_content_bg', true);
             var scalePercent = parseFloat(Lampa.Storage.get('applecation_content_scale', '100'));
+            var contentPosition = Lampa.Storage.get('applecation_content_position', 'left');
 
             var right = render.find('.full-start-new__right');
             if (!right.length) return;
@@ -1145,6 +1149,24 @@
                 left.append(contentWrapper);
             }
 
+            // Позиция контента
+            if (contentPosition === 'center') {
+                left.css('display', 'flex');
+                left.css('justify-content', 'center');
+                left.css('align-items', 'flex-end');
+            } else if (contentPosition === 'right') {
+                left.css('display', 'flex');
+                left.css('justify-content', 'flex-end');
+                left.css('align-items', 'flex-end');
+            } else {
+                left.css('display', 'block');
+                left.css('justify-content', '');
+                left.css('align-items', '');
+            }
+
+            // Ширина блока 50%
+            contentWrapper.css('max-width', '50vw');
+
             var contentGroup = $('<div class="applecation__content-group"></div>');
             contentWrapper.wrapInner(contentGroup);
             contentGroup = contentWrapper.find('.applecation__content-group');
@@ -1154,6 +1176,7 @@
 
             var scaleValue = scalePercent / 100;
             
+            // Масштабируем группу контента
             contentGroup.css('transform', 'scale(' + scaleValue + ')');
             contentGroup.css('transform-origin', 'left bottom');
             contentGroup.css('transition', 'transform 0.3s ease');
@@ -1163,7 +1186,7 @@
             logoWrapper.css('transform', 'translateY(-' + (logoOffset * 0.5) + 'px)');
             logoWrapper.css('transition', 'transform 0.3s ease');
 
-            // Фон контента
+            // Фон контента - масштабируется вместе с контентом
             if (!bgEnabled) {
                 contentWrapper.css('background', 'transparent');
                 contentWrapper.css('backdrop-filter', 'none');
@@ -1243,7 +1266,7 @@
             }
             
         } catch (e) {
-            console.error('[AppleTV+] modifyCardDOM error:', e);
+            console.error('[Тема от SERG] Ошибка модификации DOM:', e);
         }
     }
 
@@ -1291,7 +1314,7 @@
             }
             
         } catch (e) {
-            console.warn('[AppleTV+] updateContentScale error:', e);
+            console.warn('[Тема от SERG] Ошибка обновления масштаба:', e);
         }
     }
 
@@ -1388,43 +1411,104 @@
                 meta.addClass('show');
             }
 
-            // 2. Студии
+            // 2. Студии - режим отображения
+            var studiosMode = Lampa.Storage.get('applecation_studios_mode', 'show');
             var studiosContainer = contentGroup.find('.applecation__studios');
-            if (studiosContainer.length) {
+            
+            if (studiosMode === 'hide') {
+                studiosContainer.hide();
+            } else if (studiosMode === 'button') {
+                // Режим кнопки "Студии" - показываем все студии в отдельном окне
                 var companies = (movie && movie.production_companies && movie.production_companies.length) ?
-                    movie.production_companies.slice(0, 3) : [];
-
+                    movie.production_companies : [];
+                
                 if (companies.length) {
                     studiosContainer.empty().show();
-                    companies.forEach(function(co) {
-                        if (!co || !co.id) return;
-                        var node = $('<div class="applecation__studio selector" data-id="' + co.id + '" data-name="' + (co.name || '') + '"></div>');
-
-                        if (co.logo_path) {
-                            var imgUrl = Lampa.Api.img(co.logo_path, 'h100');
-                            node.append('<img src="' + imgUrl + '" title="' + (co.name || '') + '" />');
-                        } else {
-                            node.append('<span class="applecation__studio-name">' + (co.name || '') + '</span>');
-                        }
-
-                        node.on('hover:enter click', function() {
-                            var id = $(this).data('id');
-                            if (!id) return;
-                            Lampa.Activity.push({
-                                url: 'movie',
-                                id: id,
-                                title: $(this).data('name') || '',
-                                component: 'company',
-                                source: 'tmdb',
-                                page: 1
+                    
+                    // Создаем кнопку "Студии"
+                    var studiosBtn = $('<div class="applecation__studio-btn selector" style="display:inline-flex; align-items:center; gap:0.4em; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.1); border-radius:0.6em; padding:0.25em 0.6em; cursor:pointer;">' +
+                        '<span style="color:#ffffff;">🎬 Студии</span>' +
+                        '<span style="color:rgba(255,255,255,0.5); font-size:0.7em;">(' + companies.length + ')</span>' +
+                        '</div>');
+                    
+                    studiosBtn.on('hover:enter click', function() {
+                        // Показываем все студии в модальном окне
+                        var list = $('<div style="display:flex;flex-direction:column;gap:0.5em;padding:0.5em;"></div>');
+                        companies.forEach(function(co) {
+                            if (!co || !co.id) return;
+                            var item = $('<div class="selector" style="display:flex;align-items:center;gap:0.8em;padding:0.5em 0.8em;border-radius:0.5em;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);cursor:pointer;">' +
+                                '<span style="color:#ffffff;font-size:0.9em;">' + (co.name || '') + '</span>' +
+                                '</div>');
+                            item.on('hover:enter click', function() {
+                                var id = co.id;
+                                if (!id) return;
+                                Lampa.Modal.close();
+                                Lampa.Activity.push({
+                                    url: 'movie',
+                                    id: id,
+                                    title: co.name || '',
+                                    component: 'company',
+                                    source: 'tmdb',
+                                    page: 1
+                                });
                             });
+                            list.append(item);
                         });
-
-                        studiosContainer.append(node);
+                        
+                        Lampa.Modal.open({
+                            title: 'Студии',
+                            html: list,
+                            size: 'medium',
+                            scroll_to_center: true,
+                            onBack: function() {
+                                Lampa.Modal.close();
+                            }
+                        });
                     });
+                    
+                    studiosContainer.append(studiosBtn);
                     studiosContainer.addClass('show');
                 } else {
                     studiosContainer.hide();
+                }
+            } else {
+                // Обычный режим (show) - показываем до 3 студий
+                if (studiosContainer.length) {
+                    var companies = (movie && movie.production_companies && movie.production_companies.length) ?
+                        movie.production_companies.slice(0, 3) : [];
+
+                    if (companies.length) {
+                        studiosContainer.empty().show();
+                        companies.forEach(function(co) {
+                            if (!co || !co.id) return;
+                            var node = $('<div class="applecation__studio selector" data-id="' + co.id + '" data-name="' + (co.name || '') + '"></div>');
+
+                            if (co.logo_path) {
+                                var imgUrl = Lampa.Api.img(co.logo_path, 'h100');
+                                node.append('<img src="' + imgUrl + '" title="' + (co.name || '') + '" />');
+                            } else {
+                                node.append('<span class="applecation__studio-name">' + (co.name || '') + '</span>');
+                            }
+
+                            node.on('hover:enter click', function() {
+                                var id = $(this).data('id');
+                                if (!id) return;
+                                Lampa.Activity.push({
+                                    url: 'movie',
+                                    id: id,
+                                    title: $(this).data('name') || '',
+                                    component: 'company',
+                                    source: 'tmdb',
+                                    page: 1
+                                });
+                            });
+
+                            studiosContainer.append(node);
+                        });
+                        studiosContainer.addClass('show');
+                    } else {
+                        studiosContainer.hide();
+                    }
                 }
             }
 
@@ -1433,7 +1517,6 @@
             if (ratingsContainer.length) {
                 ratingsContainer.empty();
                 
-                // Применяем позицию
                 if (ratingsPosition === 'center') {
                     ratingsContainer.css('justify-content', 'center');
                 } else {
@@ -1555,7 +1638,6 @@
             if (reactionsContainer.length) {
                 reactionsContainer.empty();
                 
-                // Применяем позицию
                 if (ratingsPosition === 'center') {
                     reactionsContainer.css('justify-content', 'center');
                 } else {
@@ -1696,15 +1778,23 @@
                     infoText.html(infoParts.join(' '));
                 }
 
-                // Бейджи качества - в info
+                // Бейджи качества - в info (с возможностью отключения)
+                var showQualityBadges = Lampa.Storage.get('applecation_show_quality_badges', true);
                 var badgesContainer = info.find('.applecation__quality-badges');
-                if (badgesContainer.length) {
+                
+                if (!showQualityBadges) {
+                    badgesContainer.hide();
+                } else if (badgesContainer.length) {
                     if (qualityData && !qualityData.empty) {
                         renderBadges(badgesContainer, qualityData);
+                        badgesContainer.show();
                     } else {
                         getBestJacred(movie, function(data) {
                             if (data && !data.empty && data.resolution) {
                                 renderBadges(badgesContainer, data);
+                                badgesContainer.show();
+                            } else {
+                                badgesContainer.hide();
                             }
                         });
                     }
@@ -1720,10 +1810,10 @@
             if (isTv) {
                 var episodesData = getEpisodesData(movie);
                 if (episodesData && episodesData.episodes && episodesData.episodes.length > 0) {
-                    console.log('[AppleTV+] Processing episodes from captured data:', episodesData.episodes.length);
+                    console.log('[Тема от SERG] Обработка эпизодов из захваченных данных:', episodesData.episodes.length);
                     processEpisodesWithData(render, episodesData);
                 } else {
-                    console.log('[AppleTV+] No episodes data found, trying fallback');
+                    console.log('[Тема от SERG] Данных эпизодов нет, попытка fallback');
                     if (movie.seasons && Array.isArray(movie.seasons)) {
                         var allEpisodes = [];
                         movie.seasons.forEach(function(season) {
@@ -1741,7 +1831,7 @@
             updateContentScale(render);
 
         } catch (e) {
-            console.error('[AppleTV+] fillContent error:', e);
+            console.error('[Тема от SERG] Ошибка заполнения контента:', e);
         }
     }
 
@@ -1770,7 +1860,7 @@
             fetchAverageRuntime(imdbId, render);
             
         } catch (e) {
-            console.warn('[AppleTV+] addEpisodeRuntime error:', e);
+            console.warn('[Тема от SERG] Ошибка добавления длительности серии:', e);
         }
     }
 
@@ -1801,7 +1891,7 @@
             }, function() {});
             
         } catch (e) {
-            console.warn('[AppleTV+] fetchAverageRuntime error:', e);
+            console.warn('[Тема от SERG] Ошибка получения длительности серии:', e);
         }
     }
 
@@ -1812,17 +1902,17 @@
     function processEpisodesWithData(render, episodesData) {
         try {
             if (!episodesData || !episodesData.episodes || !episodesData.episodes.length) {
-                console.log('[AppleTV+] No episodes data to process');
+                console.log('[Тема от SERG] Нет данных эпизодов для обработки');
                 return;
             }
 
             var episodes = render.find('.full-episode');
             if (!episodes.length) {
-                console.log('[AppleTV+] No episode elements found');
+                console.log('[Тема от SERG] Элементы эпизодов не найдены');
                 return;
             }
 
-            console.log('[AppleTV+] Processing ' + episodes.length + ' episode elements with ' + episodesData.episodes.length + ' episodes data');
+            console.log('[Тема от SERG] Обработка ' + episodes.length + ' эпизодов с ' + episodesData.episodes.length + ' данными');
 
             var episodesMap = {};
             episodesData.episodes.forEach(function(ep) {
@@ -1949,7 +2039,7 @@
             });
 
         } catch (e) {
-            console.error('[AppleTV+] processEpisodesWithData error:', e);
+            console.error('[Тема от SERG] Ошибка обработки эпизодов:', e);
         }
     }
 
@@ -2010,14 +2100,14 @@
             if (hasBadges) {
                 container.addClass('show');
                 container.css('display', 'flex');
-                console.log('[AppleTV+] Badges rendered:', qualityData);
+                console.log('[Тема от SERG] Бейджи отрисованы:', qualityData);
             } else {
                 container.removeClass('show');
                 container.css('display', 'none');
             }
 
         } catch (e) {
-            console.error('[AppleTV+] renderBadges error:', e);
+            console.error('[Тема от SERG] Ошибка отрисовки бейджей:', e);
         }
     }
 
@@ -2076,7 +2166,7 @@
             Lampa.Controller.add('applecation_description', ctrl);
             Lampa.Controller.toggle('applecation_description');
         } catch (e) {
-            console.error('[AppleTV+] showDescriptionOverlay error:', e);
+            console.error('[Тема от SERG] Ошибка показа описания в оверлее:', e);
         }
     }
 
@@ -2135,7 +2225,7 @@
                 }
             });
         } catch (e) {
-            console.error('[AppleTV+] loadLogo error:', e);
+            console.error('[Тема от SERG] Ошибка загрузки логотипа:', e);
         }
     }
 
@@ -2185,7 +2275,7 @@
                 }
             }
         } catch (e) {
-            console.error('[AppleTV+] setupAnimations error:', e);
+            console.error('[Тема от SERG] Ошибка настройки анимаций:', e);
         }
     }
 
@@ -2242,7 +2332,7 @@
             });
 
         } catch (e) {
-            console.warn('[AppleTV+] setupPosterScrollHandler error:', e);
+            console.warn('[Тема от SERG] Ошибка обработчика скролла постера:', e);
         }
     }
 
@@ -2260,7 +2350,7 @@
             .applecation .full-start-new__right { display: flex !important; align-items: flex-end !important; padding: 0 2em 2em 2em !important; }
             .applecation .full-start-new__left { display: none !important; }
             .applecation .applecation__left { flex: 1 !important; width: 100% !important; position: relative !important; }
-            .applecation .applecation__content-wrapper { font-size: 100% !important; max-width: 45vw !important; padding: 1.5em !important; border-radius: 1em !important; position: relative !important; z-index: 10 !important; }
+            .applecation .applecation__content-wrapper { font-size: 100% !important; max-width: 50vw !important; padding: 1.5em !important; border-radius: 1em !important; position: relative !important; z-index: 10 !important; }
             .applecation__logo-wrapper { margin-bottom: 0.5em !important; opacity: 0 !important; transform: translateY(20px) !important; transition: opacity 0.4s ease-out, transform 0.4s ease-out !important; }
             .applecation__logo-wrapper.loaded { opacity: 1 !important; transform: translateY(0) !important; }
             .applecation__logo { display: block !important; max-width: 30vw !important; max-height: 150px !important; width: auto !important; height: auto !important; object-fit: contain !important; object-position: left center !important; filter: drop-shadow(0 2px 10px rgba(0,0,0,0.5)) !important; }
@@ -2273,6 +2363,8 @@
             .applecation__studio { display: inline-flex !important; align-items: center !important; gap: 0.4em !important; background: rgba(255,255,255,0.08) !important; border: 1px solid rgba(255,255,255,0.1) !important; border-radius: 0.6em !important; padding: 0.25em 0.6em !important; transition: all 0.2s ease !important; cursor: pointer !important; }
             .applecation__studio.focus { background: rgba(255,255,255,0.2) !important; border-color: #fff !important; transform: scale(1.05) !important; }
             .applecation__studio img { height: 1.3em !important; max-width: 120px !important; width: auto !important; object-fit: contain !important; filter: brightness(0) invert(1) !important; }
+            .applecation__studio-btn { color: #ffffff !important; }
+            .applecation__studio-btn.focus { background: rgba(255,255,255,0.2) !important; border-color: #fff !important; transform: scale(1.05) !important; }
             .applecation__ratings { display: flex !important; align-items: center !important; flex-wrap: wrap !important; gap: 0.5em !important; margin-bottom: 0.5em !important; opacity: 0 !important; transform: translateY(15px) !important; transition: opacity 0.4s ease-out, transform 0.4s ease-out !important; }
             .applecation__ratings.show { opacity: 1 !important; transform: translateY(0) !important; }
             .applecation__rating-item { display: flex !important; align-items: center !important; gap: 0.35em !important; padding: 0.2em 0.6em !important; border-radius: 0.4em !important; background: rgba(0,0,0,0.5) !important; border: 1.5px solid rgba(255,255,255,0.15) !important; font-size: 0.8em !important; font-weight: 600 !important; color: #ffffff !important; line-height: 1 !important; }
@@ -2368,9 +2460,9 @@
             `;
 
             $('head').append('<style id="applecation_plus_css">' + css + '</style>');
-            console.log('[AppleTV+] Styles injected');
+            console.log('[Тема от SERG] Стили внедрены');
         } catch (e) {
-            console.error('[AppleTV+] injectStyles error:', e);
+            console.error('[Тема от SERG] Ошибка внедрения стилей:', e);
         }
     }
 
@@ -2510,9 +2602,9 @@
             `;
 
             $('head').append('<style id="applecation_plus_extra_css">' + css + '</style>');
-            console.log('[AppleTV+] Extra styles injected');
+            console.log('[Тема от SERG] Дополнительные стили внедрены');
         } catch (e) {
-            console.error('[AppleTV+] injectAdditionalStyles error:', e);
+            console.error('[Тема от SERG] Ошибка внедрения дополнительных стилей:', e);
         }
     }
 
@@ -2526,7 +2618,7 @@
 
             Lampa.SettingsApi.addComponent({
                 component: 'applecation_plus',
-                name: 'AppleTV+',
+                name: 'Тема от SERG',
                 icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect x="8" y="8" width="48" height="48" rx="14" fill="none" stroke="currentColor" stroke-width="4"/><path d="M22 18l20 12-10 2 2 10-12-24z" fill="currentColor"/><path d="M44 20l6-6" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg>',
                 after: 'interface'
             });
@@ -2535,7 +2627,7 @@
             Lampa.SettingsApi.addParam({
                 component: 'applecation_plus',
                 param: { name: 'applecation_enabled', type: 'trigger', default: true },
-                field: { name: 'Включить AppleTV+', description: 'Полное отключение плагина (требуется перезагрузка страницы)' },
+                field: { name: 'Включить тему', description: 'Полное отключение темы (требуется перезагрузка страницы)' },
                 onChange: function(value) {
                     setTimeout(function() {
                         try {
@@ -2563,7 +2655,7 @@
                 param: { name: 'applecation_reset_settings', type: 'trigger', default: false },
                 field: { 
                     name: 'Сбросить настройки', 
-                    description: 'Восстановить все настройки плагина по умолчанию' 
+                    description: 'Восстановить все настройки темы по умолчанию' 
                 },
                 onChange: function(value) {
                     if (value === true || value === 'true' || value === 1 || value === '1') {
@@ -2653,6 +2745,86 @@
                 }
             });
 
+            // Позиция контента
+            Lampa.SettingsApi.addParam({
+                component: 'applecation_plus',
+                param: { name: 'applecation_content_position', type: 'select',
+                    values: {
+                        'left': 'Слева',
+                        'center': 'По центру',
+                        'right': 'Справа'
+                    },
+                    default: 'left'
+                },
+                field: { name: 'Позиция контента', description: 'Расположение блока с информацией' },
+                onChange: function(value) {
+                    var render = getActiveFullRender();
+                    if (render) {
+                        var movie = render.data('movie');
+                        if (movie) {
+                            getRatings(movie, function(ratings) {
+                                getLampaRating(movie, function(lampaData) {
+                                    getBestJacred(movie, function(qualityData) {
+                                        fillContent(render, movie, ratings, lampaData, qualityData);
+                                    });
+                                });
+                            });
+                        }
+                    }
+                }
+            });
+
+            // Бейджи качества
+            Lampa.SettingsApi.addParam({
+                component: 'applecation_plus',
+                param: { name: 'applecation_show_quality_badges', type: 'trigger', default: true },
+                field: { name: 'Бейджи качества', description: 'Показывать бейджи качества (4K, HDR, 7.1, DUB)' },
+                onChange: function(value) {
+                    var render = getActiveFullRender();
+                    if (render) {
+                        var movie = render.data('movie');
+                        if (movie) {
+                            getRatings(movie, function(ratings) {
+                                getLampaRating(movie, function(lampaData) {
+                                    getBestJacred(movie, function(qualityData) {
+                                        fillContent(render, movie, ratings, lampaData, qualityData);
+                                    });
+                                });
+                            });
+                        }
+                    }
+                }
+            });
+
+            // Студии
+            Lampa.SettingsApi.addParam({
+                component: 'applecation_plus',
+                param: { name: 'applecation_studios_mode', type: 'select',
+                    values: {
+                        'show': 'Показывать студии (до 3-х)',
+                        'button': 'Кнопка "Студии" (все студии)',
+                        'hide': 'Скрыть студии'
+                    },
+                    default: 'show'
+                },
+                field: { name: 'Отображение студий', description: 'Как показывать студии-производители' },
+                onChange: function(value) {
+                    var render = getActiveFullRender();
+                    if (render) {
+                        var movie = render.data('movie');
+                        if (movie) {
+                            getRatings(movie, function(ratings) {
+                                getLampaRating(movie, function(lampaData) {
+                                    getBestJacred(movie, function(qualityData) {
+                                        fillContent(render, movie, ratings, lampaData, qualityData);
+                                    });
+                                });
+                            });
+                        }
+                    }
+                }
+            });
+
             // Эффекты
             Lampa.SettingsApi.addParam({
                 component: 'applecation_plus',
@@ -2711,7 +2883,7 @@
                 component: 'applecation_plus',
                 param: { name: 'applecation_clear_cache', type: 'trigger', default: false },
                 field: { 
-                    name: 'Очистить кэш AppleTV+', 
+                    name: 'Очистить кэш темы', 
                     description: 'Очистить все кэшированные данные (рейтинги, качество, реакции) и перезагрузить страницу' 
                 },
                 onChange: function(value) {
@@ -2727,7 +2899,7 @@
             });
 
         } catch (e) {
-            console.error('[AppleTV+] addSettings error:', e);
+            console.error('[Тема от SERG] Ошибка добавления настроек:', e);
         }
     }
 
@@ -2753,11 +2925,11 @@
         // Проверяем включен ли плагин
         var enabled = Lampa.Storage.get('applecation_enabled', true);
         if (!enabled) {
-            console.log('[AppleTV+] Plugin disabled');
+            console.log('[Тема от SERG] Плагин отключен');
             return;
         }
 
-        console.log('[AppleTV+] Initializing v' + PLUGIN_VERSION);
+        console.log('[Тема от SERG] Инициализация v' + PLUGIN_VERSION);
 
         injectStyles();
         injectAdditionalStyles();
@@ -2783,7 +2955,7 @@
 
                 captureEpisodesFromFull(e);
 
-                console.log('[AppleTV+] Processing card for:', movie.title || movie.name);
+                console.log('[Тема от SERG] Обработка карточки для:', movie.title || movie.name);
 
                 render.addClass('applecation');
                 modifyCardDOM(render, movie);
@@ -2841,11 +3013,11 @@
                 }, 100);
 
             } catch (err) {
-                console.error('[AppleTV+] Error processing card:', err);
+                console.error('[Тема от SERG] Ошибка обработки карточки:', err);
             }
         });
 
-        console.log('[AppleTV+] Initialized successfully');
+        console.log('[Тема от SERG] Инициализация успешно завершена');
     }
 
     // =================================================================
@@ -2855,19 +3027,19 @@
     function init() {
         try {
             if (typeof Lampa === 'undefined') {
-                console.error('[AppleTV+] Lampa not found');
+                console.error('[Тема от SERG] Lampa не найдена');
                 return;
             }
 
-            console.log('[AppleTV+] Initializing v' + PLUGIN_VERSION);
+            console.log('[Тема от SERG] Инициализация v' + PLUGIN_VERSION);
 
             addSettings();
             initPlugin();
 
-            console.log('[AppleTV+] Initialized successfully');
+            console.log('[Тема от SERG] Инициализация успешно завершена');
 
         } catch (err) {
-            console.error('[AppleTV+] Initialization error:', err);
+            console.error('[Тема от SERG] Ошибка инициализации:', err);
         }
     }
 
@@ -2882,7 +3054,7 @@
             if (e.type === 'ready') init();
         });
     } else {
-        console.warn('[AppleTV+] Lampa.Listener not available, starting immediately');
+        console.warn('[Тема от SERG] Lampa.Listener не доступен, запуск немедленно');
         init();
     }
 
