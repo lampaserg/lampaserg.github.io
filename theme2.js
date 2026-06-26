@@ -1,5 +1,5 @@
 // @name AppleTV+
-// @version 3.9.10
+// @version 3.9.11
 // @author Your Name
 // @description Расширенная карточка фильма в стиле Apple TV+ с полными метаданными
 // @lampa-check Lampa.
@@ -11,7 +11,7 @@
     // CONFIGURATION
     // =================================================================
 
-    var PLUGIN_VERSION = '3.9.10';
+    var PLUGIN_VERSION = '3.9.11';
     var CACHE_TTL = 24 * 60 * 60 * 1000;
     var PROXY_TIMEOUT = 15000;
     var LAMPA_RATING_API = 'https://cubnotrip.top/api/reactions/get/';
@@ -53,7 +53,8 @@
         applecation_effects_enabled: true,
         applecation_content_bg: true,
         applecation_content_scale: '100',
-        applecation_description_overlay: false
+        applecation_description_overlay: true,
+        applecation_rating_icons: false
     };
 
     function resetToDefaultSettings() {
@@ -65,7 +66,6 @@
             }
             Lampa.Noty.show('Настройки AppleTV+ сброшены до заводских');
             
-            // Перезагружаем страницу
             setTimeout(function() {
                 try {
                     if (Lampa.Activity && Lampa.Activity.active) {
@@ -106,6 +106,13 @@
         'DUB': '<svg viewBox="-1 558 313 136" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2.5" y="561.5" width="306" height="129" rx="17.5" stroke="currentColor" stroke-width="5" fill="none"/><path d="M60.5284 673H27.5284V579.909H60.8011C70.1648 579.909 78.2254 581.773 84.983 585.5C91.7405 589.197 96.9375 594.515 100.574 601.455C104.241 608.394 106.074 616.697 106.074 626.364C106.074 636.061 104.241 644.394 100.574 651.364C96.9375 658.333 91.7102 663.682 84.892 667.409C78.1042 671.136 69.983 673 60.5284 673ZM47.2102 656.136H59.7102C65.5284 656.136 70.4223 655.106 74.392 653.045C78.392 650.955 81.392 647.727 83.392 643.364C85.4223 638.97 86.4375 633.303 86.4375 626.364C86.4375 619.485 85.4223 613.864 83.392 609.5C81.392 605.136 78.4072 601.924 74.4375 599.864C70.4678 597.803 65.5739 596.773 59.7557 596.773H47.2102V656.136ZM178.153 579.909H197.835V640.364C197.835 647.152 196.214 653.091 192.972 658.182C189.759 663.273 185.259 667.242 179.472 670.091C173.684 672.909 166.941 674.318 159.244 674.318C151.517 674.318 144.759 672.909 138.972 670.091C133.184 667.242 128.684 663.273 125.472 658.182C122.259 653.091 120.653 647.152 120.653 640.364V579.909H140.335V638.682C140.335 642.227 141.108 645.379 142.653 648.136C144.229 650.894 146.441 653.061 149.29 654.636C152.138 656.212 155.456 657 159.244 657C163.063 657 166.381 656.212 169.199 654.636C172.047 653.061 174.244 650.894 175.79 648.136C177.366 645.379 178.153 642.227 178.153 638.682V579.909ZM214.028 673V579.909H251.301C258.15 579.909 263.862 580.924 268.438 582.955C273.013 584.985 276.453 587.803 278.756 591.409C281.059 594.985 282.21 599.106 282.21 603.773C282.21 607.409 281.483 610.606 280.028 613.364C278.574 616.091 276.574 618.333 274.028 620.091C271.513 621.818 268.634 623.045 265.392 623.773V624.682C268.938 624.833 272.256 625.833 275.347 627.682C278.468 629.53 280.998 632.121 282.938 635.455C284.877 638.758 285.847 642.697 285.847 647.273C285.847 652.212 284.619 656.621 282.165 660.5C279.741 664.348 276.15 667.394 271.392 669.636C266.634 671.879 260.771 673 253.801 673H214.028ZM233.71 656.909H249.756C255.241 656.909 259.241 655.864 261.756 653.773C264.271 651.652 265.528 648.833 265.528 645.318C265.528 642.742 264.907 640.47 263.665 638.5C262.422 636.53 260.65 634.985 258.347 633.864C256.074 632.742 253.362 632.182 250.21 632.182H233.71V656.909ZM233.71 618.864H248.301C250.998 618.864 253.392 618.394 255.483 617.455C257.604 616.485 259.271 615.121 260.483 613.364C261.725 611.606 262.347 609.5 262.347 607.045C262.347 603.682 261.15 600.97 258.756 598.909C256.392 596.848 253.028 595.818 248.665 595.818H233.71V618.864Z" fill="currentColor"/></svg>'
     };
 
+    var RATING_ICONS = {
+        'Lampa': '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.87-3.13-7-7-7zm2 14h-4v-1h4v1zm0-2h-4v-1h4v1z"/></svg>',
+        'TMDB': '<svg viewBox="0 0 150 150"><defs><linearGradient id="tmdbGrad" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#90cea1"/><stop offset="56%" stop-color="#3cbec9"/><stop offset="100%" stop-color="#00b3e5"/></linearGradient></defs><text x="0" y="50" fill="url(#tmdbGrad)" font-weight="bold" font-size="70">TM</text><text x="0" y="120" fill="url(#tmdbGrad)" font-weight="bold" font-size="70">DB</text></svg>',
+        'IMDb': '<svg viewBox="0 0 122.88 122.88"><path fill="#F5C518" d="M18.43,0h86.02c10.18,0,18.43,8.25,18.43,18.43v86.02c0,10.18-8.25,18.43-18.43,18.43H18.43C8.25,122.88,0,114.63,0,104.45l0-86.02C0,8.25,8.25,0,18.43,0z"/><path fill="#000" d="M24.96,78.72V44.16h-9.6v34.56H24.96z M45.36,44.16L43.2,60.24L42,51.6l-1.2-7.44h-12v34.56h8.16v-22.8l3.36,22.8h6l3.12-23.28v23.28h8.16V44.16H45.36z M61.44,78.72V44.16h14.88c3.6,0,6.24,2.64,6.24,6v22.56c0,3.36-2.64,6-6.24,6H61.44z M72.72,50.4l-2.16-0.24v22.56c1.2,0,2.16-0.24,2.4-0.72c0.48-0.48,0.48-1.92,0.48-4.32V54.24v-2.88L72.72,50.4z M100.56,52.8h0.72c3.36,0,6.24,2.64,6.24,6v13.92c0,3.36-2.88,6-6.24,6h-0.72c-1.92,0-3.84-0.96-5.04-2.64l-0.48,2.16H86.4V44.16h9.12V55.2C96.72,53.76,98.64,52.8,100.56,52.8z M98.64,69.6v-8.16L98.4,58.8c-0.24-0.48-0.96-0.72-1.44-0.72c-0.48,0-1.2,0.24-1.44,0.72v13.68c0.24,0.48,0.96,0.72,1.44,0.72c0.48,0,1.44-0.24,1.44-0.72L98.64,69.6z"/></svg>',
+        'Кинопоиск': '<svg viewBox="0 0 300 300"><circle cx="150" cy="150" r="150" fill="black"/><path d="M300 45L145.26 127.827L225.9 45H181.2L126.3 121.203V45H89.9999V255H126.3V178.92L181.2 255H225.9L147.354 174.777L300 255V216L160.776 160.146L300 169.5V130.5L161.658 139.494L300 84V45Z" fill="url(#kpGrad)"/><defs><radialGradient id="kpGrad" cx="0" cy="0" r="1" gradientTransform="translate(89.9999 45) rotate(45) scale(296.985)"><stop offset="0.5" stop-color="#FF5500"/><stop offset="1" stop-color="#BBFF00"/></radialGradient></defs></svg>'
+    };
+
     // =================================================================
     // UTILITY FUNCTIONS
     // =================================================================
@@ -137,7 +144,7 @@
         var v = parseFloat(String(value).replace(',', '.'));
         if (isNaN(v) || v <= 0) return 'rgba(0,0,0,0.7)';
         if (isTotal) {
-            return 'rgba(255,215,0,0.85)';
+            return '#FFD700';
         }
         if (v <= 3) return 'rgba(231,76,60,0.8)';
         if (v < 6) return 'rgba(243,156,18,0.8)';
@@ -1152,14 +1159,9 @@
             contentGroup.css('transition', 'transform 0.3s ease');
             
             // Сдвигаем логотип вместе с контентом
-            if (scaleValue > 1) {
-                var logoOffset = (scaleValue - 1) * 100;
-                logoWrapper.css('transform', 'translateY(-' + (logoOffset * 0.5) + 'px)');
-                logoWrapper.css('transition', 'transform 0.3s ease');
-            } else {
-                logoWrapper.css('transform', 'translateY(0)');
-                logoWrapper.css('transition', 'transform 0.3s ease');
-            }
+            var logoOffset = (scaleValue - 1) * 100;
+            logoWrapper.css('transform', 'translateY(-' + (logoOffset * 0.5) + 'px)');
+            logoWrapper.css('transition', 'transform 0.3s ease');
 
             // Фон контента
             if (!bgEnabled) {
@@ -1266,14 +1268,9 @@
             
             var logoWrapper = render.find('.applecation__logo-wrapper');
             if (logoWrapper.length) {
-                if (scaleValue > 1) {
-                    var logoOffset = (scaleValue - 1) * 100;
-                    logoWrapper.css('transform', 'translateY(-' + (logoOffset * 0.5) + 'px)');
-                    logoWrapper.css('transition', 'transform 0.3s ease');
-                } else {
-                    logoWrapper.css('transform', 'translateY(0)');
-                    logoWrapper.css('transition', 'transform 0.3s ease');
-                }
+                var logoOffset = (scaleValue - 1) * 100;
+                logoWrapper.css('transform', 'translateY(-' + (logoOffset * 0.5) + 'px)');
+                logoWrapper.css('transition', 'transform 0.3s ease');
             }
 
             var bgEnabled = Lampa.Storage.get('applecation_content_bg', true);
@@ -1305,81 +1302,84 @@
     function fillContent(render, movie, ratings, lampaData, qualityData) {
         try {
             var isTv = !!(movie.name || movie.original_name || movie.first_air_date || movie.number_of_seasons);
-            var descriptionOverlayEnabled = Lampa.Storage.get('applecation_description_overlay', false);
+            var descriptionOverlayEnabled = Lampa.Storage.get('applecation_description_overlay', true);
 
             var contentGroup = render.find('.applecation__content-group');
             if (!contentGroup.length) {
                 contentGroup = render.find('.applecation__content-wrapper');
             }
 
-            // 1. МЕТА-ИНФОРМАЦИЯ (красочная как applecation__info)
+            // 1. МЕТА-ИНФОРМАЦИЯ - новый дизайн с белым текстом на цветном фоне
             var meta = contentGroup.find('.applecation__meta');
             if (meta.length) {
                 meta.empty();
-                
-                // Тип и жанры
-                var typeParts = [];
-                typeParts.push(isTv ? 'Сериал' : 'Фильм');
-                
-                if (movie.genres && movie.genres.length) {
-                    var g = movie.genres.slice(0, 2).map(function(x) {
-                        return Lampa.Utils.capitalizeFirstLetter(x.name);
-                    });
-                    typeParts = typeParts.concat(g);
-                }
-                
-                var typeHtml = typeParts.join(' · ');
-                meta.append('<span class="applecation__meta-type" style="color: #ffffff;">' + typeHtml + '</span>');
+                meta.css({
+                    'display': 'flex',
+                    'flex-wrap': 'wrap',
+                    'gap': '0.5em',
+                    'margin-bottom': '0.7em',
+                    'padding': '0.3em 0',
+                    'font-size': '1.1em',
+                    'line-height': '1.4'
+                });
 
-                // Возрастной рейтинг
-                var pg = parsePG(movie);
-                if (pg) {
-                    var ageColor = getAgeColor(pg);
-                    meta.append('<span class="applecation__age-rating" style="border-color: ' + ageColor + '; color: ' + ageColor + '; background: rgba(0,0,0,0.3); padding: 0.1em 0.4em; border-radius: 0.2em; border: 1.5px solid; font-size: 0.8em; font-weight: 700; margin-left: 0.5em;">' + pg + '</span>');
-                }
-
-                // ГОД ВЫПУСКА
+                // Год
                 var date = movie.release_date || movie.first_air_date || '';
                 if (date) {
                     var year = date.split('-')[0];
-                    meta.append('<span class="applecation__meta-year" style="background: rgba(52,152,219,0.7); color: #ffffff; padding: 0.15em 0.5em; border-radius: 0.3em; font-size: 0.8em; font-weight: 600; margin-left: 0.5em;">' + year + '</span>');
+                    meta.append('<span class="applecation__meta-item applecation__meta-year" style="background: #3498db; color: #ffffff; padding: 0.2em 0.6em; border-radius: 0.3em; font-weight: 600; display: inline-block;">' + year + '</span>');
                 }
 
-                // ДЛИТЕЛЬНОСТЬ (фильм или серия)
+                // Длительность
+                var runtimeText = '';
                 if (isTv) {
                     if (movie.episode_run_time && movie.episode_run_time.length) {
                         var m = movie.episode_run_time[0];
-                        var timeStr = m + ' ' + Lampa.Lang.translate('time_m').replace('.', '');
-                        meta.append('<span class="applecation__meta-runtime" style="background: rgba(155,89,182,0.7); color: #ffffff; padding: 0.15em 0.5em; border-radius: 0.3em; font-size: 0.8em; font-weight: 600; margin-left: 0.5em;">⏱ ' + timeStr + '</span>');
+                        runtimeText = m + ' ' + Lampa.Lang.translate('time_m').replace('.', '');
                     }
                 } else if (movie.runtime && movie.runtime > 0) {
                     var h = Math.floor(movie.runtime / 60);
                     var mm = movie.runtime % 60;
                     var th = Lampa.Lang.translate('time_h').replace('.', '');
                     var tmm = Lampa.Lang.translate('time_m').replace('.', '');
-                    var timeStr = h > 0 ? (h + ' ' + th + ' ' + mm + ' ' + tmm) : (mm + ' ' + tmm);
-                    meta.append('<span class="applecation__meta-runtime" style="background: rgba(155,89,182,0.7); color: #ffffff; padding: 0.15em 0.5em; border-radius: 0.3em; font-size: 0.8em; font-weight: 600; margin-left: 0.5em;">⏱ ' + timeStr + '</span>');
+                    runtimeText = h > 0 ? (h + ' ' + th + ' ' + mm + ' ' + tmm) : (mm + ' ' + tmm);
+                }
+                
+                if (runtimeText) {
+                    meta.append('<span class="applecation__meta-item applecation__meta-runtime" style="background: #9b59b6; color: #ffffff; padding: 0.2em 0.6em; border-radius: 0.3em; font-weight: 600; display: inline-block;">⏱ ' + runtimeText + '</span>');
                 }
 
-                // КАЧЕСТВО ВИДЕО (в мета)
+                // Тип
+                var typeText = isTv ? 'Сериал' : 'Фильм';
+                meta.append('<span class="applecation__meta-item applecation__meta-type" style="background: #2ecc71; color: #ffffff; padding: 0.2em 0.6em; border-radius: 0.3em; font-weight: 600; display: inline-block;">' + typeText + '</span>');
+
+                // Жанры
+                if (movie.genres && movie.genres.length) {
+                    var genres = movie.genres.slice(0, 3).map(function(x) {
+                        return Lampa.Utils.capitalizeFirstLetter(x.name);
+                    });
+                    meta.append('<span class="applecation__meta-item applecation__meta-genres" style="background: #1abc9c; color: #ffffff; padding: 0.2em 0.6em; border-radius: 0.3em; font-weight: 600; display: inline-block;">' + genres.join(' · ') + '</span>');
+                }
+
+                // Качество
                 if (qualityData && qualityData.resolution) {
                     var qualityText = qualityData.resolution;
                     var qualityColors = {
-                        '4K': 'rgba(46,204,113,0.8)',
-                        'FHD': 'rgba(52,152,219,0.8)',
-                        'HD': 'rgba(243,156,18,0.8)',
-                        'TS': 'rgba(231,76,60,0.8)',
-                        'SD': 'rgba(149,165,166,0.8)'
+                        '4K': '#2ecc71',
+                        'FHD': '#3498db',
+                        'HD': '#f39c12',
+                        'TS': '#e74c3c',
+                        'SD': '#95a5a6'
                     };
-                    var qualityColor = qualityColors[qualityText] || 'rgba(0,0,0,0.5)';
-                    
-                    // Используем иконку если есть
-                    var icon = QUALITY_ICONS[qualityText];
-                    if (icon) {
-                        meta.append('<span class="applecation__meta-quality" style="background: ' + qualityColor + '; color: #ffffff; padding: 0.05em 0.3em; border-radius: 0.3em; font-size: 0.8em; font-weight: 600; margin-left: 0.5em; display: inline-flex; align-items: center; height: 1.2em;">' + icon + '</span>');
-                    } else {
-                        meta.append('<span class="applecation__meta-quality" style="background: ' + qualityColor + '; color: #ffffff; padding: 0.15em 0.5em; border-radius: 0.3em; font-size: 0.8em; font-weight: 600; margin-left: 0.5em;">' + qualityText + '</span>');
-                    }
+                    var qualityColor = qualityColors[qualityText] || '#34495e';
+                    meta.append('<span class="applecation__meta-item applecation__meta-quality" style="background: ' + qualityColor + '; color: #ffffff; padding: 0.2em 0.6em; border-radius: 0.3em; font-weight: 600; display: inline-block;">' + qualityText + '</span>');
+                }
+
+                // Возрастной рейтинг
+                var pg = parsePG(movie);
+                if (pg) {
+                    var ageColor = getAgeColor(pg);
+                    meta.append('<span class="applecation__meta-item applecation__meta-age" style="background: ' + ageColor + '; color: #ffffff; padding: 0.2em 0.6em; border-radius: 0.3em; font-weight: 700; display: inline-block;">' + pg + '</span>');
                 }
 
                 meta.addClass('show');
@@ -1432,15 +1432,19 @@
                 var ratingItems = [];
                 var allRatings = [];
 
+                var useIcons = Lampa.Storage.get('applecation_rating_icons', false);
+
                 if (lampaData && lampaData.rating > 0) {
                     var lampaColor = getRatingColor(lampaData.rating);
                     var lampaBg = getRatingBackgroundColor(lampaData.rating);
+                    var icon = useIcons ? RATING_ICONS['Lampa'] : '';
                     ratingItems.push({
                         source: 'Lampa',
                         value: lampaData.rating,
                         color: lampaColor,
                         bg: lampaBg,
-                        icon: '❤️'
+                        icon: icon,
+                        useIcon: useIcons
                     });
                     allRatings.push(lampaData.rating);
                 }
@@ -1448,11 +1452,14 @@
                 if (ratings.tmdb > 0) {
                     var tmdbColor = getRatingColor(ratings.tmdb);
                     var tmdbBg = getRatingBackgroundColor(ratings.tmdb);
+                    var icon = useIcons ? RATING_ICONS['TMDB'] : '';
                     ratingItems.push({
                         source: 'TMDB',
                         value: ratings.tmdb,
                         color: tmdbColor,
-                        bg: tmdbBg
+                        bg: tmdbBg,
+                        icon: icon,
+                        useIcon: useIcons
                     });
                     allRatings.push(ratings.tmdb);
                 }
@@ -1460,11 +1467,14 @@
                 if (ratings.imdb > 0) {
                     var imdbColor = getRatingColor(ratings.imdb);
                     var imdbBg = getRatingBackgroundColor(ratings.imdb);
+                    var icon = useIcons ? RATING_ICONS['IMDb'] : '';
                     ratingItems.push({
                         source: 'IMDb',
                         value: ratings.imdb,
                         color: imdbColor,
-                        bg: imdbBg
+                        bg: imdbBg,
+                        icon: icon,
+                        useIcon: useIcons
                     });
                     allRatings.push(ratings.imdb);
                 }
@@ -1472,11 +1482,14 @@
                 if (ratings.kinopoisk > 0) {
                     var kpColor = getRatingColor(ratings.kinopoisk);
                     var kpBg = getRatingBackgroundColor(ratings.kinopoisk);
+                    var icon = useIcons ? RATING_ICONS['Кинопоиск'] : '';
                     ratingItems.push({
                         source: 'Кинопоиск',
                         value: ratings.kinopoisk,
                         color: kpColor,
-                        bg: kpBg
+                        bg: kpBg,
+                        icon: icon,
+                        useIcon: useIcons
                     });
                     allRatings.push(ratings.kinopoisk);
                 }
@@ -1501,13 +1514,20 @@
                 ratingItems.forEach(function(item) {
                     var displayValue = item.value.toFixed(1);
                     var extraClass = item.isTotal ? ' applecation__rating-item--total' : '';
-                    var iconHtml = item.icon ? '<span class="rating-icon">' + item.icon + '</span>' : '';
+                    var iconHtml = '';
+                    
+                    if (item.useIcon && item.icon) {
+                        iconHtml = '<span class="rating-icon" style="width:1.2em;height:1.2em;display:inline-flex;align-items:center;justify-content:center;">' + item.icon + '</span>';
+                    }
+                    
+                    var sourceText = item.useIcon ? '' : item.source;
+                    var textColor = item.isTotal ? '#000' : '#ffffff';
                     
                     ratingsContainer.append(
                         '<div class="applecation__rating-item' + extraClass + '" style="border-color: ' + item.color + '40; background: ' + item.bg + ';">' +
                         iconHtml +
                         '<span class="rating-value" style="color: ' + item.color + ';">' + displayValue + '</span>' +
-                        '<span class="rating-source" style="color: #ffffff;">' + item.source + '</span>' +
+                        '<span class="rating-source" style="color: ' + textColor + ';">' + sourceText + '</span>' +
                         '</div>'
                     );
                 });
@@ -1656,7 +1676,7 @@
                 contentGroup.find('.applecation__info').addClass('show');
             }
 
-            // 7. Бейджи качества (оставляем в info как дополнение)
+            // 7. Бейджи качества
             var badgesContainer = contentGroup.find('.applecation__quality-badges');
             if (badgesContainer.length) {
                 if (qualityData && !qualityData.empty) {
@@ -1670,7 +1690,7 @@
                 }
             }
 
-            // 8. Длительность серии (добавляем в мета если есть)
+            // 8. Длительность серии
             addEpisodeRuntime(render, movie);
 
             // 9. Обработка эпизодов
@@ -1751,7 +1771,7 @@
                         if (existingRuntime.length) {
                             existingRuntime.text('⏱ ' + formattedRuntime);
                         } else {
-                            meta.append('<span class="applecation__meta-runtime-avg" style="background: rgba(155,89,182,0.7); color: #ffffff; padding: 0.15em 0.5em; border-radius: 0.3em; font-size: 0.8em; font-weight: 600; margin-left: 0.5em;">⏱ ' + formattedRuntime + '</span>');
+                            meta.append('<span class="applecation__meta-runtime-avg" style="background: #9b59b6; color: #ffffff; padding: 0.2em 0.6em; border-radius: 0.3em; font-weight: 600; display: inline-block;">⏱ ' + formattedRuntime + '</span>');
                         }
                     }
                 }
@@ -1763,7 +1783,7 @@
     }
 
     // =================================================================
-    // ОБРАБОТКА ЭПИЗОДОВ - УВЕЛИЧЕННАЯ ШИРИНА В 3 РАЗА
+    // ОБРАБОТКА ЭПИЗОДОВ
     // =================================================================
 
     function processEpisodesWithData(render, episodesData) {
@@ -1846,7 +1866,6 @@
                     return;
                 }
 
-                // Ширина увеличена в 3 раза
                 var overlay = $('<div class="applecation-episode-overview">' + 
                     '<div class="applecation-episode-overview__text">' + escapeHtml(overview) + '</div>' +
                     '</div>');
@@ -2223,14 +2242,9 @@
             .applecation__logo-wrapper.loaded { opacity: 1 !important; transform: translateY(0) !important; }
             .applecation__logo { display: block !important; max-width: 30vw !important; max-height: 150px !important; width: auto !important; height: auto !important; object-fit: contain !important; object-position: left center !important; filter: drop-shadow(0 2px 10px rgba(0,0,0,0.5)) !important; }
             .applecation .full-start-new__title { font-size: 2.5em !important; font-weight: 700 !important; line-height: 1.2 !important; margin-bottom: 0.3em !important; color: #ffffff !important; text-shadow: 0 2px 10px rgba(0,0,0,0.5) !important; }
-            .applecation__meta { display: flex !important; align-items: center !important; flex-wrap: wrap !important; margin-bottom: 0.5em !important; line-height: 1 !important; gap: 0.5em !important; opacity: 0 !important; transform: translateY(15px) !important; transition: opacity 0.4s ease-out, transform 0.4s ease-out !important; }
+            .applecation__meta { display: flex !important; flex-wrap: wrap !important; gap: 0.5em !important; margin-bottom: 0.7em !important; padding: 0.3em 0 !important; font-size: 1.1em !important; line-height: 1.4 !important; opacity: 0 !important; transform: translateY(15px) !important; transition: opacity 0.4s ease-out, transform 0.4s ease-out !important; }
             .applecation__meta.show { opacity: 1 !important; transform: translateY(0) !important; }
-            .applecation__meta-type { color: #ffffff !important; }
-            .applecation__age-rating { color: #ffffff !important; }
-            .applecation__meta-year { color: #ffffff !important; }
-            .applecation__meta-runtime { color: #ffffff !important; }
-            .applecation__meta-quality { color: #ffffff !important; }
-            .applecation__meta-runtime-avg { color: #ffffff !important; }
+            .applecation__meta-item { color: #ffffff !important; display: inline-block !important; }
             .applecation__studios { display: flex !important; align-items: center !important; flex-wrap: wrap !important; gap: 0.7em !important; margin: 0 0 0.5em 0 !important; opacity: 0 !important; transform: translateY(15px) !important; transition: opacity 0.4s ease-out, transform 0.4s ease-out !important; }
             .applecation__studios.show { opacity: 1 !important; transform: translateY(0) !important; }
             .applecation__studio { display: inline-flex !important; align-items: center !important; gap: 0.4em !important; background: rgba(255,255,255,0.08) !important; border: 1px solid rgba(255,255,255,0.1) !important; border-radius: 0.6em !important; padding: 0.25em 0.6em !important; transition: all 0.2s ease !important; cursor: pointer !important; }
@@ -2241,8 +2255,8 @@
             .applecation__rating-item { display: flex !important; align-items: center !important; gap: 0.35em !important; padding: 0.2em 0.6em !important; border-radius: 0.4em !important; background: rgba(0,0,0,0.5) !important; border: 1.5px solid rgba(255,255,255,0.15) !important; font-size: 0.8em !important; font-weight: 600 !important; color: #ffffff !important; line-height: 1 !important; }
             .applecation__rating-item .rating-value { font-size: 1.05em !important; font-weight: 700 !important; }
             .applecation__rating-item .rating-source { font-size: 0.7em !important; opacity: 0.7 !important; margin-left: 0.15em !important; color: #ffffff !important; }
-            .applecation__rating-item .rating-icon { margin-right: 0.1em; }
-            .applecation__rating-item--total { border-color: rgba(255,215,0,0.5) !important; background: rgba(255,215,0,0.85) !important; }
+            .applecation__rating-item .rating-icon { margin-right: 0.1em; width: 1.2em; height: 1.2em; display: inline-flex; align-items: center; justify-content: center; }
+            .applecation__rating-item--total { border-color: rgba(255,215,0,0.5) !important; background: #FFD700 !important; }
             .applecation__rating-item--total .rating-value { color: #000 !important; }
             .applecation__rating-item--total .rating-source { color: #000 !important; }
             .applecation__reactions { display: flex !important; align-items: center !important; flex-wrap: wrap !important; gap: 0.6em !important; margin-bottom: 0.5em !important; opacity: 0 !important; transform: translateY(15px) !important; transition: opacity 0.4s ease-out, transform 0.4s ease-out !important; }
@@ -2540,6 +2554,27 @@
 
             Lampa.SettingsApi.addParam({
                 component: 'applecation_plus',
+                param: { name: 'applecation_rating_icons', type: 'trigger', default: false },
+                field: { name: 'Иконки вместо текста в рейтингах', description: 'Заменить названия источников на иконки' },
+                onChange: function(value) {
+                    var render = getActiveFullRender();
+                    if (render) {
+                        var movie = render.data('movie');
+                        if (movie) {
+                            getRatings(movie, function(ratings) {
+                                getLampaRating(movie, function(lampaData) {
+                                    getBestJacred(movie, function(qualityData) {
+                                        fillContent(render, movie, ratings, lampaData, qualityData);
+                                    });
+                                });
+                            });
+                        }
+                    }
+                }
+            });
+
+            Lampa.SettingsApi.addParam({
+                component: 'applecation_plus',
                 param: { name: 'applecation_effects_enabled', type: 'trigger', default: true },
                 field: { name: 'Включить эффекты', description: 'Отключите для слабых устройств (ускоряет загрузку)' }
             });
@@ -2583,7 +2618,7 @@
 
             Lampa.SettingsApi.addParam({
                 component: 'applecation_plus',
-                param: { name: 'applecation_description_overlay', type: 'trigger', default: false },
+                param: { name: 'applecation_description_overlay', type: 'trigger', default: true },
                 field: { name: 'Описание в оверлее', description: 'Показывать описание в отдельном окне при нажатии' }
             });
 
@@ -2649,6 +2684,7 @@
 
                 if (render.data('applecation_plus_processed')) return;
                 render.data('applecation_plus_processed', true);
+                render.data('movie', e.data.movie);
 
                 var movie = e.data && e.data.movie;
                 if (!movie) return;
