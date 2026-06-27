@@ -1,5 +1,5 @@
 // @name Тема от SERG
-// @version 4.5
+// @version 4.6
 // @author SERG
 // @description Расширенная карточка фильма/сериала с полными метаданными
 // @lampa-check Lampa.
@@ -11,7 +11,7 @@
     // CONFIGURATION
     // =================================================================
 
-    var PLUGIN_VERSION = '4.5';
+    var PLUGIN_VERSION = '4.6';
     var CACHE_TTL = 24 * 60 * 60 * 1000;
     var PROXY_TIMEOUT = 15000;
     var LAMPA_RATING_API = 'https://cubnotrip.top/api/reactions/get/';
@@ -113,8 +113,11 @@
         'DUB': '<svg viewBox="-1 558 313 136" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2.5" y="561.5" width="306" height="129" rx="17.5" stroke="currentColor" stroke-width="5" fill="none"/><path d="M60.5284 673H27.5284V579.909H60.8011C70.1648 579.909 78.2254 581.773 84.983 585.5C91.7405 589.197 96.9375 594.515 100.574 601.455C104.241 608.394 106.074 616.697 106.074 626.364C106.074 636.061 104.241 644.394 100.574 651.364C96.9375 658.333 91.7102 663.682 84.892 667.409C78.1042 671.136 69.983 673 60.5284 673ZM47.2102 656.136H59.7102C65.5284 656.136 70.4223 655.106 74.392 653.045C78.392 650.955 81.392 647.727 83.392 643.364C85.4223 638.97 86.4375 633.303 86.4375 626.364C86.4375 619.485 85.4223 613.864 83.392 609.5C81.392 605.136 78.4072 601.924 74.4375 599.864C70.4678 597.803 65.5739 596.773 59.7557 596.773H47.2102V656.136ZM178.153 579.909H197.835V640.364C197.835 647.152 196.214 653.091 192.972 658.182C189.759 663.273 185.259 667.242 179.472 670.091C173.684 672.909 166.941 674.318 159.244 674.318C151.517 674.318 144.759 672.909 138.972 670.091C133.184 667.242 128.684 663.273 125.472 658.182C122.259 653.091 120.653 647.152 120.653 640.364V579.909H140.335V638.682C140.335 642.227 141.108 645.379 142.653 648.136C144.229 650.894 146.441 653.061 149.29 654.636C152.138 656.212 155.456 657 159.244 657C163.063 657 166.381 656.212 169.199 654.636C172.047 653.061 174.244 650.894 175.79 648.136C177.366 645.379 178.153 642.227 178.153 638.682V579.909ZM214.028 673V579.909H251.301C258.15 579.909 263.862 580.924 268.438 582.955C273.013 584.985 276.453 587.803 278.756 591.409C281.059 594.985 282.21 599.106 282.21 603.773C282.21 607.409 281.483 610.606 280.028 613.364C278.574 616.091 276.574 618.333 274.028 620.091C271.513 621.818 268.634 623.045 265.392 623.773V624.682C268.938 624.833 272.256 625.833 275.347 627.682C278.468 629.53 280.998 632.121 282.938 635.455C284.877 638.758 285.847 642.697 285.847 647.273C285.847 652.212 284.619 656.621 282.165 660.5C279.741 664.348 276.15 667.394 271.392 669.636C266.634 671.879 260.771 673 253.801 673H214.028ZM233.71 656.909H249.756C255.241 656.909 259.241 655.864 261.756 653.773C264.271 651.652 265.528 648.833 265.528 645.318C265.528 642.742 264.907 640.47 263.665 638.5C262.422 636.53 260.65 634.985 258.347 633.864C256.074 632.742 253.362 632.182 250.21 632.182H233.71V656.909ZM233.71 618.864H248.301C250.998 618.864 253.392 618.394 255.483 617.455C257.604 616.485 259.271 615.121 260.483 613.364C261.725 611.606 262.347 609.5 262.347 607.045C262.347 603.682 261.15 600.97 258.756 598.909C256.392 596.848 253.028 595.818 248.665 595.818H233.71V618.864Z" fill="currentColor"/></svg>'
     };
 
+    // Правильная иконка Lampa (как в Card Overlay)
+    var LAMPA_ICON_SVG = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.87-3.13-7-7-7zm2 14h-4v-1h4v1zm0-2h-4v-1h4v1z"/></svg>';
+
     var RATING_ICONS = {
-        'Lampa': '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.87-3.13-7-7-7zm2 14h-4v-1h4v1zm0-2h-4v-1h4v1z"/></svg>',
+        'Lampa': LAMPA_ICON_SVG,
         'TMDB': '<svg viewBox="0 0 150 150"><defs><linearGradient id="tmdbGrad" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#90cea1"/><stop offset="56%" stop-color="#3cbec9"/><stop offset="100%" stop-color="#00b3e5"/></linearGradient></defs><text x="0" y="50" fill="url(#tmdbGrad)" font-weight="bold" font-size="70">TM</text><text x="0" y="120" fill="url(#tmdbGrad)" font-weight="bold" font-size="70">DB</text></svg>',
         'IMDb': '<svg viewBox="0 0 122.88 122.88"><path fill="#F5C518" d="M18.43,0h86.02c10.18,0,18.43,8.25,18.43,18.43v86.02c0,10.18-8.25,18.43-18.43,18.43H18.43C8.25,122.88,0,114.63,0,104.45l0-86.02C0,8.25,8.25,0,18.43,0z"/><path fill="#000" d="M24.96,78.72V44.16h-9.6v34.56H24.96z M45.36,44.16L43.2,60.24L42,51.6l-1.2-7.44h-12v34.56h8.16v-22.8l3.36,22.8h6l3.12-23.28v23.28h8.16V44.16H45.36z M61.44,78.72V44.16h14.88c3.6,0,6.24,2.64,6.24,6v22.56c0,3.36-2.64,6-6.24,6H61.44z M72.72,50.4l-2.16-0.24v22.56c1.2,0,2.16-0.24,2.4-0.72c0.48-0.48,0.48-1.92,0.48-4.32V54.24v-2.88L72.72,50.4z M100.56,52.8h0.72c3.36,0,6.24,2.64,6.24,6v13.92c0,3.36-2.88,6-6.24,6h-0.72c-1.92,0-3.84-0.96-5.04-2.64l-0.48,2.16H86.4V44.16h9.12V55.2C96.72,53.76,98.64,52.8,100.56,52.8z M98.64,69.6v-8.16L98.4,58.8c-0.24-0.48-0.96-0.72-1.44-0.72c-0.48,0-1.2,0.24-1.44,0.72v13.68c0.24,0.48,0.96,0.72,1.44,0.72c0.48,0,1.44-0.24,1.44-0.72L98.64,69.6z"/></svg>',
         'Кинопоиск': '<svg viewBox="0 0 300 300"><circle cx="150" cy="150" r="150" fill="black"/><path d="M300 45L145.26 127.827L225.9 45H181.2L126.3 121.203V45H89.9999V255H126.3V178.92L181.2 255H225.9L147.354 174.777L300 255V216L160.776 160.146L300 169.5V130.5L161.658 139.494L300 84V45Z" fill="url(#kpGrad)"/><defs><radialGradient id="kpGrad" cx="0" cy="0" r="1" gradientTransform="translate(89.9999 45) rotate(45) scale(296.985)"><stop offset="0.5" stop-color="#FF5500"/><stop offset="1" stop-color="#BBFF00"/></radialGradient></defs></svg>'
@@ -131,6 +134,8 @@
     // =================================================================
     // UTILITY FUNCTIONS
     // =================================================================
+
+    var workingProxy = null;
 
     function getTmdbKey() {
         try {
@@ -1340,6 +1345,7 @@
 
             var bgEnabled = Lampa.Storage.get('applecation_content_bg', true);
             var scalePercent = parseFloat(Lampa.Storage.get('applecation_content_scale', '100'));
+            var contentPosition = Lampa.Storage.get('applecation_content_position', 'left');
 
             var right = render.find('.full-start-new__right');
             if (!right.length) return;
@@ -1362,6 +1368,7 @@
                 left.append(contentWrapper);
             }
 
+            // Создаем wrapper для масштабирования
             var wrapper = $('<div class="applecation__wrapper"></div>');
             var logoHtml = logoWrapper.detach();
             var contentHtml = contentWrapper.detach();
@@ -1373,10 +1380,22 @@
             logoWrapper = wrapper.find('.applecation__logo-wrapper');
             contentWrapper = wrapper.find('.applecation__content-wrapper');
 
+            // Позиционирование всего блока через wrapper
+            var alignMap = {
+                'left': 'flex-start',
+                'center': 'center',
+                'right': 'flex-end'
+            };
+            left.css({
+                'display': 'flex',
+                'align-items': alignMap[contentPosition] || 'flex-start',
+                'justify-content': contentPosition === 'center' ? 'center' : 'flex-start'
+            });
             wrapper.css({
-                'transform-origin': 'left bottom',
-                'transition': 'transform 0.3s ease',
-                'width': '100%'
+                'max-width': contentPosition === 'center' ? '60%' : '100%',
+                'width': '100%',
+                'transform-origin': contentPosition === 'right' ? 'right bottom' : 'left bottom',
+                'transition': 'transform 0.3s ease'
             });
 
             contentWrapper.css('position', 'relative');
@@ -1387,25 +1406,7 @@
             contentWrapper.wrapInner(contentGroup);
             contentGroup = contentWrapper.find('.applecation__content-group');
 
-            // Позиция всего контента
-            var contentPosition = Lampa.Storage.get('applecation_content_position', 'left');
-            var alignMap = {
-                'left': 'flex-start',
-                'center': 'center',
-                'right': 'flex-end'
-            };
-            contentWrapper.css('align-items', alignMap[contentPosition] || 'flex-start');
-            contentWrapper.css('text-align', contentPosition === 'center' ? 'center' : (contentPosition === 'right' ? 'right' : 'left'));
-            
-            // Для right позиции - сдвигаем wrapper
-            if (contentPosition === 'right') {
-                wrapper.css('transform-origin', 'right bottom');
-            } else {
-                wrapper.css('transform-origin', 'left bottom');
-            }
-
             var scaleValue = scalePercent / 100;
-            
             wrapper.css('transform', 'scale(' + scaleValue + ')');
             
             var logoOffset = (scaleValue - 1) * 100;
@@ -1517,23 +1518,42 @@
             var contentWrapper = render.find('.applecation__content-wrapper');
             contentWrapper.css('max-width', '50vw');
 
-            // Позиция всей информации
+            // Позиция всей информации контента
             var contentPosition = Lampa.Storage.get('applecation_content_position', 'left');
-            var alignMap = {
-                'left': 'flex-start',
-                'center': 'center',
-                'right': 'flex-end'
-            };
-            contentWrapper.css('align-items', alignMap[contentPosition] || 'flex-start');
-            contentWrapper.css('text-align', contentPosition === 'center' ? 'center' : (contentPosition === 'right' ? 'right' : 'left'));
-            
-            if (contentPosition === 'right') {
-                wrapper.css('transform-origin', 'right bottom');
-            } else {
-                wrapper.css('transform-origin', 'left bottom');
+            var left = render.find('.applecation__left');
+            if (left.length) {
+                var alignMap = {
+                    'left': 'flex-start',
+                    'center': 'center',
+                    'right': 'flex-end'
+                };
+                left.css({
+                    'display': 'flex',
+                    'align-items': alignMap[contentPosition] || 'flex-start',
+                    'justify-content': contentPosition === 'center' ? 'center' : 'flex-start'
+                });
+                wrapper.css({
+                    'max-width': contentPosition === 'center' ? '60%' : '100%',
+                    'transform-origin': contentPosition === 'right' ? 'right bottom' : 'left bottom'
+                });
             }
 
-            // Позиция info
+            // Позиция рейтингов и реакций
+            var ratingsPosition = Lampa.Storage.get('applecation_ratings_position', 'left');
+            var ratingsContainer = render.find('.applecation__ratings');
+            if (ratingsContainer.length) {
+                ratingsContainer.css('justify-content', ratingsPosition === 'center' ? 'center' : 'flex-start');
+            }
+            var reactionsContainer = render.find('.applecation__reactions');
+            if (reactionsContainer.length) {
+                reactionsContainer.css('justify-content', ratingsPosition === 'center' ? 'center' : 'flex-start');
+            }
+            var meta = render.find('.applecation__meta');
+            if (meta.length) {
+                meta.css('justify-content', ratingsPosition === 'center' ? 'center' : 'flex-start');
+            }
+
+            // Позиция бейджей качества/инфо о сезонах
             var infoPosition = Lampa.Storage.get('applecation_info_position', 'left');
             var info = render.find('.applecation__info');
             if (info.length) {
@@ -1576,13 +1596,13 @@
         try {
             var isTv = !!(movie.name || movie.original_name || movie.first_air_date || movie.number_of_seasons);
             var descriptionOverlayEnabled = Lampa.Storage.get('applecation_description_overlay', true);
+            var ratingsPosition = Lampa.Storage.get('applecation_ratings_position', 'left');
+            var infoPosition = Lampa.Storage.get('applecation_info_position', 'left');
 
             var contentGroup = render.find('.applecation__content-group');
             if (!contentGroup.length) {
                 contentGroup = render.find('.applecation__content-wrapper');
             }
-
-            var ratingsPosition = Lampa.Storage.get('applecation_ratings_position', 'left');
 
             // 1. МЕТА-ИНФОРМАЦИЯ
             var meta = contentGroup.find('.applecation__meta');
@@ -1661,12 +1681,7 @@
             var ratingsContainer = contentGroup.find('.applecation__ratings');
             if (ratingsContainer.length) {
                 ratingsContainer.empty();
-                
-                if (ratingsPosition === 'center') {
-                    ratingsContainer.css('justify-content', 'center');
-                } else {
-                    ratingsContainer.css('justify-content', 'flex-start');
-                }
+                ratingsContainer.css('justify-content', ratingsPosition === 'center' ? 'center' : 'flex-start');
 
                 var ratingItems = [];
                 var allRatings = [];
@@ -1679,8 +1694,9 @@
                     var lampaBg = getRatingBackgroundColor(lampaData.rating);
                     var icon = '';
                     
+                    // Анимированная реакция добавляется дополнительно к иконке/названию
                     if (useReactionIcon && lampaData.medianReaction && REACTION_GIFS[lampaData.medianReaction]) {
-                        icon = '<img src="' + REACTION_GIFS[lampaData.medianReaction] + '" style="width:1.2em;height:1.2em;object-fit:contain;border-radius:50%;" />';
+                        icon = '<img src="' + REACTION_GIFS[lampaData.medianReaction] + '" style="width:1em;height:1em;object-fit:contain;border-radius:50%;margin-right:0.2em;" />';
                     } else if (useIcons) {
                         icon = RATING_ICONS['Lampa'];
                     }
@@ -1764,7 +1780,7 @@
                     var iconHtml = '';
                     
                     if (item.useIcon && item.icon) {
-                        iconHtml = '<span class="rating-icon" style="width:1.2em;height:1.2em;display:inline-flex;align-items:center;justify-content:center;">' + item.icon + '</span>';
+                        iconHtml = '<span class="rating-icon" style="width:1.2em;height:1.2em;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;">' + item.icon + '</span>';
                     }
                     
                     var sourceText = item.useIcon ? '' : item.source;
@@ -1790,12 +1806,7 @@
             var reactionsContainer = contentGroup.find('.applecation__reactions');
             if (reactionsContainer.length) {
                 reactionsContainer.empty();
-                
-                if (ratingsPosition === 'center') {
-                    reactionsContainer.css('justify-content', 'center');
-                } else {
-                    reactionsContainer.css('justify-content', 'flex-start');
-                }
+                reactionsContainer.css('justify-content', ratingsPosition === 'center' ? 'center' : 'flex-start');
 
                 var hasReactions = false;
                 var useAnimated = Lampa.Storage.get('applecation_animated_reactions', false);
@@ -1973,7 +1984,6 @@
                 }
 
                 // Позиция info
-                var infoPosition = Lampa.Storage.get('applecation_info_position', 'left');
                 if (infoPosition === 'center') {
                     info.css('align-items', 'center');
                     info.css('text-align', 'center');
@@ -2524,9 +2534,9 @@
             .applecation .full-start-new__body { height: 80vh !important; min-height: 400px !important; }
             .applecation .full-start-new__right { display: flex !important; align-items: flex-end !important; padding: 0 2em 2em 2em !important; }
             .applecation .full-start-new__left { display: none !important; }
-            .applecation .applecation__left { flex: 1 !important; width: 100% !important; position: relative !important; }
+            .applecation .applecation__left { flex: 1 !important; width: 100% !important; position: relative !important; display: flex !important; align-items: flex-start !important; }
             .applecation .applecation__content-wrapper { font-size: 100% !important; max-width: 50vw !important; padding: 1.5em !important; border-radius: 1em !important; position: relative !important; z-index: 10 !important; display: flex !important; flex-direction: column !important; }
-            .applecation__wrapper { transform-origin: left bottom; transition: transform 0.3s ease; width: 100%; }
+            .applecation__wrapper { transition: transform 0.3s ease; width: 100%; }
             .applecation__logo-wrapper { margin-bottom: 0.5em !important; opacity: 0 !important; transform: translateY(20px) !important; transition: opacity 0.4s ease-out, transform 0.4s ease-out !important; }
             .applecation__logo-wrapper.loaded { opacity: 1 !important; transform: translateY(0) !important; }
             .applecation__logo { display: block !important; max-width: 30vw !important; max-height: 150px !important; width: auto !important; height: auto !important; object-fit: contain !important; object-position: left center !important; filter: drop-shadow(0 2px 10px rgba(0,0,0,0.5)) !important; }
@@ -2544,7 +2554,7 @@
             .applecation__rating-item { display: flex !important; align-items: center !important; gap: 0.35em !important; padding: 0.2em 0.6em !important; border-radius: 0.4em !important; background: rgba(0,0,0,0.5) !important; border: 1.5px solid rgba(255,255,255,0.15) !important; font-size: 0.8em !important; font-weight: 600 !important; color: #ffffff !important; line-height: 1 !important; }
             .applecation__rating-item .rating-value { font-size: 1.05em !important; font-weight: 700 !important; }
             .applecation__rating-item .rating-source { font-size: 0.7em !important; opacity: 0.7 !important; margin-left: 0.15em !important; color: #ffffff !important; }
-            .applecation__rating-item .rating-icon { margin-right: 0.1em; width: 1.2em; height: 1.2em; display: inline-flex; align-items: center; justify-content: center; }
+            .applecation__rating-item .rating-icon { margin-right: 0.1em; width: 1.2em; height: 1.2em; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
             .applecation__rating-item--total { border-color: rgba(255,215,0,0.5) !important; background: #FFD700 !important; }
             .applecation__rating-item--total .rating-value { color: #000 !important; }
             .applecation__rating-item--total .rating-source { color: #000 !important; }
@@ -2552,7 +2562,7 @@
             .applecation__reactions.show { opacity: 1 !important; transform: translateY(0) !important; }
             .applecation__reaction-item { display: flex !important; align-items: center !important; gap: 0.3em !important; padding: 0.15em 0.5em !important; border-radius: 0.4em !important; background: rgba(255,255,255,0.06) !important; border: 1px solid rgba(255,255,255,0.08) !important; font-size: 0.85em !important; color: #ffffff !important; line-height: 1 !important; }
             .applecation__reaction-item .reaction-count { font-weight: 600 !important; font-size: 0.9em !important; color: #ffffff !important; }
-            .applecation__reaction-item img { border-radius: 50%; }
+            .applecation__reaction-item img { border-radius: 50%; width: 1.2em; height: 1.2em; object-fit: contain; }
             .applecation__description-wrapper { background: transparent !important; padding: 0 !important; border-radius: 1em !important; width: fit-content !important; opacity: 0 !important; transform: translateY(15px) !important; transition: padding 0.25s ease, transform 0.25s ease, opacity 0.4s ease-out !important; cursor: pointer !important; }
             .applecation__description-wrapper.show { opacity: 1 !important; transform: translateY(0) !important; }
             .applecation__description-wrapper.focus { background: linear-gradient(135deg, rgba(255,255,255,0.28), rgba(255,255,255,0.18)) !important; padding: 0.15em 0.4em 0 0.7em !important; border-radius: 1em !important; width: fit-content !important; box-shadow: inset 0 1px 0 rgba(255,255,255,0.35) !important; transform: scale(1.07) translateY(0) !important; }
@@ -2809,6 +2819,15 @@
                 after: 'interface'
             });
 
+            // =============================================================
+            // КАТЕГОРИЯ: ОСНОВНЫЕ НАСТРОЙКИ
+            // =============================================================
+            Lampa.SettingsApi.addParam({
+                component: 'applecation_plus',
+                param: { type: 'title' },
+                field: { name: 'Основные настройки' }
+            });
+
             // Включение/отключение плагина
             Lampa.SettingsApi.addParam({
                 component: 'applecation_plus',
@@ -2835,8 +2854,54 @@
                 }
             });
 
+            // Сброс настроек
+            Lampa.SettingsApi.addParam({
+                component: 'applecation_plus',
+                param: { name: 'applecation_reset_settings', type: 'trigger', default: false },
+                field: { 
+                    name: 'Сбросить настройки', 
+                    description: 'Восстановить все настройки темы по умолчанию' 
+                },
+                onChange: function(value) {
+                    if (value === true || value === 'true' || value === 1 || value === '1') {
+                        resetToDefaultSettings();
+                        setTimeout(function() {
+                            try {
+                                Lampa.Storage.set('applecation_reset_settings', false);
+                            } catch (e) {}
+                        }, 100);
+                    }
+                }
+            });
+
+            // Качество изображений
+            Lampa.SettingsApi.addParam({
+                component: 'applecation_plus',
+                param: { name: 'applecation_image_quality', type: 'select', 
+                    values: {
+                        'original': 'Оригинальное (4K/8K)',
+                        'fhd': 'Full HD (1080p)',
+                        'hd': 'HD (720p)'
+                    },
+                    default: 'original'
+                },
+                field: { name: 'Качество изображений', description: 'Качество постеров и фонов' },
+                onChange: function(value) {
+                    overrideImageApi();
+                    if (Lampa.Activity && Lampa.Activity.active) {
+                        var active = Lampa.Activity.active();
+                        if (active && active.component === 'full') {
+                            Lampa.Activity.backward();
+                            setTimeout(function() {
+                                location.reload();
+                            }, 300);
+                        }
+                    }
+                }
+            });
+
             // =============================================================
-            // НОВАЯ КАТЕГОРИЯ: ПОЗИЦИЯ КОНТЕНТА
+            // КАТЕГОРИЯ: ПОЗИЦИЯ КОНТЕНТА
             // =============================================================
             Lampa.SettingsApi.addParam({
                 component: 'applecation_plus',
@@ -2864,17 +2929,12 @@
                 onChange: function(value) {
                     var render = getActiveFullRender();
                     if (render) {
-                        var movie = render.data('movie');
-                        if (movie) {
-                            renderStudiosBtn(render, movie);
-                            renderStudiosLine(render, movie);
-                        }
                         updateContentScale(render);
                     }
                 }
             });
 
-            // 2. Позиция рейтинга и реакций (переименовано)
+            // 2. Позиция рейтинга и реакций
             Lampa.SettingsApi.addParam({
                 component: 'applecation_plus',
                 param: { 
@@ -2893,21 +2953,12 @@
                 onChange: function(value) {
                     var render = getActiveFullRender();
                     if (render) {
-                        var movie = render.data('movie');
-                        if (movie) {
-                            getRatings(movie, function(ratings) {
-                                getLampaRating(movie, function(lampaData) {
-                                    getBestJacred(movie, function(qualityData) {
-                                        fillContent(render, movie, ratings, lampaData, qualityData);
-                                    });
-                                });
-                            });
-                        }
+                        updateContentScale(render);
                     }
                 }
             });
 
-            // 3. Позиция бейджей качества/инфо о сезонах и сериях (переименовано)
+            // 3. Позиция бейджей качества/инфо о сезонах
             Lampa.SettingsApi.addParam({
                 component: 'applecation_plus',
                 param: { 
@@ -2926,69 +2977,18 @@
                 onChange: function(value) {
                     var render = getActiveFullRender();
                     if (render) {
-                        var movie = render.data('movie');
-                        if (movie) {
-                            getRatings(movie, function(ratings) {
-                                getLampaRating(movie, function(lampaData) {
-                                    getBestJacred(movie, function(qualityData) {
-                                        fillContent(render, movie, ratings, lampaData, qualityData);
-                                    });
-                                });
-                            });
-                        }
                         updateContentScale(render);
                     }
                 }
             });
 
             // =============================================================
-            // ОСТАЛЬНЫЕ НАСТРОЙКИ
+            // КАТЕГОРИЯ: РЕЙТИНГИ И РЕАКЦИИ
             // =============================================================
-
-            // Сброс настроек
             Lampa.SettingsApi.addParam({
                 component: 'applecation_plus',
-                param: { name: 'applecation_reset_settings', type: 'trigger', default: false },
-                field: { 
-                    name: 'Сбросить настройки', 
-                    description: 'Восстановить все настройки темы по умолчанию' 
-                },
-                onChange: function(value) {
-                    if (value === true || value === 'true' || value === 1 || value === '1') {
-                        resetToDefaultSettings();
-                        setTimeout(function() {
-                            try {
-                                Lampa.Storage.set('applecation_reset_settings', false);
-                            } catch (e) {}
-                        }, 100);
-                    }
-                }
-            });
-
-            // Качество изображений (упрощено)
-            Lampa.SettingsApi.addParam({
-                component: 'applecation_plus',
-                param: { name: 'applecation_image_quality', type: 'select', 
-                    values: {
-                        'original': 'Оригинальное (4K/8K)',
-                        'fhd': 'Full HD (1080p)',
-                        'hd': 'HD (720p)'
-                    },
-                    default: 'original'
-                },
-                field: { name: 'Качество изображений', description: 'Качество постеров и фонов' },
-                onChange: function(value) {
-                    overrideImageApi();
-                    if (Lampa.Activity && Lampa.Activity.active) {
-                        var active = Lampa.Activity.active();
-                        if (active && active.component === 'full') {
-                            Lampa.Activity.backward();
-                            setTimeout(function() {
-                                location.reload();
-                            }, 300);
-                        }
-                    }
-                }
+                param: { type: 'title' },
+                field: { name: 'Рейтинги и реакции' }
             });
 
             // Иконки в рейтингах
@@ -3013,7 +3013,7 @@
                 }
             });
 
-            // Реакция вместо иконки Lampa (новая)
+            // Реакция вместо иконки Lampa
             Lampa.SettingsApi.addParam({
                 component: 'applecation_plus',
                 param: { 
@@ -3023,7 +3023,7 @@
                 },
                 field: { 
                     name: 'Реакция вместо иконки Lampa', 
-                    description: 'Показывать анимированную реакцию вместо иконки Lampa (работает даже без "Иконки вместо текста")' 
+                    description: 'Показывать анимированную реакцию рядом с рейтингом Lampa (дополнительно к иконке/названию)' 
                 },
                 onChange: function(value) {
                     var render = getActiveFullRender();
@@ -3042,7 +3042,7 @@
                 }
             });
 
-            // Анимированные реакции (новая)
+            // Анимированные реакции
             Lampa.SettingsApi.addParam({
                 component: 'applecation_plus',
                 param: { 
@@ -3071,6 +3071,46 @@
                 }
             });
 
+            // =============================================================
+            // КАТЕГОРИЯ: КАЧЕСТВО И БЕЙДЖИ
+            // =============================================================
+            Lampa.SettingsApi.addParam({
+                component: 'applecation_plus',
+                param: { type: 'title' },
+                field: { name: 'Качество и бейджи' }
+            });
+
+            // Бейджи качества
+            Lampa.SettingsApi.addParam({
+                component: 'applecation_plus',
+                param: { name: 'applecation_show_quality_badges', type: 'trigger', default: true },
+                field: { name: 'Бейджи качества', description: 'Показывать бейджи качества (4K, HDR, 7.1, DUB)' },
+                onChange: function(value) {
+                    var render = getActiveFullRender();
+                    if (render) {
+                        var movie = render.data('movie');
+                        if (movie) {
+                            getRatings(movie, function(ratings) {
+                                getLampaRating(movie, function(lampaData) {
+                                    getBestJacred(movie, function(qualityData) {
+                                        fillContent(render, movie, ratings, lampaData, qualityData);
+                                    });
+                                });
+                            });
+                        }
+                    }
+                }
+            });
+
+            // =============================================================
+            // КАТЕГОРИЯ: СТУДИИ
+            // =============================================================
+            Lampa.SettingsApi.addParam({
+                component: 'applecation_plus',
+                param: { type: 'title' },
+                field: { name: 'Студии' }
+            });
+
             // Студии
             Lampa.SettingsApi.addParam({
                 component: 'applecation_plus',
@@ -3095,26 +3135,13 @@
                 }
             });
 
-            // Бейджи качества
+            // =============================================================
+            // КАТЕГОРИЯ: ОФОРМЛЕНИЕ
+            // =============================================================
             Lampa.SettingsApi.addParam({
                 component: 'applecation_plus',
-                param: { name: 'applecation_show_quality_badges', type: 'trigger', default: true },
-                field: { name: 'Бейджи качества', description: 'Показывать бейджи качества (4K, HDR, 7.1, DUB)' },
-                onChange: function(value) {
-                    var render = getActiveFullRender();
-                    if (render) {
-                        var movie = render.data('movie');
-                        if (movie) {
-                            getRatings(movie, function(ratings) {
-                                getLampaRating(movie, function(lampaData) {
-                                    getBestJacred(movie, function(qualityData) {
-                                        fillContent(render, movie, ratings, lampaData, qualityData);
-                                    });
-                                });
-                            });
-                        }
-                    }
-                }
+                param: { type: 'title' },
+                field: { name: 'Оформление' }
             });
 
             // Эффекты
@@ -3168,6 +3195,15 @@
                 component: 'applecation_plus',
                 param: { name: 'applecation_description_overlay', type: 'trigger', default: true },
                 field: { name: 'Описание в оверлее', description: 'Показывать описание в отдельном окне при нажатии' }
+            });
+
+            // =============================================================
+            // КАТЕГОРИЯ: СЛУЖЕБНЫЕ
+            // =============================================================
+            Lampa.SettingsApi.addParam({
+                component: 'applecation_plus',
+                param: { type: 'title' },
+                field: { name: 'Служебные' }
             });
 
             // Очистка кэша
