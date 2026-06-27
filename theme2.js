@@ -114,10 +114,21 @@
     };
 
     // Правильная иконка Lampa (как в Card Overlay)
-    var LAMPA_ICON_SVG = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.87-3.13-7-7-7zm2 14h-4v-1h4v1zm0-2h-4v-1h4v1z"/></svg>';
+    var LAMPA_ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="110" height="104" viewBox="0 0 110 104" fill="none">' +
+        '<path d="M81.6744 103.11C98.5682 93.7234 110 75.6967 110 55C110 24.6243 85.3757 0 55 0C24.6243 0 0 24.6243 0 55C0 75.6967 11.4318 93.7234 28.3255 103.11C14.8869 94.3724 6 79.224 6 62C6 34.938 27.938 13 55 13C82.062 13 104 34.938 104 62C104 79.224 95.1131 94.3725 81.6744 103.11Z" fill="currentColor"/>' +
+        '<path d="M92.9546 80.0076C95.5485 74.5501 97 68.4446 97 62C97 38.804 78.196 20 55 20C31.804 20 13 38.804 13 62C13 68.4446 14.4515 74.5501 17.0454 80.0076C16.3618 77.1161 16 74.1003 16 71C16 49.4609 33.4609 32 55 32C76.5391 32 94 49.4609 94 71C94 74.1003 93.6382 77.1161 92.9546 80.0076Z" fill="currentColor"/>' +
+        '<path d="M55 89C69.3594 89 81 77.3594 81 63C81 57.9297 79.5486 53.1983 77.0387 49.1987C82.579 54.7989 86 62.5 86 71C86 88.1208 72.1208 102 55 102C37.8792 102 24 88.1208 24 71C24 62.5 27.421 54.7989 32.9613 49.1987C30.4514 53.1983 29 57.9297 29 63C29 77.3594 40.6406 89 55 89Z" fill="currentColor"/>' +
+        '<path d="M73 63C73 72.9411 64.9411 81 55 81C45.0589 81 37 72.9411 37 63C37 53.0589 45.0589 45 55 45C64.9411 45 73 53.0589 73 63Z" fill="currentColor"/>' +
+        '</svg>';
+
+    // Упрощенная иконка Lampa для рейтингов
+    var LAMPA_ICON_SMALL = '<svg viewBox="0 0 24 24" fill="currentColor">' +
+        '<path d="M12 2C8.13 2 5 5.13 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.87-3.13-7-7-7zm2 14h-4v-1h4v1zm0-2h-4v-1h4v1z"/>' +
+        '</svg>';
 
     var RATING_ICONS = {
         'Lampa': LAMPA_ICON_SVG,
+        'LampaSmall': LAMPA_ICON_SMALL,
         'TMDB': '<svg viewBox="0 0 150 150"><defs><linearGradient id="tmdbGrad" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#90cea1"/><stop offset="56%" stop-color="#3cbec9"/><stop offset="100%" stop-color="#00b3e5"/></linearGradient></defs><text x="0" y="50" fill="url(#tmdbGrad)" font-weight="bold" font-size="70">TM</text><text x="0" y="120" fill="url(#tmdbGrad)" font-weight="bold" font-size="70">DB</text></svg>',
         'IMDb': '<svg viewBox="0 0 122.88 122.88"><path fill="#F5C518" d="M18.43,0h86.02c10.18,0,18.43,8.25,18.43,18.43v86.02c0,10.18-8.25,18.43-18.43,18.43H18.43C8.25,122.88,0,114.63,0,104.45l0-86.02C0,8.25,8.25,0,18.43,0z"/><path fill="#000" d="M24.96,78.72V44.16h-9.6v34.56H24.96z M45.36,44.16L43.2,60.24L42,51.6l-1.2-7.44h-12v34.56h8.16v-22.8l3.36,22.8h6l3.12-23.28v23.28h8.16V44.16H45.36z M61.44,78.72V44.16h14.88c3.6,0,6.24,2.64,6.24,6v22.56c0,3.36-2.64,6-6.24,6H61.44z M72.72,50.4l-2.16-0.24v22.56c1.2,0,2.16-0.24,2.4-0.72c0.48-0.48,0.48-1.92,0.48-4.32V54.24v-2.88L72.72,50.4z M100.56,52.8h0.72c3.36,0,6.24,2.64,6.24,6v13.92c0,3.36-2.88,6-6.24,6h-0.72c-1.92,0-3.84-0.96-5.04-2.64l-0.48,2.16H86.4V44.16h9.12V55.2C96.72,53.76,98.64,52.8,100.56,52.8z M98.64,69.6v-8.16L98.4,58.8c-0.24-0.48-0.96-0.72-1.44-0.72c-0.48,0-1.2,0.24-1.44,0.72v13.68c0.24,0.48,0.96,0.72,1.44,0.72c0.48,0,1.44-0.24,1.44-0.72L98.64,69.6z"/></svg>',
         'Кинопоиск': '<svg viewBox="0 0 300 300"><circle cx="150" cy="150" r="150" fill="black"/><path d="M300 45L145.26 127.827L225.9 45H181.2L126.3 121.203V45H89.9999V255H126.3V178.92L181.2 255H225.9L147.354 174.777L300 255V216L160.776 160.146L300 169.5V130.5L161.658 139.494L300 84V45Z" fill="url(#kpGrad)"/><defs><radialGradient id="kpGrad" cx="0" cy="0" r="1" gradientTransform="translate(89.9999 45) rotate(45) scale(296.985)"><stop offset="0.5" stop-color="#FF5500"/><stop offset="1" stop-color="#BBFF00"/></radialGradient></defs></svg>'
@@ -460,7 +471,7 @@
     }
 
     // =================================================================
-    // JACRED QUALITY (Улучшенная версия с подходом Card Overlay)
+    // JACRED QUALITY (Улучшенная версия с приоритетом видео)
     // =================================================================
 
     function fetchWithProxy(url, callback) {
@@ -505,16 +516,208 @@
         tryProxy(0);
     }
 
-    function detectLowQuality(title) {
-        if (!title) return false;
-        var l = title.toLowerCase();
-        var patterns = ['camrip', 'камрип', 'ts', 'telecine', 'telesync', 'upscale', 'tc', 'тс'];
-        for (var i = 0; i < patterns.length; i++) {
-            if (l.indexOf(patterns[i]) !== -1) {
+    function isTSRelease(item) {
+        var titleLower = (item.Title || '').toLowerCase();
+        var info = item.info || item.Info || {};
+        var videotype = (info.videotype || '').toLowerCase();
+        
+        // 1. Проверяем по названию
+        var tsKeywords = ['cam', 'camrip', 'ts', 'telesync', 'tc', 'telecine', 'hdts', 'hdtc'];
+        for (var i = 0; i < tsKeywords.length; i++) {
+            if (titleLower.indexOf(tsKeywords[i]) >= 0) {
+                // Исключаем ложные срабатывания
+                if (tsKeywords[i] === 'cam' && titleLower.indexOf('cameraman') >= 0) continue;
+                if (tsKeywords[i] === 'cam' && titleLower.indexOf('camera') >= 0) continue;
+                if (tsKeywords[i] === 'tc' && titleLower.indexOf('teac') >= 0) continue;
                 return true;
             }
         }
+        
+        // 2. Проверяем по videotype
+        if (videotype.indexOf('cam') >= 0 || 
+            videotype.indexOf('ts') >= 0 || 
+            videotype.indexOf('tc') >= 0) {
+            return true;
+        }
+        
+        // 3. Проверяем по ffprobe (если есть)
+        if (item.ffprobe && Array.isArray(item.ffprobe)) {
+            var audioTracks = item.ffprobe.filter(function(track) {
+                return track.codec_type === 'audio';
+            });
+            
+            for (var j = 0; j < audioTracks.length; j++) {
+                var track = audioTracks[j];
+                if (track.tags && track.tags.title) {
+                    var title = track.tags.title.toLowerCase();
+                    if (title.indexOf('ts') >= 0 || 
+                        title.indexOf('telesync') >= 0 || 
+                        title.indexOf('cam') >= 0) {
+                        return true;
+                    }
+                }
+            }
+        }
+        
         return false;
+    }
+
+    function analyzeReleaseQuality(item) {
+        var info = item.info || item.Info || {};
+        var titleLower = (item.Title || '').toLowerCase();
+        
+        var result = {
+            videoQuality: null,
+            audioQuality: null,
+            isTS: false,
+            videoHeight: 0,
+            audioChannels: 0,
+            audioCodec: null,
+            audioLanguage: null,
+            audioTitle: null,
+            hdr: false,
+            dolbyVision: false,
+            dub: false
+        };
+        
+        // 1. Проверяем на TS
+        result.isTS = isTSRelease(item);
+        
+        // 2. АНАЛИЗ ВИДЕО
+        if (item.ffprobe && Array.isArray(item.ffprobe)) {
+            var videoTrack = item.ffprobe.find(function(track) {
+                return track.codec_type === 'video';
+            });
+            
+            if (videoTrack) {
+                result.videoHeight = videoTrack.height || 0;
+                
+                // Определяем качество видео
+                if (result.videoHeight >= 2160) {
+                    result.videoQuality = '4K';
+                } else if (result.videoHeight >= 1440) {
+                    result.videoQuality = '2K';
+                } else if (result.videoHeight >= 1080) {
+                    result.videoQuality = 'FHD';
+                } else if (result.videoHeight >= 720) {
+                    result.videoQuality = 'HD';
+                } else if (result.videoHeight > 0) {
+                    result.videoQuality = 'SD';
+                }
+                
+                // Проверяем HDR через ffprobe
+                if (videoTrack.side_data_list) {
+                    var hasMastering = videoTrack.side_data_list.some(function(sd) {
+                        return sd.side_data_type === 'Mastering display metadata';
+                    });
+                    var hasContentLight = videoTrack.side_data_list.some(function(sd) {
+                        return sd.side_data_type === 'Content light level metadata';
+                    });
+                    var hasDolby = videoTrack.side_data_list.some(function(sd) {
+                        return sd.side_data_type === 'DOVI configuration record' || 
+                               sd.side_data_type === 'Dolby Vision RPU';
+                    });
+                    
+                    if (hasDolby) {
+                        result.dolbyVision = true;
+                        result.hdr = true;
+                    } else if (hasMastering || hasContentLight) {
+                        result.hdr = true;
+                    }
+                }
+                
+                if (!result.hdr && videoTrack.color_transfer) {
+                    var ct = (videoTrack.color_transfer || '').toLowerCase();
+                    if (ct === 'smpte2084' || ct === 'arib-std-b67') {
+                        result.hdr = true;
+                    }
+                }
+            }
+            
+            // 3. АНАЛИЗ АУДИО
+            var audioTracks = item.ffprobe.filter(function(track) {
+                return track.codec_type === 'audio';
+            });
+            
+            // Берем основную аудиодорожку (с наибольшим количеством каналов)
+            var mainAudio = null;
+            audioTracks.forEach(function(track) {
+                if (track.channels && (!mainAudio || track.channels > mainAudio.channels)) {
+                    mainAudio = track;
+                }
+            });
+            
+            if (mainAudio) {
+                result.audioChannels = mainAudio.channels || 0;
+                result.audioCodec = mainAudio.codec_name || null;
+                
+                if (mainAudio.tags) {
+                    result.audioLanguage = mainAudio.tags.language || null;
+                    result.audioTitle = mainAudio.tags.title || mainAudio.tags.handler_name || null;
+                }
+                
+                // Определяем качество аудио
+                if (result.audioChannels >= 8) {
+                    result.audioQuality = '7.1';
+                } else if (result.audioChannels >= 6) {
+                    result.audioQuality = '5.1';
+                } else if (result.audioChannels >= 4) {
+                    result.audioQuality = '4.0';
+                } else if (result.audioChannels >= 2) {
+                    result.audioQuality = '2.0';
+                }
+                
+                // Проверяем DUB
+                if (!result.dub) {
+                    audioTracks.forEach(function(track) {
+                        if (track.tags) {
+                            var language = (track.tags.language || '').toLowerCase();
+                            var trackTitle = (track.tags.title || track.tags.handler_name || '').toLowerCase();
+                            
+                            if (language === 'rus' || language === 'ru' || language === 'russian') {
+                                if (trackTitle.indexOf('dub') >= 0 || 
+                                    trackTitle.indexOf('дубляж') >= 0 || 
+                                    trackTitle.indexOf('дублир') >= 0 || 
+                                    trackTitle === 'd') {
+                                    result.dub = true;
+                                }
+                            }
+                        }
+                    });
+                }
+            }
+        }
+        
+        // 4. Если нет ffprobe - определяем по числовому качеству
+        if (!result.videoQuality) {
+            var qualityNumeric = info.quality || 0;
+            if (qualityNumeric >= 2160) {
+                result.videoQuality = '4K';
+            } else if (qualityNumeric >= 1440) {
+                result.videoQuality = '2K';
+            } else if (qualityNumeric >= 1080) {
+                result.videoQuality = 'FHD';
+            } else if (qualityNumeric >= 720) {
+                result.videoQuality = 'HD';
+            } else if (qualityNumeric > 0) {
+                result.videoQuality = 'SD';
+            }
+        }
+        
+        // 5. Если все еще нет качества - по названию
+        if (!result.videoQuality) {
+            if (titleLower.indexOf('2160') >= 0 || titleLower.indexOf('4k') >= 0) {
+                result.videoQuality = '4K';
+            } else if (titleLower.indexOf('1440') >= 0 || titleLower.indexOf('2k') >= 0) {
+                result.videoQuality = '2K';
+            } else if (titleLower.indexOf('1080') >= 0 || titleLower.indexOf('fhd') >= 0) {
+                result.videoQuality = 'FHD';
+            } else if (titleLower.indexOf('720') >= 0 || titleLower.indexOf('hd') >= 0) {
+                result.videoQuality = 'HD';
+            }
+        }
+        
+        return result;
     }
 
     function getBestJacred(card, callback) {
@@ -563,7 +766,7 @@
                 return;
             }
 
-            console.log('[Тема от SERG] Jacred v2: Получение качества для:', title, year);
+            console.log('[Тема от SERG] Jacred: Получение качества для:', title, year);
 
             fetchWithProxy(requestUrl, function(err, data) {
                 if (err || !data) {
@@ -590,164 +793,137 @@
                         return;
                     }
 
-                    // === УЛУЧШЕННАЯ ЛОГИКА ОПРЕДЕЛЕНИЯ КАЧЕСТВА ===
-                    // Подход Card Overlay: сначала проверяем, есть ли HD релизы
+                    var releases = [];
                     
-                    var hasHDRelease = results.some(function(item) {
-                        var info = item.info || item.Info || {};
-                        var quality = info.quality || 0;
-                        return quality >= 720;
-                    });
-
-                    // Если есть HD релизы - игнорируем TS
-                    var filteredResults = results;
-                    if (hasHDRelease) {
-                        filteredResults = results.filter(function(item) {
-                            return !detectLowQuality(item.Title);
-                        });
-                        console.log('[Тема от SERG] Найдены HD релизы, TS исключены. Осталось:', filteredResults.length);
-                    }
-
-                    // Дополнительная проверка по году выпуска (для старых фильмов)
-                    var releaseYear = parseInt(year, 10);
-                    var currentYear = new Date().getFullYear();
-                    var age = currentYear - releaseYear;
-
-                    var best = {
-                        resolution: 'SD',
-                        hdr: false,
-                        dolbyVision: false,
-                        sound: null,
-                        dub: false,
-                        _ts: now
-                    };
-
-                    var resOrder = ['SD', 'HD', 'FHD', '2K', '4K'];
-
-                    filteredResults.forEach(function(item) {
-                        var titleLower = (item.Title || '').toLowerCase();
-                        var info = item.info || item.Info || {};
-                        var videotype = (info.videotype || '').toLowerCase();
-                        var quality = info.quality || 0;
-
-                        var currentRes = 'SD';
+                    results.forEach(function(item) {
+                        var analysis = analyzeReleaseQuality(item);
                         
-                        // Проверяем на TS только если нет HD релизов
-                        if (!hasHDRelease) {
-                            if (titleLower.indexOf('cam') >= 0 || titleLower.indexOf('ts') >= 0 || 
-                                titleLower.indexOf('tc') >= 0 || titleLower.indexOf('telesync') >= 0 ||
-                                titleLower.indexOf('telecine') >= 0 || titleLower.indexOf('camrip') >= 0) {
-                                // Если фильм старый (>2 лет) - игнорируем TS метки
-                                if (age <= 2) {
-                                    currentRes = 'TS';
-                                } else {
-                                    // Старый фильм - скорее всего есть нормальное качество
-                                    return;
-                                }
-                            }
-                        }
-
-                        if (currentRes !== 'TS') {
-                            if (quality >= 2160) {
-                                currentRes = '4K';
-                            } else if (quality >= 1440) {
-                                currentRes = '2K';
-                            } else if (quality >= 1080) {
-                                currentRes = 'FHD';
-                            } else if (quality >= 720) {
-                                currentRes = 'HD';
-                            } else {
-                                // Fallback по названию
-                                if (titleLower.indexOf('2160') >= 0 || titleLower.indexOf('4k') >= 0) {
-                                    currentRes = '4K';
-                                } else if (titleLower.indexOf('1440') >= 0 || titleLower.indexOf('2k') >= 0) {
-                                    currentRes = '2K';
-                                } else if (titleLower.indexOf('1080') >= 0 || titleLower.indexOf('fhd') >= 0) {
-                                    currentRes = 'FHD';
-                                } else if (titleLower.indexOf('720') >= 0 || titleLower.indexOf('hd') >= 0) {
-                                    currentRes = 'HD';
-                                }
-                            }
-                        }
-
-                        if (currentRes === 'TS' && age > 2) {
-                            // Старый фильм с TS меткой - игнорируем
-                            return;
-                        }
-
-                        if (resOrder.indexOf(currentRes) > resOrder.indexOf(best.resolution)) {
-                            best.resolution = currentRes;
-                        }
-
-                        // HDR / Dolby Vision
-                        if (videotype.indexOf('dolby') >= 0 || videotype.indexOf('dv') >= 0 || 
-                            titleLower.indexOf('dolby vision') >= 0 || titleLower.indexOf('dovi') >= 0) {
-                            best.dolbyVision = true;
-                            best.hdr = true;
-                        } else if (videotype.indexOf('hdr') >= 0 || titleLower.indexOf('hdr10+') >= 0 || 
-                                   titleLower.indexOf('hdr10') >= 0 || titleLower.indexOf('hdr') >= 0) {
-                            best.hdr = true;
-                        }
-
-                        // Звук
-                        if (item.ffprobe && Array.isArray(item.ffprobe)) {
-                            var audioTracks = item.ffprobe.filter(function(track) {
-                                return track.codec_type === 'audio';
-                            });
-                            
-                            var maxChannels = 0;
-                            audioTracks.forEach(function(track) {
-                                if (track.channels && track.channels > maxChannels) {
-                                    maxChannels = track.channels;
-                                }
-                            });
-                            
-                            if (maxChannels >= 8) {
-                                best.sound = '7.1';
-                            } else if (maxChannels >= 6) {
-                                best.sound = '5.1';
-                            } else if (maxChannels >= 2) {
-                                best.sound = '2.0';
-                            }
-                            
-                            if (!best.dub) {
-                                audioTracks.forEach(function(track) {
-                                    if (track.tags) {
-                                        var language = (track.tags.language || '').toLowerCase();
-                                        var trackTitle = (track.tags.title || track.tags.handler_name || '').toLowerCase();
-                                        
-                                        if (language === 'rus' || language === 'ru' || language === 'russian') {
-                                            if (trackTitle.indexOf('dub') >= 0 || trackTitle.indexOf('дубляж') >= 0 || 
-                                                trackTitle.indexOf('дублир') >= 0 || trackTitle === 'd') {
-                                                best.dub = true;
-                                            }
-                                        }
-                                    }
-                                });
-                            }
-                        }
-
-                        if (!best.dub && titleLower.indexOf('dub') >= 0) {
-                            best.dub = true;
-                        }
+                        releases.push({
+                            title: item.Title,
+                            videoQuality: analysis.videoQuality,
+                            audioQuality: analysis.audioQuality,
+                            isTS: analysis.isTS,
+                            videoHeight: analysis.videoHeight,
+                            audioChannels: analysis.audioChannels,
+                            audioCodec: analysis.audioCodec,
+                            audioLanguage: analysis.audioLanguage,
+                            audioTitle: analysis.audioTitle,
+                            hdr: analysis.hdr || false,
+                            dolbyVision: analysis.dolbyVision || false,
+                            dub: analysis.dub || false,
+                            sound: analysis.audioQuality
+                        });
                     });
-
-                    // Если не нашли HD и это старый фильм - ставим HD как fallback
-                    if (best.resolution === 'SD' && age > 2) {
-                        best.resolution = 'HD';
-                    }
-
-                    // Если результат SD, но есть релизы - поднимаем до HD
-                    if (best.resolution === 'SD' && results.length > 0 && !hasHDRelease) {
-                        best.resolution = 'HD';
-                    }
-
-                    _jacredCache[cacheKey] = best;
-                    saveToStorage('jacred_cache', { [cacheKey]: best });
                     
-                    console.log('[Тема от SERG] Результат Jacred (улучшенный):', best);
-                    callback(best);
-
+                    // ============================================================
+                    // 1. РАЗДЕЛЯЕМ РЕЛИЗЫ НА TS И НЕ-TS
+                    // ============================================================
+                    
+                    var nonTSReleases = releases.filter(function(item) {
+                        return !item.isTS;
+                    });
+                    
+                    var tsReleases = releases.filter(function(item) {
+                        return item.isTS;
+                    });
+                    
+                    // ============================================================
+                    // 2. ЕСЛИ ЕСТЬ НЕ-TS РЕЛИЗЫ - ВЫБИРАЕМ ИЗ НИХ
+                    // ============================================================
+                    
+                    if (nonTSReleases.length > 0) {
+                        // Сортируем не-TS релизы по качеству видео
+                        var videoQualityPriority = ['4K', '2K', 'FHD', 'HD', 'SD'];
+                        
+                        nonTSReleases.sort(function(a, b) {
+                            // Сначала сравниваем качество видео
+                            var idxA = videoQualityPriority.indexOf(a.videoQuality);
+                            var idxB = videoQualityPriority.indexOf(b.videoQuality);
+                            
+                            if (idxA !== idxB) {
+                                return idxA - idxB;
+                            }
+                            
+                            // Если качество видео одинаковое - сравниваем звук
+                            var audioPriority = ['7.1', '5.1', '4.0', '2.0'];
+                            var idxAudioA = audioPriority.indexOf(a.sound);
+                            var idxAudioB = audioPriority.indexOf(b.sound);
+                            
+                            if (idxAudioA === -1) idxAudioA = audioPriority.length;
+                            if (idxAudioB === -1) idxAudioB = audioPriority.length;
+                            
+                            return idxAudioA - idxAudioB;
+                        });
+                        
+                        // Берем лучший не-TS релиз
+                        var bestRelease = nonTSReleases[0];
+                        var result = {
+                            resolution: bestRelease.videoQuality,
+                            hdr: bestRelease.hdr || false,
+                            dolbyVision: bestRelease.dolbyVision || false,
+                            sound: bestRelease.sound || '2.0',
+                            dub: bestRelease.dub || false,
+                            _ts: now,
+                            _source: 'jacred',
+                            _nonTS: true
+                        };
+                        
+                        console.log('[Тема от SERG] Выбран не-TS релиз:', {
+                            video: bestRelease.videoQuality,
+                            sound: bestRelease.sound,
+                            title: bestRelease.title
+                        });
+                        
+                        _jacredCache[cacheKey] = result;
+                        saveToStorage('jacred_cache', { [cacheKey]: result });
+                        callback(result);
+                        return;
+                    }
+                    
+                    // ============================================================
+                    // 3. ЕСЛИ НЕТ НЕ-TS РЕЛИЗОВ - ВЫБИРАЕМ ЛУЧШИЙ ИЗ TS
+                    // ============================================================
+                    
+                    if (tsReleases.length > 0) {
+                        // Сортируем TS релизы по качеству видео
+                        var videoQualityPriority = ['4K', '2K', 'FHD', 'HD', 'SD'];
+                        
+                        tsReleases.sort(function(a, b) {
+                            var idxA = videoQualityPriority.indexOf(a.videoQuality);
+                            var idxB = videoQualityPriority.indexOf(b.videoQuality);
+                            return idxA - idxB;
+                        });
+                        
+                        var bestRelease = tsReleases[0];
+                        var result = {
+                            resolution: bestRelease.videoQuality,
+                            hdr: bestRelease.hdr || false,
+                            dolbyVision: bestRelease.dolbyVision || false,
+                            sound: 'TS',
+                            dub: bestRelease.dub || false,
+                            _ts: now,
+                            _source: 'jacred',
+                            _nonTS: false,
+                            _note: 'Только TS релизы'
+                        };
+                        
+                        console.log('[Тема от SERG] Выбран TS релиз (нет альтернатив):', {
+                            video: bestRelease.videoQuality,
+                            title: bestRelease.title
+                        });
+                        
+                        _jacredCache[cacheKey] = result;
+                        saveToStorage('jacred_cache', { [cacheKey]: result });
+                        callback(result);
+                        return;
+                    }
+                    
+                    // ============================================================
+                    // 4. НЕТ РЕЛИЗОВ
+                    // ============================================================
+                    
+                    callback(null);
+                    
                 } catch (e) {
                     console.error('[Тема от SERG] Ошибка парсинга Jacred:', e);
                     callback(null);
@@ -1056,7 +1232,7 @@
     }
 
     // =================================================================
-    // OVERRIDE IMAGE API (упрощено, без w600_and_h900_face)
+    // OVERRIDE IMAGE API (упрощено)
     // =================================================================
 
     function getImageQuality() {
@@ -1089,6 +1265,57 @@
         } catch (e) {
             console.error('[Тема от SERG] Ошибка переопределения API изображений:', e);
         }
+    }
+
+    // =================================================================
+    // ПОЗИЦИОНИРОВАНИЕ (централизованные функции)
+    // =================================================================
+
+    function applyContentPosition(render) {
+        if (!render || !render.length) return;
+        
+        var position = Lampa.Storage.get('applecation_content_position', 'left');
+        
+        // Удаляем старые классы и добавляем новый
+        render.removeClass('content-left content-center content-right')
+              .addClass('content-' + position);
+        
+        // Дополнительно применяем CSS-стили для wrapper
+        var wrapper = render.find('.applecation__wrapper');
+        if (wrapper.length) {
+            if (position === 'center') {
+                wrapper.css('max-width', '60%');
+            } else {
+                wrapper.css('max-width', '100%');
+            }
+            wrapper.css('transform-origin', position === 'right' ? 'right bottom' : 'left bottom');
+        }
+    }
+
+    function applyRatingsPosition(render) {
+        if (!render || !render.length) return;
+        
+        var position = Lampa.Storage.get('applecation_ratings_position', 'left');
+        
+        render.removeClass('ratings-left ratings-center ratings-right')
+              .addClass('ratings-' + position);
+    }
+
+    function applyInfoPosition(render) {
+        if (!render || !render.length) return;
+        
+        var position = Lampa.Storage.get('applecation_info_position', 'left');
+        
+        render.removeClass('info-left info-center info-right')
+              .addClass('info-' + position);
+    }
+
+    function applyAllPositions(render) {
+        if (!render || !render.length) return;
+        
+        applyContentPosition(render);
+        applyRatingsPosition(render);
+        applyInfoPosition(render);
     }
 
     // =================================================================
@@ -1345,7 +1572,6 @@
 
             var bgEnabled = Lampa.Storage.get('applecation_content_bg', true);
             var scalePercent = parseFloat(Lampa.Storage.get('applecation_content_scale', '100'));
-            var contentPosition = Lampa.Storage.get('applecation_content_position', 'left');
 
             var right = render.find('.full-start-new__right');
             if (!right.length) return;
@@ -1379,24 +1605,6 @@
             wrapper = left.find('.applecation__wrapper');
             logoWrapper = wrapper.find('.applecation__logo-wrapper');
             contentWrapper = wrapper.find('.applecation__content-wrapper');
-
-            // Позиционирование всего блока через wrapper
-            var alignMap = {
-                'left': 'flex-start',
-                'center': 'center',
-                'right': 'flex-end'
-            };
-            left.css({
-                'display': 'flex',
-                'align-items': alignMap[contentPosition] || 'flex-start',
-                'justify-content': contentPosition === 'center' ? 'center' : 'flex-start'
-            });
-            wrapper.css({
-                'max-width': contentPosition === 'center' ? '60%' : '100%',
-                'width': '100%',
-                'transform-origin': contentPosition === 'right' ? 'right bottom' : 'left bottom',
-                'transition': 'transform 0.3s ease'
-            });
 
             contentWrapper.css('position', 'relative');
             contentWrapper.css('z-index', '10');
@@ -1487,13 +1695,16 @@
                 bg.after('<div class="full-start__background loaded applecation__overlay"></div>');
             }
             
+            // Применяем все позиционирования
+            applyAllPositions(render);
+            
         } catch (e) {
             console.error('[Тема от SERG] Ошибка модификации DOM:', e);
         }
     }
 
     // =================================================================
-    // ОБНОВЛЕНИЕ МАСШТАБА В РЕАЛЬНОМ ВРЕМЕНИ
+    // ОБНОВЛЕНИЕ МАСШТАБА И ПОЗИЦИОНИРОВАНИЯ
     // =================================================================
 
     function updateContentScale(render) {
@@ -1518,54 +1729,6 @@
             var contentWrapper = render.find('.applecation__content-wrapper');
             contentWrapper.css('max-width', '50vw');
 
-            // Позиция всей информации контента
-            var contentPosition = Lampa.Storage.get('applecation_content_position', 'left');
-            var left = render.find('.applecation__left');
-            if (left.length) {
-                var alignMap = {
-                    'left': 'flex-start',
-                    'center': 'center',
-                    'right': 'flex-end'
-                };
-                left.css({
-                    'display': 'flex',
-                    'align-items': alignMap[contentPosition] || 'flex-start',
-                    'justify-content': contentPosition === 'center' ? 'center' : 'flex-start'
-                });
-                wrapper.css({
-                    'max-width': contentPosition === 'center' ? '60%' : '100%',
-                    'transform-origin': contentPosition === 'right' ? 'right bottom' : 'left bottom'
-                });
-            }
-
-            // Позиция рейтингов и реакций
-            var ratingsPosition = Lampa.Storage.get('applecation_ratings_position', 'left');
-            var ratingsContainer = render.find('.applecation__ratings');
-            if (ratingsContainer.length) {
-                ratingsContainer.css('justify-content', ratingsPosition === 'center' ? 'center' : 'flex-start');
-            }
-            var reactionsContainer = render.find('.applecation__reactions');
-            if (reactionsContainer.length) {
-                reactionsContainer.css('justify-content', ratingsPosition === 'center' ? 'center' : 'flex-start');
-            }
-            var meta = render.find('.applecation__meta');
-            if (meta.length) {
-                meta.css('justify-content', ratingsPosition === 'center' ? 'center' : 'flex-start');
-            }
-
-            // Позиция бейджей качества/инфо о сезонах
-            var infoPosition = Lampa.Storage.get('applecation_info_position', 'left');
-            var info = render.find('.applecation__info');
-            if (info.length) {
-                if (infoPosition === 'center') {
-                    info.css('align-items', 'center');
-                    info.css('text-align', 'center');
-                } else {
-                    info.css('align-items', 'flex-start');
-                    info.css('text-align', 'left');
-                }
-            }
-
             var bgEnabled = Lampa.Storage.get('applecation_content_bg', true);
             if (!bgEnabled) {
                 contentWrapper.css('background', 'transparent');
@@ -1583,9 +1746,71 @@
                 contentWrapper.css('background-color', 'rgba(0,0,0,0.3)');
             }
             
+            // Применяем все позиционирования
+            applyAllPositions(render);
+            
         } catch (e) {
             console.warn('[Тема от SERG] Ошибка обновления масштаба:', e);
         }
+    }
+
+    // =================================================================
+    // RENDER LAMPA RATING
+    // =================================================================
+
+    function renderLampaRating(lampaData) {
+        if (!lampaData || !lampaData.rating) return null;
+        
+        var rating = lampaData.rating;
+        var medianReaction = lampaData.medianReaction || '';
+        var color = getRatingColor(rating);
+        var bg = getRatingBackgroundColor(rating);
+        var useIcons = Lampa.Storage.get('applecation_rating_icons', false);
+        var useReactionIcon = Lampa.Storage.get('applecation_lampa_reaction_icon', false);
+        
+        var parts = [];
+        
+        // 1. Анимированная реакция (всегда первая, если включена)
+        if (useReactionIcon && medianReaction && REACTION_GIFS[medianReaction]) {
+            parts.push({
+                type: 'reaction',
+                html: '<img src="' + REACTION_GIFS[medianReaction] + 
+                      '" style="width:1.2em;height:1.2em;object-fit:contain;border-radius:50%;flex-shrink:0;" />'
+            });
+        }
+        
+        // 2. Рейтинг (всегда посередине)
+        parts.push({
+            type: 'rating',
+            html: '<span class="rating-value" style="color: ' + color + '; font-weight:700;">' + 
+                  rating.toFixed(1) + 
+                  '</span>'
+        });
+        
+        // 3. Иконка Lampa или название (всегда последняя)
+        if (useIcons) {
+            parts.push({
+                type: 'icon',
+                html: '<span class="rating-icon" style="width:1.2em;height:1.2em;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;">' + 
+                      RATING_ICONS['LampaSmall'] + 
+                      '</span>'
+            });
+        } else {
+            parts.push({
+                type: 'source',
+                html: '<span class="rating-source" style="color: #ffffff; font-size:0.7em; opacity:0.7;">Lampa</span>'
+            });
+        }
+        
+        // Собираем все части
+        var content = parts.map(function(p) { return p.html; }).join('');
+        
+        return {
+            content: content,
+            color: color,
+            bg: bg,
+            rating: rating
+        };
     }
 
     // =================================================================
@@ -1596,8 +1821,6 @@
         try {
             var isTv = !!(movie.name || movie.original_name || movie.first_air_date || movie.number_of_seasons);
             var descriptionOverlayEnabled = Lampa.Storage.get('applecation_description_overlay', true);
-            var ratingsPosition = Lampa.Storage.get('applecation_ratings_position', 'left');
-            var infoPosition = Lampa.Storage.get('applecation_info_position', 'left');
 
             var contentGroup = render.find('.applecation__content-group');
             if (!contentGroup.length) {
@@ -1615,8 +1838,7 @@
                     'margin-bottom': '0.7em',
                     'padding': '0.3em 0',
                     'font-size': '1.0em',
-                    'line-height': '1.4',
-                    'justify-content': ratingsPosition === 'center' ? 'center' : 'flex-start'
+                    'line-height': '1.4'
                 });
 
                 var date = movie.release_date || movie.first_air_date || '';
@@ -1681,82 +1903,105 @@
             var ratingsContainer = contentGroup.find('.applecation__ratings');
             if (ratingsContainer.length) {
                 ratingsContainer.empty();
-                ratingsContainer.css('justify-content', ratingsPosition === 'center' ? 'center' : 'flex-start');
 
                 var ratingItems = [];
                 var allRatings = [];
 
-                var useIcons = Lampa.Storage.get('applecation_rating_icons', false);
-                var useReactionIcon = Lampa.Storage.get('applecation_lampa_reaction_icon', false);
-
+                // Lampa рейтинг (с анимированной реакцией)
                 if (lampaData && lampaData.rating > 0) {
-                    var lampaColor = getRatingColor(lampaData.rating);
-                    var lampaBg = getRatingBackgroundColor(lampaData.rating);
-                    var icon = '';
-                    
-                    // Анимированная реакция добавляется дополнительно к иконке/названию
-                    if (useReactionIcon && lampaData.medianReaction && REACTION_GIFS[lampaData.medianReaction]) {
-                        icon = '<img src="' + REACTION_GIFS[lampaData.medianReaction] + '" style="width:1em;height:1em;object-fit:contain;border-radius:50%;margin-right:0.2em;" />';
-                    } else if (useIcons) {
-                        icon = RATING_ICONS['Lampa'];
+                    var lampaResult = renderLampaRating(lampaData);
+                    if (lampaResult) {
+                        ratingItems.push({
+                            source: 'Lampa',
+                            value: lampaResult.rating,
+                            color: lampaResult.color,
+                            bg: lampaResult.bg,
+                            html: lampaResult.content,
+                            isLampa: true
+                        });
+                        allRatings.push(lampaResult.rating);
                     }
-                    
-                    ratingItems.push({
-                        source: 'Lampa',
-                        value: lampaData.rating,
-                        color: lampaColor,
-                        bg: lampaBg,
-                        icon: icon,
-                        useIcon: useIcons || useReactionIcon
-                    });
-                    allRatings.push(lampaData.rating);
                 }
 
+                // TMDB
                 if (ratings.tmdb > 0) {
                     var tmdbColor = getRatingColor(ratings.tmdb);
                     var tmdbBg = getRatingBackgroundColor(ratings.tmdb);
+                    var useIcons = Lampa.Storage.get('applecation_rating_icons', false);
                     var icon = useIcons ? RATING_ICONS['TMDB'] : '';
+                    
+                    var content = '';
+                    if (useIcons && icon) {
+                        content = '<span class="rating-icon" style="width:1.2em;height:1.2em;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;">' + icon + '</span>' +
+                                  '<span class="rating-value" style="color: ' + tmdbColor + ';">' + ratings.tmdb.toFixed(1) + '</span>';
+                    } else {
+                        content = '<span class="rating-source" style="color: #ffffff; font-size:0.7em; opacity:0.7;">TMDB</span>' +
+                                  '<span class="rating-value" style="color: ' + tmdbColor + ';">' + ratings.tmdb.toFixed(1) + '</span>';
+                    }
+                    
                     ratingItems.push({
                         source: 'TMDB',
                         value: ratings.tmdb,
                         color: tmdbColor,
                         bg: tmdbBg,
-                        icon: icon,
-                        useIcon: useIcons
+                        html: content
                     });
                     allRatings.push(ratings.tmdb);
                 }
 
+                // IMDb
                 if (ratings.imdb > 0) {
                     var imdbColor = getRatingColor(ratings.imdb);
                     var imdbBg = getRatingBackgroundColor(ratings.imdb);
+                    var useIcons = Lampa.Storage.get('applecation_rating_icons', false);
                     var icon = useIcons ? RATING_ICONS['IMDb'] : '';
+                    
+                    var content = '';
+                    if (useIcons && icon) {
+                        content = '<span class="rating-icon" style="width:1.2em;height:1.2em;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;">' + icon + '</span>' +
+                                  '<span class="rating-value" style="color: ' + imdbColor + ';">' + ratings.imdb.toFixed(1) + '</span>';
+                    } else {
+                        content = '<span class="rating-source" style="color: #ffffff; font-size:0.7em; opacity:0.7;">IMDb</span>' +
+                                  '<span class="rating-value" style="color: ' + imdbColor + ';">' + ratings.imdb.toFixed(1) + '</span>';
+                    }
+                    
                     ratingItems.push({
                         source: 'IMDb',
                         value: ratings.imdb,
                         color: imdbColor,
                         bg: imdbBg,
-                        icon: icon,
-                        useIcon: useIcons
+                        html: content
                     });
                     allRatings.push(ratings.imdb);
                 }
 
+                // Кинопоиск
                 if (ratings.kinopoisk > 0) {
                     var kpColor = getRatingColor(ratings.kinopoisk);
                     var kpBg = getRatingBackgroundColor(ratings.kinopoisk);
+                    var useIcons = Lampa.Storage.get('applecation_rating_icons', false);
                     var icon = useIcons ? RATING_ICONS['Кинопоиск'] : '';
+                    
+                    var content = '';
+                    if (useIcons && icon) {
+                        content = '<span class="rating-icon" style="width:1.2em;height:1.2em;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;">' + icon + '</span>' +
+                                  '<span class="rating-value" style="color: ' + kpColor + ';">' + ratings.kinopoisk.toFixed(1) + '</span>';
+                    } else {
+                        content = '<span class="rating-source" style="color: #ffffff; font-size:0.7em; opacity:0.7;">Кинопоиск</span>' +
+                                  '<span class="rating-value" style="color: ' + kpColor + ';">' + ratings.kinopoisk.toFixed(1) + '</span>';
+                    }
+                    
                     ratingItems.push({
                         source: 'Кинопоиск',
                         value: ratings.kinopoisk,
                         color: kpColor,
                         bg: kpBg,
-                        icon: icon,
-                        useIcon: useIcons
+                        html: content
                     });
                     allRatings.push(ratings.kinopoisk);
                 }
 
+                // ИТОГ (если больше одного рейтинга)
                 if (allRatings.length > 1) {
                     var sum = 0;
                     for (var i = 0; i < allRatings.length; i++) {
@@ -1765,32 +2010,27 @@
                     var avg = sum / allRatings.length;
                     var avgColor = getRatingColor(avg);
                     var avgBg = getRatingBackgroundColor(avg, true);
+                    
                     ratingItems.push({
                         source: 'ИТОГ',
                         value: avg,
                         color: '#000',
                         bg: avgBg,
+                        html: '<span class="rating-value" style="color: #000; font-weight:700;">' + avg.toFixed(1) + '</span>' +
+                              '<span class="rating-source" style="color: #000; font-size:0.7em;">ИТОГ</span>',
                         isTotal: true
                     });
                 }
 
+                // Рендерим все рейтинги
                 ratingItems.forEach(function(item) {
-                    var displayValue = item.value.toFixed(1);
                     var extraClass = item.isTotal ? ' applecation__rating-item--total' : '';
-                    var iconHtml = '';
-                    
-                    if (item.useIcon && item.icon) {
-                        iconHtml = '<span class="rating-icon" style="width:1.2em;height:1.2em;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;">' + item.icon + '</span>';
-                    }
-                    
-                    var sourceText = item.useIcon ? '' : item.source;
-                    var textColor = item.isTotal ? '#000' : '#ffffff';
+                    var borderColor = item.isTotal ? 'rgba(255,215,0,0.5)' : (item.color + '40');
+                    var bgColor = item.isTotal ? '#FFD700' : item.bg;
                     
                     ratingsContainer.append(
-                        '<div class="applecation__rating-item' + extraClass + '" style="border-color: ' + item.color + '40; background: ' + item.bg + ';">' +
-                        iconHtml +
-                        '<span class="rating-value" style="color: ' + item.color + ';">' + displayValue + '</span>' +
-                        '<span class="rating-source" style="color: ' + textColor + ';">' + sourceText + '</span>' +
+                        '<div class="applecation__rating-item' + extraClass + '" style="border-color: ' + borderColor + '; background: ' + bgColor + ';">' +
+                        item.html +
                         '</div>'
                     );
                 });
@@ -1806,7 +2046,6 @@
             var reactionsContainer = contentGroup.find('.applecation__reactions');
             if (reactionsContainer.length) {
                 reactionsContainer.empty();
-                reactionsContainer.css('justify-content', ratingsPosition === 'center' ? 'center' : 'flex-start');
 
                 var hasReactions = false;
                 var useAnimated = Lampa.Storage.get('applecation_animated_reactions', false);
@@ -1983,20 +2222,12 @@
                     }
                 }
 
-                // Позиция info
-                if (infoPosition === 'center') {
-                    info.css('align-items', 'center');
-                    info.css('text-align', 'center');
-                } else {
-                    info.css('align-items', 'flex-start');
-                    info.css('text-align', 'left');
-                }
-
                 info.addClass('show');
             }
 
             renderStudiosBtn(render, movie);
 
+            // 7. ЭПИЗОДЫ
             if (isTv) {
                 addEpisodeRuntime(render, movie);
                 
@@ -2237,6 +2468,7 @@
             container.empty();
             var hasBadges = false;
 
+            // 1. Бейдж ВИДЕО
             if (qualityData.resolution) {
                 var icon = QUALITY_ICONS[qualityData.resolution];
                 if (icon) {
@@ -2245,21 +2477,28 @@
                 }
             }
 
+            // 2. Бейдж ЗВУКА (если отличается от 2.0 или TS)
+            if (qualityData.sound && qualityData.sound !== '2.0') {
+                if (qualityData.sound === 'TS') {
+                    container.append('<span class="quality-badge quality-badge--ts" style="color: #ff6b6b; border-color: rgba(255,107,107,0.3);">TS</span>');
+                    hasBadges = true;
+                } else {
+                    var soundIcon = QUALITY_ICONS[qualityData.sound];
+                    if (soundIcon) {
+                        container.append('<span class="quality-badge quality-badge--icon" style="color: #ffffff;">' + soundIcon + '</span>');
+                        hasBadges = true;
+                    }
+                }
+            }
+
+            // 3. HDR/DV
             if (qualityData.dolbyVision) {
                 var dvIcon = QUALITY_ICONS['Dolby Vision'];
                 if (dvIcon) {
                     container.append('<span class="quality-badge quality-badge--icon" style="color: #ffffff;">' + dvIcon + '</span>');
                     hasBadges = true;
                 }
-            }
-            
-            if (qualityData.hdr && !qualityData.dolbyVision) {
-                var hdrIcon = QUALITY_ICONS['HDR'];
-                if (hdrIcon) {
-                    container.append('<span class="quality-badge quality-badge--icon" style="color: #ffffff;">' + hdrIcon + '</span>');
-                    hasBadges = true;
-                }
-            } else if (qualityData.hdr && qualityData.dolbyVision) {
+            } else if (qualityData.hdr) {
                 var hdrIcon = QUALITY_ICONS['HDR'];
                 if (hdrIcon) {
                     container.append('<span class="quality-badge quality-badge--icon" style="color: #ffffff;">' + hdrIcon + '</span>');
@@ -2267,20 +2506,19 @@
                 }
             }
 
-            if (qualityData.sound) {
-                var soundIcon = QUALITY_ICONS[qualityData.sound];
-                if (soundIcon) {
-                    container.append('<span class="quality-badge quality-badge--icon" style="color: #ffffff;">' + soundIcon + '</span>');
-                    hasBadges = true;
-                }
-            }
-
+            // 4. DUB
             if (qualityData.dub) {
                 var dubIcon = QUALITY_ICONS['DUB'];
                 if (dubIcon) {
                     container.append('<span class="quality-badge quality-badge--icon" style="color: #ffffff;">' + dubIcon + '</span>');
                     hasBadges = true;
                 }
+            }
+
+            // 5. Если есть пометка о TS
+            if (qualityData._note) {
+                container.append('<span class="quality-badge quality-badge--ts-label" style="color: #ff6b6b; font-size: 0.5em; border-color: #ff6b6b;">TS</span>');
+                hasBadges = true;
             }
 
             if (hasBadges) {
@@ -2555,6 +2793,8 @@
             .applecation__rating-item .rating-value { font-size: 1.05em !important; font-weight: 700 !important; }
             .applecation__rating-item .rating-source { font-size: 0.7em !important; opacity: 0.7 !important; margin-left: 0.15em !important; color: #ffffff !important; }
             .applecation__rating-item .rating-icon { margin-right: 0.1em; width: 1.2em; height: 1.2em; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+            .applecation__rating-item .rating-icon svg { width: 100% !important; height: 100% !important; }
+            .applecation__rating-item img { width: 1.2em !important; height: 1.2em !important; object-fit: contain !important; border-radius: 50% !important; flex-shrink: 0 !important; }
             .applecation__rating-item--total { border-color: rgba(255,215,0,0.5) !important; background: #FFD700 !important; }
             .applecation__rating-item--total .rating-value { color: #000 !important; }
             .applecation__rating-item--total .rating-source { color: #000 !important; }
@@ -2570,8 +2810,6 @@
             .focus .applecation__description { color: #ffffff !important; }
             .applecation__info { color: #ffffff !important; font-size: 0.95em !important; line-height: 1.4 !important; margin-bottom: 0.5em !important; opacity: 0 !important; transform: translateY(15px) !important; transition: opacity 0.4s ease-out, transform 0.4s ease-out !important; display: flex !important; flex-direction: column !important; gap: 0.5em !important; }
             .applecation__info.show { opacity: 1 !important; transform: translateY(0) !important; }
-            .applecation__info.align-center { align-items: center !important; text-align: center !important; }
-            .applecation__info.align-left { align-items: flex-start !important; text-align: left !important; }
             .applecation__season-info { color: #ffffff !important; }
             .applecation__status-info { color: #ffffff !important; }
             .applecation__quality-badges { display: flex !important; align-items: center !important; flex-wrap: wrap !important; gap: 0.3em !important; margin-top: 0.3em !important; opacity: 0 !important; transform: translateY(10px) !important; transition: opacity 0.3s ease-out, transform 0.3s ease-out !important; }
@@ -2579,6 +2817,8 @@
             .quality-badge { display: inline-flex !important; align-items: center !important; justify-content: center !important; padding: 0.1em 0.3em !important; border-radius: 0.2em !important; font-size: 0.65em !important; font-weight: 700 !important; line-height: 1.2 !important; color: #ffffff !important; text-transform: uppercase !important; letter-spacing: 0.02em !important; border: 1px solid rgba(255,255,255,0.1) !important; background: rgba(0,0,0,0.4) !important; }
             .quality-badge--icon { background: transparent !important; border: none !important; padding: 0 !important; height: 1.1em !important; color: #ffffff !important; }
             .quality-badge--icon svg { height: 100% !important; width: auto !important; display: block !important; }
+            .quality-badge--ts { color: #ff6b6b !important; border-color: rgba(255,107,107,0.3) !important; }
+            .quality-badge--ts-label { background: rgba(255,107,107,0.15) !important; border-color: rgba(255,107,107,0.4) !important; color: #ff6b6b !important; padding: 0.1em 0.4em !important; border-radius: 0.3em !important; font-size: 0.5em !important; font-weight: 700 !important; text-transform: uppercase !important; }
             .applecation .full-start-new__buttons { display: flex !important; flex-direction: row !important; flex-wrap: wrap !important; gap: 0.6em !important; margin-top: 0.5em !important; }
             .applecation .full-start__button { min-height: 2.6em !important; padding: 0.4em 1em !important; border-radius: 0.8em !important; background: rgba(255,255,255,0.08) !important; border: 1px solid rgba(255,255,255,0.12) !important; color: rgba(255,255,255,0.9) !important; font-size: 0.85em !important; font-weight: 600 !important; transition: all 0.25s ease !important; backdrop-filter: blur(10px) !important; -webkit-backdrop-filter: blur(10px) !important; }
             .applecation .full-start__button.focus, .applecation .full-start__button.hover { background: rgba(255,255,255,0.18) !important; border-color: rgba(255,255,255,0.3) !important; transform: scale(1.05) !important; }
@@ -2636,6 +2876,61 @@
                 transform: scale(1.05) !important;
             }
             
+            /* ============================================================
+               ПОЗИЦИОНИРОВАНИЕ КОНТЕНТА (CSS-классы)
+               ============================================================ */
+            
+            /* УРОВЕНЬ 1: Позиция всей информации контента */
+            .content-left .applecation__content-group {
+                align-items: flex-start !important;
+                text-align: left !important;
+            }
+            
+            .content-center .applecation__content-group {
+                align-items: center !important;
+                text-align: center !important;
+            }
+            
+            .content-right .applecation__content-group {
+                align-items: flex-end !important;
+                text-align: right !important;
+            }
+            
+            /* УРОВЕНЬ 2: Позиция рейтингов и реакций */
+            .ratings-left .applecation__meta,
+            .ratings-left .applecation__ratings,
+            .ratings-left .applecation__reactions {
+                justify-content: flex-start !important;
+            }
+            
+            .ratings-center .applecation__meta,
+            .ratings-center .applecation__ratings,
+            .ratings-center .applecation__reactions {
+                justify-content: center !important;
+            }
+            
+            .ratings-right .applecation__meta,
+            .ratings-right .applecation__ratings,
+            .ratings-right .applecation__reactions {
+                justify-content: flex-end !important;
+            }
+            
+            /* УРОВЕНЬ 2: Позиция информации о сезонах */
+            .info-left .applecation__info {
+                align-items: flex-start !important;
+                text-align: left !important;
+            }
+            
+            .info-center .applecation__info {
+                align-items: center !important;
+                text-align: center !important;
+            }
+            
+            .info-right .applecation__info {
+                align-items: flex-end !important;
+                text-align: right !important;
+            }
+            
             @media screen and (max-width: 720px) { 
                 .applecation .full-start-new__body { height: auto !important; min-height: 0 !important; } 
                 .applecation .full-start-new__right { display: block !important; padding: 0 1em 1em 1em !important; } 
@@ -2644,6 +2939,29 @@
                 .applecation__logo { max-width: 60vw !important; max-height: 80px !important; } 
                 .applecation .full-start-new__title { font-size: 1.8em !important; }
                 .applecation-episode-overview { max-width: 30em !important; min-width: 20em !important; font-size: 0.6em !important; }
+                /* Мобильные позиционирования */
+                .content-center .applecation__content-group,
+                .content-right .applecation__content-group {
+                    align-items: flex-start !important;
+                    text-align: left !important;
+                }
+                .ratings-center .applecation__meta,
+                .ratings-center .applecation__ratings,
+                .ratings-center .applecation__reactions,
+                .ratings-right .applecation__meta,
+                .ratings-right .applecation__ratings,
+                .ratings-right .applecation__reactions {
+                    justify-content: flex-start !important;
+                }
+                .info-center .applecation__info,
+                .info-right .applecation__info {
+                    align-items: flex-start !important;
+                    text-align: left !important;
+                }
+                .content-center .applecation__wrapper,
+                .content-right .applecation__wrapper {
+                    max-width: 100% !important;
+                }
             }
             @media screen and (max-width: 480px) { 
                 .applecation .applecation__description { -webkit-line-clamp: 2 !important; } 
@@ -2828,7 +3146,6 @@
                 field: { name: 'Основные настройки' }
             });
 
-            // Включение/отключение плагина
             Lampa.SettingsApi.addParam({
                 component: 'applecation_plus',
                 param: { name: 'applecation_enabled', type: 'trigger', default: true },
@@ -2854,7 +3171,6 @@
                 }
             });
 
-            // Сброс настроек
             Lampa.SettingsApi.addParam({
                 component: 'applecation_plus',
                 param: { name: 'applecation_reset_settings', type: 'trigger', default: false },
@@ -2874,7 +3190,6 @@
                 }
             });
 
-            // Качество изображений
             Lampa.SettingsApi.addParam({
                 component: 'applecation_plus',
                 param: { name: 'applecation_image_quality', type: 'select', 
@@ -2909,7 +3224,6 @@
                 field: { name: 'Позиция контента' }
             });
 
-            // 1. Позиция всей информации контента
             Lampa.SettingsApi.addParam({
                 component: 'applecation_plus',
                 param: { 
@@ -2934,7 +3248,6 @@
                 }
             });
 
-            // 2. Позиция рейтинга и реакций
             Lampa.SettingsApi.addParam({
                 component: 'applecation_plus',
                 param: { 
@@ -2942,7 +3255,8 @@
                     type: 'select',
                     values: {
                         'left': 'Слева',
-                        'center': 'По центру'
+                        'center': 'По центру',
+                        'right': 'Справа'
                     },
                     default: 'left'
                 },
@@ -2958,7 +3272,6 @@
                 }
             });
 
-            // 3. Позиция бейджей качества/инфо о сезонах
             Lampa.SettingsApi.addParam({
                 component: 'applecation_plus',
                 param: { 
@@ -2966,7 +3279,8 @@
                     type: 'select',
                     values: {
                         'left': 'Слева',
-                        'center': 'По центру'
+                        'center': 'По центру',
+                        'right': 'Справа'
                     },
                     default: 'left'
                 },
@@ -2991,7 +3305,6 @@
                 field: { name: 'Рейтинги и реакции' }
             });
 
-            // Иконки в рейтингах
             Lampa.SettingsApi.addParam({
                 component: 'applecation_plus',
                 param: { name: 'applecation_rating_icons', type: 'trigger', default: false },
@@ -3013,7 +3326,6 @@
                 }
             });
 
-            // Реакция вместо иконки Lampa
             Lampa.SettingsApi.addParam({
                 component: 'applecation_plus',
                 param: { 
@@ -3042,7 +3354,6 @@
                 }
             });
 
-            // Анимированные реакции
             Lampa.SettingsApi.addParam({
                 component: 'applecation_plus',
                 param: { 
@@ -3080,7 +3391,6 @@
                 field: { name: 'Качество и бейджи' }
             });
 
-            // Бейджи качества
             Lampa.SettingsApi.addParam({
                 component: 'applecation_plus',
                 param: { name: 'applecation_show_quality_badges', type: 'trigger', default: true },
@@ -3111,7 +3421,6 @@
                 field: { name: 'Студии' }
             });
 
-            // Студии
             Lampa.SettingsApi.addParam({
                 component: 'applecation_plus',
                 param: { name: 'applecation_studios_mode', type: 'select',
@@ -3144,14 +3453,12 @@
                 field: { name: 'Оформление' }
             });
 
-            // Эффекты
             Lampa.SettingsApi.addParam({
                 component: 'applecation_plus',
                 param: { name: 'applecation_effects_enabled', type: 'trigger', default: true },
                 field: { name: 'Включить эффекты', description: 'Отключите для слабых устройств (ускоряет загрузку)' }
             });
 
-            // Фон контента
             Lampa.SettingsApi.addParam({
                 component: 'applecation_plus',
                 param: { name: 'applecation_content_bg', type: 'trigger', default: true },
@@ -3164,7 +3471,6 @@
                 }
             });
 
-            // Масштаб контента
             Lampa.SettingsApi.addParam({
                 component: 'applecation_plus',
                 param: { name: 'applecation_content_scale', type: 'select', 
@@ -3190,7 +3496,6 @@
                 }
             });
 
-            // Описание в оверлее
             Lampa.SettingsApi.addParam({
                 component: 'applecation_plus',
                 param: { name: 'applecation_description_overlay', type: 'trigger', default: true },
@@ -3206,7 +3511,6 @@
                 field: { name: 'Служебные' }
             });
 
-            // Очистка кэша
             Lampa.SettingsApi.addParam({
                 component: 'applecation_plus',
                 param: { name: 'applecation_clear_cache', type: 'trigger', default: false },
