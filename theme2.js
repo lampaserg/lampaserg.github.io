@@ -1,5 +1,5 @@
 // @name Тема от SERG
-// @version 4.7.1
+// @version 4.7.0
 // @author SERG
 // @description Расширенная карточка фильма/сериала с полными метаданными
 // @lampa-check Lampa.
@@ -11,11 +11,12 @@
     // CONFIGURATION
     // =================================================================
 
-    var PLUGIN_VERSION = '4.7.1';
+    var PLUGIN_VERSION = '4.7.0';
     var CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 дней
-    var PROXY_TIMEOUT = 10000;
+    var PROXY_TIMEOUT = 5000;
     var BATCH_SIZE = 10;
     var MAX_CONCURRENT = 4;
+    var QUEUE_MAX_TASKS = 100;
 
     var LAMPA_RATING_API = 'https://cubnotrip.top/api/reactions/get/';
 
@@ -47,22 +48,104 @@
     };
 
     // =================================================================
+    // DEVICE DETECTION & ADAPTATION
+    // =================================================================
+
+    function getDeviceConfig() {
+        var memory = navigator.deviceMemory || 4;
+        var cores = navigator.hardwareConcurrency || 4;
+        var ua = navigator.userAgent || '';
+        var isMobile = /android|iphone|ipad|ipod|mobile|webos|tizen|smart-tv/i.test(ua);
+        var isTV = /smart-tv|webos|tizen|appletv|aftb|aftm|aftt/i.test(ua);
+        var isLowMemory = memory < 2;
+        var isSlow = cores < 2 || isLowMemory;
+
+        // Определяем конфиг в зависимости от устройства
+        var config = {
+            concurrent: 4,
+            timeout: 5000,
+            preloadCount: 4,
+            batchSize: 10,
+            queueDelay: 100,
+            useAnimations: true,
+            useBlur: true,
+            useParallax: true,
+            mobileLayout: false,
+            contentScale: 100,
+            contentPosition: 'left'
+        };
+
+        if (isMobile || isTV) {
+            config.mobileLayout = true;
+            config.contentScale = isTV ? 85 : 90;
+            config.contentPosition = 'center';
+            
+            if (isTV) {
+                config.concurrent = 2;
+                config.timeout = 8000;
+                config.preloadCount = 2;
+                config.batchSize = 5;
+                config.queueDelay = 200;
+                config.useAnimations = false;
+                config.useBlur = false;
+                config.useParallax = false;
+            } else if (isLowMemory) {
+                config.concurrent = 1;
+                config.timeout = 10000;
+                config.preloadCount = 1;
+                config.batchSize = 3;
+                config.queueDelay = 300;
+                config.useAnimations = false;
+                config.useBlur = false;
+                config.useParallax = false;
+            } else if (isSlow) {
+                config.concurrent = 2;
+                config.timeout = 8000;
+                config.preloadCount = 2;
+                config.batchSize = 5;
+                config.queueDelay = 200;
+                config.useAnimations = false;
+                config.useBlur = false;
+                config.useParallax = false;
+            } else {
+                config.concurrent = 3;
+                config.timeout = 6000;
+                config.preloadCount = 3;
+                config.batchSize = 7;
+                config.queueDelay = 150;
+                config.useAnimations = true;
+                config.useBlur = true;
+                config.useParallax = false;
+            }
+        }
+
+        return config;
+    }
+
+    var deviceConfig = getDeviceConfig();
+
+    // Применяем настройки устройства
+    MAX_CONCURRENT = deviceConfig.concurrent;
+    PROXY_TIMEOUT = deviceConfig.timeout;
+    BATCH_SIZE = deviceConfig.batchSize;
+
+    // =================================================================
     // DEFAULT SETTINGS
     // =================================================================
 
     var DEFAULT_SETTINGS = {
         applecation_enabled: true,
         applecation_image_quality: 'original',
-        applecation_effects_enabled: true,
+        applecation_effects_enabled: deviceConfig.useAnimations,
         applecation_content_bg: true,
-        applecation_content_scale: '100',
+        applecation_content_scale: String(deviceConfig.contentScale),
         applecation_description_overlay: true,
         applecation_rating_icons: false,
-        applecation_ratings_position: 'left',
+        applecation_ratings_position: deviceConfig.mobileLayout ? 'center' : 'left',
         applecation_show_quality_badges: true,
         applecation_studios_mode: 'button',
-        applecation_info_position: 'left',
-        applecation_content_position: 'left',
+        applecation_info_position: deviceConfig.mobileLayout ? 'center' : 'left',
+        applecation_content_position: deviceConfig.contentPosition,
         applecation_animated_reactions: false,
         applecation_lampa_reaction_icon: true
     };
@@ -97,6 +180,54 @@
             console.error('[Тема от SERG] Ошибка сброса настроек:', e);
             Lampa.Noty.show('Ошибка сброса настроек');
         }
+    }
+
+    // =================================================================
+    // КЭШИРОВАНИЕ (Трёхуровневое)
+    // =================================================================
+
+    var memoryCache = {};
+    var saveQueue = {};
+    var activeRequests = {};
+    var pendingCards = [];
+    var visibleCards = new Set();
+    var updateTimer = null;
+    var observer = null;
+    var requestQueue = [];
+    var activeRequestsCount = 0;
+
+    function getCachedQuality(cardId) {
+        // 1. Проверяем память
+        if (memoryCache[cardId]) return memoryCache[cardId];
+
+        // 2. Проверяем localStorage
+        try {
+            var stored = localStorage.getItem('temav_quality_' + cardId);
+            if (stored) {
+                var data = JSON.parse(stored);
+                if (Date.now() - data._ts < CACHE_TTL) {
+                    memoryCache[cardId] = data;
+                    return data;
+                }
+            }
+        } catch (e) {}
+
+        // 3. Проверяем Lampa.Storage
+        var stored = getFromStorage('jacred_cache', cardId);
+        if (stored && stored._ts && (Date.now() - stored._ts < CACHE_TTL)) {
+            memoryCache[cardId] = stored;
+            return stored;
+        }
+
+        return null;
+    }
+
+    function setCachedQuality(cardId, data) {
+        memoryCache[cardId] = data;
+        try {
+            localStorage.setItem('temav_quality_' + cardId, JSON.stringify(data));
+        } catch (e) {}
+        saveToStorage('jacred_cache', { [cardId]: data });
     }
 
     // =================================================================
@@ -476,7 +607,7 @@
     }
 
     // =================================================================
-    // JACRED QUALITY (Интерфейс Мод стиль)
+    // JACRED QUALITY (Оптимизированная версия)
     // =================================================================
 
     function fetchWithProxy(url, callback) {
@@ -519,33 +650,6 @@
             xhr.send();
         }
         tryProxy(0);
-    }
-
-    function isTSRelease(item) {
-        var titleLower = (item.Title || '').toLowerCase();
-        var info = item.info || item.Info || {};
-        var videotype = (info.videotype || '').toLowerCase();
-        
-        // 1. Проверяем по названию (как в Интерфейс Мод)
-        var tsKeywords = ['cam', 'camrip', 'ts', 'telesync', 'tc', 'telecine'];
-        for (var i = 0; i < tsKeywords.length; i++) {
-            if (titleLower.indexOf(tsKeywords[i]) >= 0) {
-                // Исключаем ложные срабатывания
-                if (tsKeywords[i] === 'cam' && titleLower.indexOf('cameraman') >= 0) continue;
-                if (tsKeywords[i] === 'cam' && titleLower.indexOf('camera') >= 0) continue;
-                if (tsKeywords[i] === 'tc' && titleLower.indexOf('teac') >= 0) continue;
-                return true;
-            }
-        }
-        
-        // 2. Проверяем по videotype
-        if (videotype.indexOf('cam') >= 0 || 
-            videotype.indexOf('ts') >= 0 || 
-            videotype.indexOf('tc') >= 0) {
-            return true;
-        }
-        
-        return false;
     }
 
     function getBestJacred(card, callback) {
@@ -592,6 +696,7 @@
                 return;
             }
 
+            // Используем XHR вместо Reguest для лучшего контроля
             var xhr = new XMLHttpRequest();
             xhr.timeout = PROXY_TIMEOUT;
             xhr.open('GET', requestUrl, true);
@@ -634,10 +739,20 @@
                         var videotype = (info.videotype || '').toLowerCase();
                         var quality = info.quality || 0;
 
-                        // Проверяем на TS (как в Интерфейс Мод)
-                        var isTS = isTSRelease(item);
-                        
                         var currentRes = 'SD';
+                        
+                        // Проверяем на TS
+                        var isTS = false;
+                        var tsKeywords = ['cam', 'camrip', 'ts', 'telesync', 'tc', 'telecine', 'hdts', 'hdtc'];
+                        for (var i = 0; i < tsKeywords.length; i++) {
+                            if (titleLower.indexOf(tsKeywords[i]) >= 0) {
+                                if (tsKeywords[i] === 'cam' && titleLower.indexOf('cameraman') >= 0) continue;
+                                if (tsKeywords[i] === 'cam' && titleLower.indexOf('camera') >= 0) continue;
+                                if (tsKeywords[i] === 'tc' && titleLower.indexOf('teac') >= 0) continue;
+                                isTS = true;
+                                break;
+                            }
+                        }
                         
                         if (isTS) {
                             currentRes = 'TS';
@@ -662,9 +777,8 @@
                             }
                         }
 
-                        // TS имеет низкий приоритет (как в Интерфейс Мод)
-                        if (currentRes === 'TS') {
-                            // Пропускаем TS, если есть другие релизы
+                        if (isTS && currentRes !== 'TS') {
+                            // TS имеет низкий приоритет
                         } else if (resOrder.indexOf(currentRes) > resOrder.indexOf(best.resolution)) {
                             best.resolution = currentRes;
                         }
@@ -679,7 +793,7 @@
                             best.hdr = true;
                         }
 
-                        // Звук (оставляем ffprobe проверку)
+                        // Звук
                         if (item.ffprobe && Array.isArray(item.ffprobe)) {
                             var audioTracks = item.ffprobe.filter(function(track) {
                                 return track.codec_type === 'audio';
@@ -702,7 +816,6 @@
                                 best.sound = '2.0';
                             }
                             
-                            // DUB через ffprobe
                             if (!best.dub) {
                                 audioTracks.forEach(function(track) {
                                     if (track.tags) {
@@ -732,15 +845,6 @@
                         best.resolution = 'HD';
                     }
 
-                    // Если все релизы TS, отмечаем это
-                    var allTS = results.every(function(item) {
-                        return isTSRelease(item);
-                    });
-                    
-                    if (allTS && best.resolution !== 'TS') {
-                        best.resolution = 'TS';
-                    }
-
                     setCachedQuality(cacheKey, best);
                     callback(best);
 
@@ -767,57 +871,10 @@
     }
 
     // =================================================================
-    // ОПТИМИЗИРОВАННАЯ СИСТЕМА КЭШИРОВАНИЯ
+    // ОПТИМИЗИРОВАННАЯ ОЧЕРЕДЬ ЗАПРОСОВ
     // =================================================================
 
-    var memoryCache = {};
-    var saveQueue = {};
-    var pendingCards = [];
-    var visibleCards = new Set();
-    var updateTimer = null;
-    var observer = null;
-    var requestQueue = [];
-    var activeRequestsCount = 0;
-    var pendingQualityUpdates = [];
-    var qualityUpdateTimer = null;
-
-    function getCachedQuality(cardId) {
-        // 1. Проверяем память
-        if (memoryCache[cardId]) return memoryCache[cardId];
-
-        // 2. Проверяем localStorage
-        try {
-            var stored = localStorage.getItem('temav_quality_' + cardId);
-            if (stored) {
-                var data = JSON.parse(stored);
-                if (Date.now() - data._ts < CACHE_TTL) {
-                    memoryCache[cardId] = data;
-                    return data;
-                }
-            }
-        } catch (e) {}
-
-        // 3. Проверяем Lampa.Storage
-        var stored = getFromStorage('jacred_cache', cardId);
-        if (stored && stored._ts && (Date.now() - stored._ts < CACHE_TTL)) {
-            memoryCache[cardId] = stored;
-            return stored;
-        }
-
-        return null;
-    }
-
-    function setCachedQuality(cardId, data) {
-        memoryCache[cardId] = data;
-        try {
-            localStorage.setItem('temav_quality_' + cardId, JSON.stringify(data));
-        } catch (e) {}
-        saveToStorage('jacred_cache', { [cardId]: data });
-    }
-
-    // =================================================================
-    // ПАКЕТНАЯ ОБРАБОТКА КАРТОЧЕК
-    // =================================================================    function processCard(card) {
+    function processCard(card) {
         if (card.hasAttribute('data-quality-added')) return;
         
         var data = card.card_data;
@@ -845,8 +902,17 @@
     }
 
     function fetchQuality(card, data) {
+        var id = data.id;
+        
+        // Отменяем предыдущий запрос для этой карточки
+        if (activeRequests[id]) {
+            try { activeRequests[id].abort(); } catch (e) {}
+            delete activeRequests[id];
+        }
+        
         getBestJacred(data, function(result) {
             activeRequestsCount--;
+            delete activeRequests[id];
             
             if (result && result.resolution) {
                 applyQualityToCard(card, result.resolution);
@@ -857,8 +923,11 @@
     }
 
     // =================================================================
-    // ПРИМЕНЕНИЕ КАЧЕСТВА К КАРТОЧКЕ (пакетная обработка)
+    // ПРИМЕНЕНИЕ КАЧЕСТВА К КАРТОЧКЕ (с пакетной обработкой)
     // =================================================================
+
+    var pendingQualityUpdates = [];
+    var qualityUpdateTimer = null;
 
     function applyQualityToCard(card, quality) {
         pendingQualityUpdates.push({ card: card, quality: quality });
@@ -888,32 +957,14 @@
                 existing[j].remove();
             }
             
-            // Создаём новый
+            // Создаём новый через фрагмент
             var div = document.createElement('div');
-            div.className = 'card__quality';
+            var qClass = quality.toLowerCase().replace(/\s/g, '-');
+            div.className = 'card__quality card__quality--' + qClass;
             div.textContent = quality;
             fragment.appendChild(div);
             view.appendChild(div);
             card.setAttribute('data-quality-added', 'true');
-        }
-    }
-
-    // =================================================================
-    // INTERSECTION OBSERVER ДЛЯ ВИДИМЫХ КАРТОЧЕК
-    // =================================================================
-
-    function initObserver() {
-        if (window.IntersectionObserver) {
-            observer = new IntersectionObserver(function(entries) {
-                for (var i = 0; i < entries.length; i++) {
-                    if (entries[i].isIntersecting) {
-                        visibleCards.add(entries[i].target);
-                        processCard(entries[i].target);
-                    } else {
-                        visibleCards.delete(entries[i].target);
-                    }
-                }
-            }, { rootMargin: '100px', threshold: 0.01 });
         }
     }
 
@@ -1249,24 +1300,28 @@
     }
 
     // =================================================================
-    // ПОЗИЦИОНИРОВАНИЕ
+    // ПОЗИЦИОНИРОВАНИЕ (адаптивное для мобильных)
     // =================================================================
 
     function applyAllPositions(render) {
         if (!render || !render.length) return;
         
-        var contentPosition = Lampa.Storage.get('applecation_content_position', 'left');
-        var ratingsPosition = Lampa.Storage.get('applecation_ratings_position', 'left');
-        var infoPosition = Lampa.Storage.get('applecation_info_position', 'left');
+        var isMobile = deviceConfig.mobileLayout;
+        var contentPosition = Lampa.Storage.get('applecation_content_position', isMobile ? 'center' : 'left');
+        var ratingsPosition = Lampa.Storage.get('applecation_ratings_position', isMobile ? 'center' : 'left');
+        var infoPosition = Lampa.Storage.get('applecation_info_position', isMobile ? 'center' : 'left');
         
+        // Удаляем старые классы
         render.removeClass('content-left content-center content-right');
         render.removeClass('ratings-left ratings-center ratings-right');
         render.removeClass('info-left info-center info-right');
         
+        // Добавляем новые
         render.addClass('content-' + contentPosition);
         render.addClass('ratings-' + ratingsPosition);
         render.addClass('info-' + infoPosition);
         
+        // Применяем CSS-стили напрямую
         var contentGroup = render.find('.applecation__content-group');
         if (contentGroup.length) {
             if (contentPosition === 'center') {
@@ -1281,6 +1336,7 @@
             }
         }
         
+        // Рейтинги
         var ratings = render.find('.applecation__ratings');
         if (ratings.length) {
             if (ratingsPosition === 'center') {
@@ -1314,6 +1370,7 @@
             }
         }
         
+        // Информация
         var info = render.find('.applecation__info');
         if (info.length) {
             if (infoPosition === 'center') {
@@ -1580,6 +1637,7 @@
     function modifyCardDOM(render, movie) {
         try {
             var isTv = !!(movie.name || movie.original_name || movie.first_air_date || movie.number_of_seasons);
+            var isMobile = deviceConfig.mobileLayout;
 
             render.find('.full-start-new__tagline, .full-start__tagline, .tagline, [class*="tagline"]').remove();
             render.find('.full-start-new__head .tagline, .full-start__head .tagline').remove();
@@ -1587,7 +1645,7 @@
             render.find('.full-start-new__head, .full-start-new__details, .full-descr, .full-descr__title, .full-start__head, .full-start-new__reactions').hide();
 
             var bgEnabled = Lampa.Storage.get('applecation_content_bg', true);
-            var scalePercent = parseFloat(Lampa.Storage.get('applecation_content_scale', '100'));
+            var scalePercent = parseFloat(Lampa.Storage.get('applecation_content_scale', String(deviceConfig.contentScale)));
 
             var right = render.find('.full-start-new__right');
             if (!right.length) return;
@@ -1623,7 +1681,7 @@
 
             contentWrapper.css('position', 'relative');
             contentWrapper.css('z-index', '10');
-            contentWrapper.css('max-width', '50vw');
+            contentWrapper.css('max-width', isMobile ? '100%' : '50vw');
 
             var contentGroup = $('<div class="applecation__content-group"></div>');
             contentWrapper.wrapInner(contentGroup);
@@ -1647,8 +1705,8 @@
                 contentWrapper.css('background-color', 'transparent');
             } else {
                 contentWrapper.css('background', 'rgba(0,0,0,0.3)');
-                contentWrapper.css('backdrop-filter', 'blur(10px)');
-                contentWrapper.css('-webkit-backdrop-filter', 'blur(10px)');
+                contentWrapper.css('backdrop-filter', deviceConfig.useBlur ? 'blur(10px)' : 'none');
+                contentWrapper.css('-webkit-backdrop-filter', deviceConfig.useBlur ? 'blur(10px)' : 'none');
                 contentWrapper.css('border', '1px solid rgba(255,255,255,0.05)');
                 contentWrapper.css('box-shadow', '0 4px 20px rgba(0,0,0,0.3)');
                 contentWrapper.css('background-color', 'rgba(0,0,0,0.3)');
@@ -1726,7 +1784,8 @@
             var wrapper = render.find('.applecation__wrapper');
             if (!wrapper.length) return;
 
-            var scalePercent = parseFloat(Lampa.Storage.get('applecation_content_scale', '100'));
+            var isMobile = deviceConfig.mobileLayout;
+            var scalePercent = parseFloat(Lampa.Storage.get('applecation_content_scale', String(deviceConfig.contentScale)));
             var scaleValue = scalePercent / 100;
             
             wrapper.css('transform', 'scale(' + scaleValue + ')');
@@ -1741,7 +1800,7 @@
             }
 
             var contentWrapper = render.find('.applecation__content-wrapper');
-            contentWrapper.css('max-width', '50vw');
+            contentWrapper.css('max-width', isMobile ? '100%' : '50vw');
 
             var bgEnabled = Lampa.Storage.get('applecation_content_bg', true);
             if (!bgEnabled) {
@@ -1753,8 +1812,8 @@
                 contentWrapper.css('background-color', 'transparent');
             } else {
                 contentWrapper.css('background', 'rgba(0,0,0,0.3)');
-                contentWrapper.css('backdrop-filter', 'blur(10px)');
-                contentWrapper.css('-webkit-backdrop-filter', 'blur(10px)');
+                contentWrapper.css('backdrop-filter', deviceConfig.useBlur ? 'blur(10px)' : 'none');
+                contentWrapper.css('-webkit-backdrop-filter', deviceConfig.useBlur ? 'blur(10px)' : 'none');
                 contentWrapper.css('border', '1px solid rgba(255,255,255,0.05)');
                 contentWrapper.css('box-shadow', '0 4px 20px rgba(0,0,0,0.3)');
                 contentWrapper.css('background-color', 'rgba(0,0,0,0.3)');
@@ -1859,6 +1918,7 @@
     function fillContent(render, movie, ratings, lampaData, qualityData) {
         try {
             var isTv = !!(movie.name || movie.original_name || movie.first_air_date || movie.number_of_seasons);
+            var isMobile = deviceConfig.mobileLayout;
             var descriptionOverlayEnabled = Lampa.Storage.get('applecation_description_overlay', true);
 
             var contentGroup = render.find('.applecation__content-group');
@@ -2125,15 +2185,13 @@
                 }
             }
 
-            // 5. ОПИСАНИЕ (увеличена ширина)
+            // 5. ОПИСАНИЕ
             var descWrapper = contentGroup.find('.applecation__description-wrapper');
             var description = contentGroup.find('.applecation__description');
             if (descWrapper.length && description.length) {
                 var text = movie.overview || 'Описание отсутствует';
                 description.text(text);
                 description.css('color', '#ffffff');
-                // Увеличиваем максимальную ширину для правильного центрирования
-                description.css('max-width', '45vw');
 
                 if (descriptionOverlayEnabled) {
                     descWrapper.off('hover:enter').on('hover:enter', function() {
@@ -2446,8 +2504,8 @@
                     'border-radius': '0.5em',
                     'font-size': '0.7em',
                     'line-height': '1.3',
-                    'max-width': '75em',
-                    'min-width': '45em',
+                    'max-width': isMobile ? '20em' : '75em',
+                    'min-width': isMobile ? '14em' : '45em',
                     'white-space': 'normal',
                     'word-wrap': 'break-word',
                     'z-index': '100',
@@ -2675,12 +2733,12 @@
     }
 
     // =================================================================
-    // ANIMATIONS
+    // ANIMATIONS (адаптивные)
     // =================================================================
 
     function setupAnimations(render) {
         try {
-            var effectsEnabled = Lampa.Storage.get('applecation_effects_enabled', true);
+            var effectsEnabled = Lampa.Storage.get('applecation_effects_enabled', deviceConfig.useAnimations);
             
             if (!effectsEnabled) {
                 render.find('.applecation__meta, .applecation__ratings, .applecation__reactions, .applecation__description-wrapper, .applecation__info').each(function() {
@@ -2725,11 +2783,13 @@
     }
 
     // =================================================================
-    // POSTER SCROLL HANDLER
+    // POSTER SCROLL HANDLER (адаптивный)
     // =================================================================
 
     function setupPosterScrollHandler(render) {
         try {
+            if (!deviceConfig.useParallax) return;
+            
             var poster = render.find('.full-start__background:not(.applecation__overlay)');
             if (!poster.length) return;
 
@@ -2782,12 +2842,14 @@
     }
 
     // =================================================================
-    // STYLES
+    // STYLES (с адаптивными правилами)
     // =================================================================
 
     function injectStyles() {
         try {
             $('#applecation_plus_css').remove();
+
+            var isMobile = deviceConfig.mobileLayout;
 
             var css = `
             .applecation { transition: all .3s !important; }
@@ -2827,7 +2889,7 @@
             .applecation__description-wrapper { background: transparent !important; padding: 0 !important; border-radius: 1em !important; width: fit-content !important; opacity: 0 !important; transform: translateY(15px) !important; transition: padding 0.25s ease, transform 0.25s ease, opacity 0.4s ease-out !important; cursor: pointer !important; }
             .applecation__description-wrapper.show { opacity: 1 !important; transform: translateY(0) !important; }
             .applecation__description-wrapper.focus { background: linear-gradient(135deg, rgba(255,255,255,0.28), rgba(255,255,255,0.18)) !important; padding: 0.15em 0.4em 0 0.7em !important; border-radius: 1em !important; width: fit-content !important; box-shadow: inset 0 1px 0 rgba(255,255,255,0.35) !important; transform: scale(1.07) translateY(0) !important; }
-            .applecation__description { color: #ffffff !important; font-size: 0.95em !important; line-height: 1.5 !important; margin-bottom: 0.5em !important; max-width: 45vw !important; display: -webkit-box !important; -webkit-line-clamp: 4 !important; -webkit-box-orient: vertical !important; overflow: hidden !important; text-overflow: ellipsis !important; }
+            .applecation__description { color: #ffffff !important; font-size: 0.95em !important; line-height: 1.5 !important; margin-bottom: 0.5em !important; max-width: 35vw !important; display: -webkit-box !important; -webkit-line-clamp: 4 !important; -webkit-box-orient: vertical !important; overflow: hidden !important; text-overflow: ellipsis !important; }
             .focus .applecation__description { color: #ffffff !important; }
             .applecation__info { color: #ffffff !important; font-size: 0.95em !important; line-height: 1.4 !important; margin-bottom: 0.5em !important; opacity: 0 !important; transform: translateY(15px) !important; transition: opacity 0.4s ease-out, transform 0.4s ease-out !important; display: flex !important; flex-direction: column !important; gap: 0.5em !important; }
             .applecation__info.show { opacity: 1 !important; transform: translateY(0) !important; }
@@ -2946,6 +3008,10 @@
                 align-items: flex-end !important;
                 text-align: right !important;
             }
+            
+            /* ============================================================
+               МОБИЛЬНАЯ АДАПТАЦИЯ
+               ============================================================ */
             
             @media screen and (max-width: 720px) { 
                 .applecation .full-start-new__body { height: auto !important; min-height: 0 !important; } 
@@ -3255,7 +3321,7 @@
                         'center': 'По центру',
                         'right': 'Справа'
                     },
-                    default: 'left'
+                    default: deviceConfig.mobileLayout ? 'center' : 'left'
                 },
                 field: { 
                     name: 'Позиция всей информации контента (описание, кнопки, рейтинги, бейджи)', 
@@ -3279,7 +3345,7 @@
                         'center': 'По центру',
                         'right': 'Справа'
                     },
-                    default: 'left'
+                    default: deviceConfig.mobileLayout ? 'center' : 'left'
                 },
                 field: { 
                     name: 'Позиция рейтингов и реакций', 
@@ -3303,7 +3369,7 @@
                         'center': 'По центру',
                         'right': 'Справа'
                     },
-                    default: 'left'
+                    default: deviceConfig.mobileLayout ? 'center' : 'left'
                 },
                 field: { 
                     name: 'Позиция бейджей качества и инфо о сезонах', 
@@ -3476,7 +3542,7 @@
 
             Lampa.SettingsApi.addParam({
                 component: 'applecation_plus',
-                param: { name: 'applecation_effects_enabled', type: 'trigger', default: true },
+                param: { name: 'applecation_effects_enabled', type: 'trigger', default: deviceConfig.useAnimations },
                 field: { name: 'Включить эффекты', description: 'Отключите для слабых устройств (ускоряет загрузку)' }
             });
 
@@ -3506,7 +3572,7 @@
                         '115': '115%',
                         '120': '120%'
                     },
-                    default: '100'
+                    default: String(deviceConfig.contentScale)
                 },
                 field: { name: 'Масштаб контента', description: 'Размер блока с информацией и кнопками' },
                 onChange: function(value) {
