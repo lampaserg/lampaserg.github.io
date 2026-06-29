@@ -4,6 +4,40 @@
     if (window.smartonline_plugin_v2) return;
     window.smartonline_plugin_v2 = true;
 
+    // ============================================================
+    // НАСТРОЙКИ ОТЛАДКИ
+    // ============================================================
+
+    var DEBUG = {
+        enabled: true,           // Включить отладку
+        console: true,           // Вывод в консоль
+        noty: false,            // Вывод уведомлений
+        detailed: true,         // Подробный вывод
+        qualityDetection: true, // Отладка определения качества
+        queueBuilding: true,    // Отладка построения очереди
+        scoreCalculation: true, // Отладка расчета весов
+        selection: true         // Отладка выбора потока
+    };
+
+    function debugLog(category, message, data) {
+        if (!DEBUG.enabled || !DEBUG.console) return;
+        if (!DEBUG[category] && category !== 'always') return;
+
+        var prefix = '[SmartOnline DEBUG]';
+        if (category === 'qualityDetection') prefix = '[Quality]';
+        else if (category === 'queueBuilding') prefix = '[Queue]';
+        else if (category === 'scoreCalculation') prefix = '[Score]';
+        else if (category === 'selection') prefix = '[Selection]';
+
+        if (data !== undefined) {
+            console.log(prefix, message, data);
+        } else {
+            console.log(prefix, message);
+        }
+    }
+
+    // ============================================================
+
     var PLAYBACK_TIMEOUT_MS = 12000;
     var CONFIRM_OK_MS = 15000;
     var WAIT_INTERVAL_MS = 300;
@@ -197,27 +231,44 @@
     }
 
     // ============================================================
-    // ОПРЕДЕЛЕНИЕ КАЧЕСТВА С ПОГРЕШНОСТЬЮ
+    // ОПРЕДЕЛЕНИЕ КАЧЕСТВА С ПОГРЕШНОСТЬЮ И ОТЛАДКОЙ
     // ============================================================
 
     function detectQuality(value) {
         var text = normalize(value);
         if (!text) return 0;
 
+        var result = 0;
+
         // 2160p (4K, UHD, 2160, 3840) — погрешность
-        if (/(2160|4k|uhd|ultra[\s-]?hd|3840)/i.test(text)) return 2160;
-
+        if (/(2160|4k|uhd|ultra[\s-]?hd|3840)/i.test(text)) {
+            result = 2160;
+            debugLog('qualityDetection', '✅ 4K detected:', { text: text, result: result });
+        }
         // 1080p (Full HD, 1080, 1920) — погрешность
-        if (/(1080|full[\s-]?hd|fhd|1920)/i.test(text)) return 1080;
-
+        else if (/(1080|full[\s-]?hd|fhd|1920)/i.test(text)) {
+            result = 1080;
+            debugLog('qualityDetection', '✅ 1080p detected:', { text: text, result: result });
+        }
         // 720p (HD Ready, 720, 1280) — исключается
-        if (/(720|hd[\s-]?ready|1280)/i.test(text)) return 0;
-
+        else if (/(720|hd[\s-]?ready|1280)/i.test(text)) {
+            result = 0;
+            debugLog('qualityDetection', '❌ 720p excluded:', { text: text, result: result });
+        }
         // 480p (SD, 480, 640, 854) — исключается
-        if (/(480|sd|640|854)/i.test(text)) return 0;
-
+        else if (/(480|sd|640|854)/i.test(text)) {
+            result = 0;
+            debugLog('qualityDetection', '❌ 480p/SD excluded:', { text: text, result: result });
+        }
         // Все остальные — исключаются
-        return 0;
+        else {
+            result = 0;
+            if (text.length > 0 && DEBUG.qualityDetection) {
+                debugLog('qualityDetection', '❌ Unknown quality excluded:', { text: text, result: result });
+            }
+        }
+
+        return result;
     }
 
     // ============================================================
@@ -225,9 +276,16 @@
     // ============================================================
 
     function qualityWeight(quality) {
-        if (quality >= 2160) return 100;  // 2160p (4K) — максимальный вес
-        if (quality >= 1080) return 50;   // 1080p (Full HD) — средний вес
-        return 0;                          // Все остальные — исключаются
+        if (quality >= 2160) {
+            debugLog('scoreCalculation', '📊 Quality weight: 100 (4K)');
+            return 100;
+        }
+        if (quality >= 1080) {
+            debugLog('scoreCalculation', '📊 Quality weight: 50 (1080p)');
+            return 50;
+        }
+        debugLog('scoreCalculation', '📊 Quality weight: 0 (excluded)');
+        return 0;
     }
 
     // ============================================================
@@ -236,11 +294,25 @@
 
     function sourceWeight(source) {
         var text = normalize(source);
-        if (/phantom/.test(text)) return 10;   // Наивысший приоритет
-        if (/filmix/.test(text)) return 8;     // Высокий приоритет
-        if (/alloha/.test(text)) return 6;     // Средний приоритет
-        if (/kinopub/.test(text)) return 4;    // Базовый приоритет
-        return 0;
+        var weight = 0;
+
+        if (/phantom/.test(text)) {
+            weight = 10;
+            debugLog('scoreCalculation', '📊 Source weight: 10 (Phantom)');
+        } else if (/filmix/.test(text)) {
+            weight = 8;
+            debugLog('scoreCalculation', '📊 Source weight: 8 (Filmix)');
+        } else if (/alloha/.test(text)) {
+            weight = 6;
+            debugLog('scoreCalculation', '📊 Source weight: 6 (Alloha)');
+        } else if (/kinopub/.test(text)) {
+            weight = 4;
+            debugLog('scoreCalculation', '📊 Source weight: 4 (Kinopub)');
+        } else {
+            debugLog('scoreCalculation', '📊 Source weight: 0 (unknown source: ' + text + ')');
+        }
+
+        return weight;
     }
 
     // ============================================================
@@ -253,20 +325,43 @@
 
         if (!text) return score;
 
+        debugLog('scoreCalculation', '🎤 Voice analysis:', { text: text });
+
         // === ПРИОРИТЕТНЫЕ ОЗВУЧКИ ===
-        if (/hdrezka|hd.rezka|rezka/.test(text)) score += 20;
+        if (/hdrezka|hd.rezka|rezka/.test(text)) {
+            score += 20;
+            debugLog('scoreCalculation', '  +20 (HDRezka)');
+        }
 
         // === КУБИК В КУБЕ (вес 13) ===
-        if (/(\u043A\u0443\u0431\u0438\u043A|cube|куб|kubik)/i.test(text)) score += 13;
+        if (/(\u043A\u0443\u0431\u0438\u043A|cube|куб|kubik)/i.test(text)) {
+            score += 13;
+            debugLog('scoreCalculation', '  +13 (Кубик в Кубе)');
+        }
 
-        if (/(\u0434\u0443\u0431\u043B\u044F\u0436|dub\b)/i.test(text)) score += 15;
-        if (/lostfilm|lost.film/.test(text)) score += 10;
+        if (/(\u0434\u0443\u0431\u043B\u044F\u0436|dub\b)/i.test(text)) {
+            score += 15;
+            debugLog('scoreCalculation', '  +15 (Дубляж)');
+        }
+
+        if (/lostfilm|lost.film/.test(text)) {
+            score += 10;
+            debugLog('scoreCalculation', '  +10 (LostFilm)');
+        }
 
         // === СУБТИТРЫ И ОРИГИНАЛ (низкий приоритет) ===
-        if (/(\u0441\u0443\u0431\u0442|sub\b|subtitle|original|\u043E\u0440\u0438\u0433\u0456\u043D|orig)/i.test(text)) score -= 10;
+        if (/(\u0441\u0443\u0431\u0442|sub\b|subtitle|original|\u043E\u0440\u0438\u0433\u0456\u043D|orig)/i.test(text)) {
+            score -= 10;
+            debugLog('scoreCalculation', '  -10 (subtitles/original)');
+        }
 
         // === ИСКЛЮЧАЕМ АНГЛИЙСКУЮ ОЗВУЧКУ ===
-        if (/english|eng|en\b/i.test(text) && !/russian|rus/.test(text)) score -= 100;
+        if (/english|eng|en\b/i.test(text) && !/russian|rus/.test(text)) {
+            score -= 100;
+            debugLog('scoreCalculation', '  -100 (English voice excluded)');
+        }
+
+        debugLog('scoreCalculation', '  Total voice score: ' + score);
 
         return score;
     }
@@ -282,27 +377,48 @@
     function itemQuality(item) {
         var max = 0;
 
+        debugLog('qualityDetection', '🔍 Analyzing item:', {
+            text: item.text,
+            title: item.title,
+            url: item.url
+        });
+
         // Проверяем качество из объекта quality
         if (item && item.quality && Lampa.Arrays.isObject(item.quality)) {
             Lampa.Arrays.getKeys(item.quality).forEach(function (q) {
                 var detected = detectQuality(q + ' ' + item.quality[q]);
-                if (detected > max) max = detected;
+                if (detected > max) {
+                    debugLog('qualityDetection', '  From quality object: ' + q + ' → ' + detected);
+                    max = detected;
+                }
             });
         }
 
         // Проверяем текстовые поля
         var textFields = [item && item.text, item && item.title, item && item.name, item && item.label];
         textFields.forEach(function (field) {
-            var detected = detectQuality(field);
-            if (detected > max) max = detected;
+            if (field) {
+                var detected = detectQuality(field);
+                if (detected > max) {
+                    debugLog('qualityDetection', '  From text: "' + field + '" → ' + detected);
+                    max = detected;
+                }
+            }
         });
 
         // Проверяем URL
         var urlFields = [item && item.url, item && item.stream];
         urlFields.forEach(function (field) {
-            var detected = detectQuality(field);
-            if (detected > max) max = detected;
+            if (field) {
+                var detected = detectQuality(field);
+                if (detected > max) {
+                    debugLog('qualityDetection', '  From URL: "' + field + '" → ' + detected);
+                    max = detected;
+                }
+            }
         });
+
+        debugLog('qualityDetection', '  Final quality: ' + max + (max === 0 ? ' (will be excluded)' : ''));
 
         return max;
     }
@@ -336,35 +452,89 @@
         return rankVoices(buttons, sourceName, context)[0] || null;
     }
 
+    // ============================================================
+    // ПОСТРОЕНИЕ ОЧЕРЕДИ С ОТЛАДКОЙ
+    // ============================================================
+
     function buildQueue(videos, sourceName, fallbackVoice, context) {
         var map = {};
+        var totalCandidates = 0;
+        var excludedCount = 0;
 
-        videos.forEach(function (item) {
+        debugLog('queueBuilding', '🚀 Building queue for source: ' + sourceName);
+        debugLog('queueBuilding', '📊 Total videos: ' + videos.length);
+
+        videos.forEach(function (item, index) {
             var voiceName = item.voice_name || item.text || fallbackVoice || '';
             var voiceKey = keyify(voiceName);
             var sourceKey = keyify(sourceName);
             var quality = itemQuality(item);
 
-            // === ФИЛЬТРАЦИЯ: исключаем все, кроме 2160p и 1080p ===
-            if (quality !== 2160 && quality !== 1080) return;
+            debugLog('queueBuilding', '--- Video #' + (index + 1) + ' ---');
+            debugLog('queueBuilding', '  Text: ' + (item.text || 'N/A'));
+            debugLog('queueBuilding', '  Voice: ' + voiceName);
+            debugLog('queueBuilding', '  Quality detected: ' + quality);
 
-            if (!item || (!item.url && !item.stream)) return;
+            // === ФИЛЬТРАЦИЯ: исключаем все, кроме 2160p и 1080p ===
+            if (quality !== 2160 && quality !== 1080) {
+                excludedCount++;
+                debugLog('queueBuilding', '  ❌ EXCLUDED: quality ' + quality + ' (only 2160p and 1080p allowed)');
+                return;
+            }
+
+            if (!item || (!item.url && !item.stream)) {
+                debugLog('queueBuilding', '  ❌ EXCLUDED: no URL or stream');
+                return;
+            }
+
+            totalCandidates++;
 
             var score = 0;
 
             // === СБОР ОЦЕНОК ===
-            score += qualityWeight(quality);              // 100 или 50
-            score += voiceWeight(voiceName);              // 20/15/13/10
-            score += sourceWeight(sourceName);            // 10/8/6/4
-            score += statsWeight('voices', voiceKey, context);
-            score += statsWeight('sources', sourceKey, context);
-            score += item.method === 'play' ? 10 : 4;
+            debugLog('queueBuilding', '  📊 Calculating score:');
+
+            var qWeight = qualityWeight(quality);
+            score += qWeight;
+
+            var vWeight = voiceWeight(voiceName);
+            score += vWeight;
+
+            var sWeight = sourceWeight(sourceName);
+            score += sWeight;
+
+            var statsVoice = statsWeight('voices', voiceKey, context);
+            score += statsVoice;
+
+            var statsSource = statsWeight('sources', sourceKey, context);
+            score += statsSource;
+
+            var methodBonus = item.method === 'play' ? 10 : 4;
+            score += methodBonus;
 
             // Формат
             var urlHint = normalize(item.url || item.stream || '');
-            if (/m3u8/.test(urlHint)) score += 4;
-            if (/mp4/.test(urlHint)) score += 2;
-            if (/iframe|embed/.test(urlHint)) score -= 4;
+            var formatBonus = 0;
+            if (/m3u8/.test(urlHint)) {
+                formatBonus = 4;
+                debugLog('queueBuilding', '  +4 (m3u8 format)');
+            } else if (/mp4/.test(urlHint)) {
+                formatBonus = 2;
+                debugLog('queueBuilding', '  +2 (mp4 format)');
+            } else if (/iframe|embed/.test(urlHint)) {
+                formatBonus = -4;
+                debugLog('queueBuilding', '  -4 (iframe/embed format)');
+            }
+            score += formatBonus;
+
+            debugLog('queueBuilding', '  ✅ FINAL SCORE: ' + score);
+            debugLog('queueBuilding', '    Quality: ' + qWeight);
+            debugLog('queueBuilding', '    Voice: ' + vWeight);
+            debugLog('queueBuilding', '    Source: ' + sWeight);
+            debugLog('queueBuilding', '    Stats (voice): ' + statsVoice);
+            debugLog('queueBuilding', '    Stats (source): ' + statsSource);
+            debugLog('queueBuilding', '    Method: ' + methodBonus);
+            debugLog('queueBuilding', '    Format: ' + formatBonus);
 
             var candidate = {
                 id: Lampa.Utils.hash([sourceKey, voiceKey, item.url || item.stream || item.text || Math.random()].join('::')),
@@ -383,10 +553,29 @@
             }
         });
 
+        debugLog('queueBuilding', '📊 Results:');
+        debugLog('queueBuilding', '  Total candidates: ' + totalCandidates);
+        debugLog('queueBuilding', '  Excluded: ' + excludedCount);
+
         // Сортировка по убыванию оценки
-        return Object.keys(map).map(function (id) { return map[id]; }).sort(function (a, b) {
+        var sorted = Object.keys(map).map(function (id) { return map[id]; }).sort(function (a, b) {
             return b.score - a.score;
         });
+
+        if (sorted.length > 0 && DEBUG.queueBuilding) {
+            debugLog('queueBuilding', '🏆 SORTED QUEUE (top 5):');
+            sorted.slice(0, 5).forEach(function (c, i) {
+                debugLog('queueBuilding', '  #' + (i + 1) + ': score=' + c.score + ' | quality=' + c.quality + ' | voice=' + c.voiceName + ' | source=' + c.sourceName);
+            });
+        } else {
+            debugLog('queueBuilding', '❌ NO CANDIDATES FOUND!');
+            debugLog('queueBuilding', '  Check:');
+            debugLog('queueBuilding', '  1. Are there any 2160p or 1080p streams?');
+            debugLog('queueBuilding', '  2. Check the quality detection in itemQuality()');
+            debugLog('queueBuilding', '  3. Check if URLs are present');
+        }
+
+        return sorted;
     }
 
     // ============================================================
@@ -408,6 +597,15 @@
 
     function failPlayback(playback, reason) {
         if (!playback || playback.failing) return;
+
+        debugLog('always', '❌ Playback failed: ' + reason, {
+            candidate: playback.candidate ? {
+                source: playback.candidate.sourceName,
+                voice: playback.candidate.voiceName,
+                quality: playback.candidate.quality,
+                score: playback.candidate.score
+            } : 'N/A'
+        });
 
         playback.failing = true;
         clearTimeout(playback.failTimer);
@@ -448,6 +646,14 @@
         instance.orUrlReserve(play);
         if (play.quality && Lampa.Arrays.isObject(play.quality)) instance.setDefaultQuality(play);
 
+        debugLog('selection', '🎬 PLAYING STREAM:', {
+            source: candidate.sourceName,
+            voice: candidate.voiceName,
+            quality: candidate.quality,
+            score: candidate.score,
+            url: play.url
+        });
+
         return play;
     }
 
@@ -458,6 +664,8 @@
         state.queueIndex++;
 
         if (!state.queue.length || state.queueIndex >= state.queue.length) {
+            debugLog('always', '❌ Queue exhausted, all candidates failed');
+
             if (runtime.playback && runtime.playback.state === state) clearPlayback(runtime.playback);
 
             if (state.tryNextVoice && state.tryNextVoice()) return;
@@ -469,10 +677,23 @@
         var candidate = state.queue[state.queueIndex];
         state.currentCandidate = candidate;
 
+        debugLog('selection', '▶️ Trying candidate #' + (state.queueIndex + 1) + ' of ' + state.queue.length, {
+            source: candidate.sourceName,
+            voice: candidate.voiceName,
+            quality: candidate.quality,
+            score: candidate.score
+        });
+
         if (reason && reason !== 'autostart') notifyRuntime(Lampa.Lang.translate('lampac_smart_retrying'));
 
         instance.getFileUrl(candidate.item, function (json, jsonCall) {
             if (!json || !json.url) {
+                debugLog('always', '❌ Failed to get file URL for candidate', {
+                    source: candidate.sourceName,
+                    voice: candidate.voiceName,
+                    quality: candidate.quality
+                });
+
                 failPlayback({
                     instance: instance,
                     state: state,
@@ -521,6 +742,13 @@
             var playback = runtime.playback;
             if (!playback || !data || data._lampacSmartId !== playback.candidate.id) return;
 
+            debugLog('always', '✅ Player started successfully:', {
+                source: playback.candidate.sourceName,
+                voice: playback.candidate.voiceName,
+                quality: playback.candidate.quality,
+                score: playback.candidate.score
+            });
+
             if (Lampa.Storage.field('player') !== 'inner') {
                 updateStats('sources', playback.candidate.sourceKey, true, playback.candidate.statsContext);
                 updateStats('voices', playback.candidate.voiceKey, true, playback.candidate.statsContext);
@@ -531,6 +759,13 @@
         Lampa.Player.listener.follow('ready', function (data) {
             var playback = runtime.playback;
             if (!playback || !data || data._lampacSmartId !== playback.candidate.id) return;
+
+            debugLog('always', '✅ Player ready:', {
+                source: playback.candidate.sourceName,
+                voice: playback.candidate.voiceName,
+                quality: playback.candidate.quality,
+                score: playback.candidate.score
+            });
 
             playback.readyAt = Date.now();
             clearTimeout(playback.failTimer);
@@ -545,6 +780,13 @@
             var playback = runtime.playback;
             if (!playback) return;
 
+            debugLog('always', '❌ Player error', {
+                source: playback.candidate ? playback.candidate.sourceName : 'N/A',
+                voice: playback.candidate ? playback.candidate.voiceName : 'N/A',
+                quality: playback.candidate ? playback.candidate.quality : 'N/A',
+                readyAt: playback.readyAt ? 'yes' : 'no'
+            });
+
             if (playback.readyAt && Date.now() - playback.readyAt > getConfirmTimeoutMs()) {
                 clearPlayback(playback);
                 return;
@@ -556,7 +798,10 @@
         });
 
         Lampa.Player.listener.follow('ended', function () {
-            if (runtime.playback) clearPlayback(runtime.playback);
+            if (runtime.playback) {
+                debugLog('always', '🏁 Playback ended');
+                clearPlayback(runtime.playback);
+            }
         });
 
         return true;
@@ -621,7 +866,7 @@
     }
 
     // ============================================================
-    // UI: FULL BUTTON (ОДНА ВИДИМАЯ КНОПКА)
+    // UI: FULL BUTTON
     // ============================================================
 
     function addFullButton() {
@@ -639,6 +884,7 @@
             );
 
             btn.on('hover:enter', function () {
+                debugLog('always', '🔘 Smart Online button clicked for:', movie.title || movie.name);
                 Lampa.Activity.push(smartActivity(movie));
             });
 
@@ -670,14 +916,12 @@
             var btn = buildButton(data.movie);
             buttonsContainer.append(btn);
 
-            // Убеждаемся, что кнопка видима
             btn.css({
                 'display': 'flex !important',
                 'opacity': '1 !important',
                 'visibility': 'visible !important'
             });
 
-            // Убираем стиль display:none у контейнера, если он есть
             buttonsContainer.css('display', 'flex');
         }
 
@@ -691,10 +935,8 @@
 
                 if (!movie) return;
 
-                // Удаляем старые кнопки
                 render.find('.lampac-smart-button').remove();
 
-                // Добавляем новую кнопку
                 addButtonToCard({
                     render: render,
                     movie: movie
@@ -704,7 +946,6 @@
             }
         }
 
-        // Подписываемся на событие открытия карточки
         Lampa.Listener.follow('full', function (e) {
             if (e.type === 'complite') {
                 var render = e.object.activity.render();
@@ -719,7 +960,6 @@
             }
         });
 
-        // Подписываемся на смену активности
         Lampa.Listener.follow('activity', function (e) {
             if (e && e.type === 'start') {
                 setTimeout(function() {
@@ -728,10 +968,8 @@
             }
         });
 
-        // Добавляем кнопку при загрузке
         setTimeout(injectFromActive, 500);
 
-        // Периодическая проверка (на случай, если кнопка пропала)
         runtime.fullTicker = setInterval(function() {
             var active = Lampa.Activity.active();
             if (active && active.component === 'full' && active.activity && active.activity.render) {
@@ -838,6 +1076,7 @@
             onChange: function onChange() {
                 Lampa.Storage.set(STATS_KEY, { sources: {}, voices: {} });
                 notify(Lampa.Lang.translate('lampac_smart_settings_cleared'));
+                debugLog('always', '🗑 Stats cleared');
             }
         });
 
@@ -967,12 +1206,15 @@
                 }
             };
 
+            debugLog('always', '📦 Smart Component initialized for:', object.movie.title || object.movie.name);
+
             function stopAuto() {
                 clearTimeout(state.autoTimer);
                 state.autoTimer = null;
             }
 
             function enableManual() {
+                debugLog('always', '🔄 Manual mode enabled');
                 state.manualMode = true;
                 stopAuto();
                 if (runtime.playback && runtime.playback.state === state) clearPlayback(runtime.playback);
@@ -1098,6 +1340,9 @@
                 if (state.manualMode || state.autoStarted) return;
                 if (object.movie && object.movie.name) return;
 
+                debugLog('always', '🚀 Autoplay triggered');
+                debugLog('queueBuilding', '📊 Available videos: ' + parsed.videos.length);
+
                 stopAuto();
                 state.sourceName = getActiveSource();
 
@@ -1114,8 +1359,12 @@
                     state.queue = buildQueue(parsed.videos, state.sourceName, self.getChoice().voice_name || '', state.statsContext);
                     state.queueIndex = -1;
 
-                    if (!state.queue.length) return;
+                    if (!state.queue.length) {
+                        debugLog('always', '❌ No candidates in queue, manual mode needed');
+                        return;
+                    }
 
+                    debugLog('always', '📊 Queue built with ' + state.queue.length + ' candidates');
                     playNextCandidate(self, state, 'autostart');
                 }, 150);
             }
@@ -1139,6 +1388,8 @@
         SmartLampac.prototype.constructor = SmartLampac;
 
         Lampa.Component.add(smartComponentName(), SmartLampac);
+        debugLog('always', '✅ Smart Component installed: ' + smartComponentName());
+
         return true;
     }
 
@@ -1162,8 +1413,10 @@
 
             if (componentReady && manifestReady && settingsReady && (playerReady || tries >= WAIT_MAX_TRIES)) {
                 clearInterval(timer);
+                debugLog('always', '✅ Runtime ready after ' + tries + ' tries');
             } else if (tries >= WAIT_MAX_TRIES * 2) {
                 clearInterval(timer);
+                debugLog('always', '❌ Runtime initialization timeout');
             }
         }, WAIT_INTERVAL_MS);
     }
@@ -1226,6 +1479,17 @@
         runtime.started = true;
         window.smartonline_started = true;
         window.smartonline_plugin = true;
+
+        debugLog('always', '🚀 Smart Online plugin starting...');
+        debugLog('always', '📊 DEBUG settings:', {
+            enabled: DEBUG.enabled,
+            console: DEBUG.console,
+            qualityDetection: DEBUG.qualityDetection,
+            queueBuilding: DEBUG.queueBuilding,
+            scoreCalculation: DEBUG.scoreCalculation,
+            selection: DEBUG.selection
+        });
+
         addLang();
         registerSettings();
         installPlayerHooks();
@@ -1235,6 +1499,8 @@
         addHeadButton();
         ensureRuntime();
         scheduleManifestSync();
+
+        debugLog('always', '✅ Smart Online plugin started');
     }
 
     function waitLampac() {
@@ -1257,6 +1523,7 @@
             } else if (tries >= WAIT_MAX_TRIES) {
                 clearInterval(timer);
                 runtime.waitStarted = false;
+                debugLog('always', '❌ Lampa not found after ' + tries + ' tries');
             }
         }, WAIT_INTERVAL_MS);
     }
