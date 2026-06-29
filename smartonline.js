@@ -6,20 +6,20 @@
     // ============================================================
 
     console.log('========================================');
-    console.log('🔍 SmartOnline v3 - ЗАПУСК');
+    console.log('🔍 SmartOnline v4 - ЗАПУСК');
     console.log('========================================');
     console.log('📋 Будет выполнено:');
     console.log('  1. Сбор данных со всех источников (Phantom, Filmix, Alloha, Kinopub)');
-    console.log('  2. Анализ качества в каждом источнике');
+    console.log('  2. Анализ качества ВО ВСЕХ ПОЛЯХ');
     console.log('  3. Выбор лучшего качества');
     console.log('  4. Запуск видео с лучшим качеством');
     console.log('========================================');
 
-    if (window.smartonline_plugin_v3) {
+    if (window.smartonline_plugin_v4) {
         console.log('⚠️ Плагин уже запущен, пропускаем');
         return;
     }
-    window.smartonline_plugin_v3 = true;
+    window.smartonline_plugin_v4 = true;
 
     // ============================================================
     // ПРИОРИТЕТЫ ИСТОЧНИКОВ
@@ -38,22 +38,137 @@
     });
 
     // ============================================================
-    // ОПРЕДЕЛЕНИЕ КАЧЕСТВА
+    // РАСШИРЕННОЕ ОПРЕДЕЛЕНИЕ КАЧЕСТВА
     // ============================================================
 
     function detectQuality(value) {
-        var text = (value || '').toString().toLowerCase().replace(/\s+/g, ' ').trim();
+        if (!value) return 0;
+        var text = String(value).toLowerCase().replace(/\s+/g, ' ').trim();
         if (!text) return 0;
 
+        // 4K / 2160p
         if (/(2160|4k|uhd|ultra[\s-]?hd|3840|ultrahd|4[\s-]?k)/i.test(text)) return 2160;
+
+        // 1080p / Full HD
         if (/(1080|full[\s-]?hd|fhd|1920|fullhd)/i.test(text)) return 1080;
+
+        // 720p / HD
         if (/(720|hd[\s-]?ready|1280)/i.test(text)) return 720;
+
+        // 480p / SD
         if (/(480|sd|dvd|640|854)/i.test(text)) return 480;
+
+        // Если есть цифры с p (например "720p", "1080p")
+        var match = text.match(/(\d{3,4})[pP]/);
+        if (match) {
+            var num = parseInt(match[1], 10);
+            if (num >= 480) return num;
+        }
 
         return 0;
     }
 
-    console.log('📐 Определение качества по ключевым словам: 2160p, 4K, 1080p, Full HD, 720p, 480p');
+    console.log('📐 Определение качества по: тексту, URL, quality объекту, названию');
+
+    // ============================================================
+    // ГЛУБОКИЙ АНАЛИЗ КАЧЕСТВА
+    // ============================================================
+
+    function getVideoQuality(item) {
+        var quality = 0;
+        var sources = [];
+
+        // 1. Проверяем text
+        if (item.text) {
+            var q = detectQuality(item.text);
+            if (q > quality) {
+                quality = q;
+                sources.push('text: "' + item.text + '" → ' + q + 'p');
+            }
+        }
+
+        // 2. Проверяем title
+        if (item.title) {
+            var q = detectQuality(item.title);
+            if (q > quality) {
+                quality = q;
+                sources.push('title: "' + item.title + '" → ' + q + 'p');
+            }
+        }
+
+        // 3. Проверяем name
+        if (item.name) {
+            var q = detectQuality(item.name);
+            if (q > quality) {
+                quality = q;
+                sources.push('name: "' + item.name + '" → ' + q + 'p');
+            }
+        }
+
+        // 4. Проверяем URL
+        if (item.url) {
+            var q = detectQuality(item.url);
+            if (q > quality) {
+                quality = q;
+                sources.push('url: "' + item.url.substring(0, 50) + '..." → ' + q + 'p');
+            }
+        }
+
+        // 5. Проверяем stream
+        if (item.stream) {
+            var q = detectQuality(item.stream);
+            if (q > quality) {
+                quality = q;
+                sources.push('stream: "' + item.stream.substring(0, 50) + '..." → ' + q + 'p');
+            }
+        }
+
+        // 6. Проверяем quality объект
+        if (item.quality && typeof item.quality === 'object') {
+            for (var key in item.quality) {
+                var q = detectQuality(key);
+                if (q > quality) {
+                    quality = q;
+                    sources.push('quality key: "' + key + '" → ' + q + 'p');
+                }
+                var q2 = detectQuality(item.quality[key]);
+                if (q2 > quality) {
+                    quality = q2;
+                    sources.push('quality value: "' + item.quality[key] + '" → ' + q2 + 'p');
+                }
+            }
+        }
+
+        // 7. Проверяем qualitys
+        if (item.qualitys && typeof item.qualitys === 'object') {
+            for (var key2 in item.qualitys) {
+                var q = detectQuality(key2);
+                if (q > quality) {
+                    quality = q;
+                    sources.push('qualitys key: "' + key2 + '" → ' + q + 'p');
+                }
+                var q2 = detectQuality(item.qualitys[key2]);
+                if (q2 > quality) {
+                    quality = q2;
+                    sources.push('qualitys value: "' + item.qualitys[key2] + '" → ' + q2 + 'p');
+                }
+            }
+        }
+
+        // 8. Проверяем label
+        if (item.label) {
+            var q = detectQuality(item.label);
+            if (q > quality) {
+                quality = q;
+                sources.push('label: "' + item.label + '" → ' + q + 'p');
+            }
+        }
+
+        return {
+            quality: quality,
+            sources: sources
+        };
+    }
 
     // ============================================================
     // СБОР СО ВСЕХ ИСТОЧНИКОВ
@@ -61,6 +176,7 @@
 
     function collectAllSources(movie, callback) {
         var allVideos = [];
+        var allButtons = [];
         var sources = ['phantom', 'filmix', 'alloha', 'kinopub'];
         var totalSources = sources.length;
         var completed = 0;
@@ -89,7 +205,7 @@
             var host = 'https://ab2024.ru';
             var url = host + '/lite/' + sourceName + '?' + query.join('&');
 
-            console.log('  📡 Запрос к ' + sourceName + ': ' + url);
+            console.log('  📡 Запрос к ' + sourceName);
 
             var network = new Lampa.Reguest();
             network.timeout(10000);
@@ -100,131 +216,191 @@
                 try {
                     var $html = $('<div>' + str + '</div>');
                     var found = 0;
+
+                    // Парсим элементы видео
                     $html.find('.videos__item').each(function() {
                         var $item = $(this);
                         try {
                             var data = JSON.parse($item.attr('data-json'));
                             var text = $item.text().trim();
+                            var season = $item.attr('s');
+                            var episode = $item.attr('e');
+
                             if (data.method === 'play' || data.method === 'call') {
                                 data.text = text;
                                 data.sourceName = sourceName;
+                                if (season) data.season = parseInt(season);
+                                if (episode) data.episode = parseInt(episode);
                                 allVideos.push(data);
                                 found++;
                             }
                         } catch (e) {}
                     });
-                    console.log('    📹 Найдено видео: ' + found);
+
+                    // Парсим кнопки (озвучки) - здесь тоже может быть качество
+                    $html.find('.videos__button').each(function() {
+                        var $item = $(this);
+                        try {
+                            var data = JSON.parse($item.attr('data-json'));
+                            var text = $item.text().trim();
+                            data.text = text;
+                            data.sourceName = sourceName;
+                            data.isButton = true;
+                            allButtons.push(data);
+                        } catch (e) {}
+                    });
+
+                    console.log('    📹 Найдено видео: ' + found + ', кнопок: ' + allButtons.length);
                 } catch (e) {
                     console.log('    ❌ Ошибка парсинга: ' + e.message);
                 }
 
                 if (completed === totalSources) {
-                    console.log('📊 Все источники обработаны. Всего видео: ' + allVideos.length);
-                    callback(allVideos);
+                    // Объединяем видео и кнопки для анализа качества
+                    var allItems = allVideos.concat(allButtons);
+                    console.log('📊 Всего элементов для анализа: ' + allItems.length + ' (видео: ' + allVideos.length + ', кнопки: ' + allButtons.length + ')');
+                    callback(allItems);
                 }
             }, function(err) {
                 completed++;
                 console.log('  ❌ Ошибка запроса к ' + sourceName + ': ' + (err.status || 'unknown'));
                 if (completed === totalSources) {
-                    console.log('📊 Все источники обработаны. Всего видео: ' + allVideos.length);
-                    callback(allVideos);
+                    var allItems = allVideos.concat(allButtons);
+                    console.log('📊 Всего элементов для анализа: ' + allItems.length);
+                    callback(allItems);
                 }
             }, false, { dataType: 'text' });
         });
     }
 
     // ============================================================
-    // АНАЛИЗ КАЧЕСТВА ВИДЕО
-    // ============================================================
-
-    function analyzeVideoQuality(item, callback) {
-        var url = item.url || item.stream || '';
-
-        // Проверяем текст
-        var textQuality = 0;
-        var textFields = [item && item.text, item && item.title, item && item.name, item && item.label];
-        textFields.forEach(function(field) {
-            if (field) {
-                var q = detectQuality(field);
-                if (q > textQuality) textQuality = q;
-            }
-        });
-
-        var urlQuality = detectQuality(url);
-        var result = Math.max(textQuality, urlQuality);
-
-        // Проверяем quality объект
-        if (item && item.quality && typeof item.quality === 'object') {
-            for (var q in item.quality) {
-                var detected = detectQuality(q + ' ' + item.quality[q]);
-                if (detected > result) result = detected;
-            }
-        }
-
-        callback(result);
-    }
-
-    // ============================================================
     // ВЫБОР ЛУЧШЕГО ВИДЕО
     // ============================================================
 
-    function selectBestVideo(videos) {
-        console.log('🎯 Анализ ' + videos.length + ' видео для выбора лучшего');
+    function selectBestVideo(items) {
+        console.log('🎯 Анализ ' + items.length + ' элементов для выбора лучшего качества');
 
-        if (!videos || videos.length === 0) {
-            console.log('❌ Нет видео для анализа');
+        if (!items || items.length === 0) {
+            console.log('❌ Нет элементов для анализа');
             return null;
         }
 
-        // Анализируем каждое видео
+        // Анализируем каждый элемент
         var analyzed = [];
-        var pending = videos.length;
 
-        return new Promise(function(resolve) {
-            videos.forEach(function(item, index) {
-                analyzeVideoQuality(item, function(quality) {
-                    console.log('  Видео #' + (index + 1) + ' [' + (item.sourceName || 'unknown') + ']: качество ' + quality + 'p, текст: ' + (item.text || ''));
-                    analyzed.push({
-                        item: item,
-                        quality: quality,
-                        index: index
-                    });
-
-                    pending--;
-                    if (pending === 0) {
-                        // Сортируем по качеству (от высшего к низшему)
-                        analyzed.sort(function(a, b) {
-                            return b.quality - a.quality;
-                        });
-
-                        // Оставляем только самое высокое качество
-                        var maxQuality = analyzed[0].quality;
-                        var bestCandidates = analyzed.filter(function(a) {
-                            return a.quality === maxQuality;
-                        });
-
-                        console.log('🏆 ЛУЧШЕЕ КАЧЕСТВО: ' + maxQuality + 'p');
-                        console.log('📋 Кандидатов с лучшим качеством: ' + bestCandidates.length);
-
-                        // Сортируем по приоритету источника
-                        bestCandidates.sort(function(a, b) {
-                            var aPrio = SOURCE_PRIORITY.find(function(s) { return a.item.sourceName && a.item.sourceName.indexOf(s.name) !== -1; });
-                            var bPrio = SOURCE_PRIORITY.find(function(s) { return b.item.sourceName && b.item.sourceName.indexOf(s.name) !== -1; });
-                            return (bPrio ? bPrio.weight : 0) - (aPrio ? aPrio.weight : 0);
-                        });
-
-                        var best = bestCandidates[0];
-                        console.log('🎯 ВЫБРАННОЕ ВИДЕО:');
-                        console.log('  Качество: ' + best.quality + 'p');
-                        console.log('  Источник: ' + (best.item.sourceName || 'unknown'));
-                        console.log('  Текст: ' + (best.item.text || ''));
-                        console.log('  URL: ' + (best.item.url || best.item.stream || '').substring(0, 80) + '...');
-
-                        resolve(best.item);
-                    }
+        items.forEach(function(item, index) {
+            var result = getVideoQuality(item);
+            console.log('  Элемент #' + (index + 1) + ' [' + (item.sourceName || 'unknown') + ']:');
+            console.log('    Текст: ' + (item.text || 'Нет'));
+            console.log('    Качество: ' + result.quality + 'p');
+            if (result.sources.length > 0) {
+                console.log('    Найдено в:');
+                result.sources.forEach(function(s) {
+                    console.log('      - ' + s);
                 });
+            } else {
+                console.log('    ⚠️ Качество не найдено');
+            }
+
+            analyzed.push({
+                item: item,
+                quality: result.quality,
+                sources: result.sources,
+                index: index
             });
         });
+
+        // Сортируем по качеству
+        analyzed.sort(function(a, b) {
+            return b.quality - a.quality;
+        });
+
+        // Оставляем только самое высокое качество
+        var maxQuality = analyzed.length > 0 ? analyzed[0].quality : 0;
+
+        if (maxQuality === 0) {
+            console.log('⚠️ Качество не найдено ни в одном элементе');
+            return null;
+        }
+
+        var bestCandidates = analyzed.filter(function(a) {
+            return a.quality === maxQuality;
+        });
+
+        console.log('🏆 ЛУЧШЕЕ КАЧЕСТВО: ' + maxQuality + 'p');
+        console.log('📋 Кандидатов с лучшим качеством: ' + bestCandidates.length);
+
+        // Сортируем по приоритету источника
+        bestCandidates.sort(function(a, b) {
+            var aPrio = SOURCE_PRIORITY.find(function(s) {
+                return a.item.sourceName && a.item.sourceName.indexOf(s.name) !== -1;
+            });
+            var bPrio = SOURCE_PRIORITY.find(function(s) {
+                return b.item.sourceName && b.item.sourceName.indexOf(s.name) !== -1;
+            });
+            return (bPrio ? bPrio.weight : 0) - (aPrio ? aPrio.weight : 0);
+        });
+
+        var best = bestCandidates[0];
+        console.log('🎯 ВЫБРАННЫЙ ЭЛЕМЕНТ:');
+        console.log('  Качество: ' + best.quality + 'p');
+        console.log('  Источник: ' + (best.item.sourceName || 'unknown'));
+        console.log('  Текст: ' + (best.item.text || 'Нет'));
+        console.log('  Найдено в:');
+        best.sources.forEach(function(s) {
+            console.log('    - ' + s);
+        });
+
+        return best.item;
+    }
+
+    // ============================================================
+    // ЗАПУСК ВИДЕО
+    // ============================================================
+
+    function playVideo(item, movie) {
+        if (!item) {
+            console.log('❌ Нет элемента для воспроизведения');
+            return;
+        }
+
+        var url = item.url || item.stream;
+        if (!url) {
+            console.log('❌ Нет URL для воспроизведения');
+            return;
+        }
+
+        console.log('▶️ ЗАПУСК ВИДЕО:');
+        console.log('  URL: ' + url.substring(0, 80) + '...');
+        console.log('  Источник: ' + (item.sourceName || 'unknown'));
+        console.log('  Качество: ' + getVideoQuality(item).quality + 'p');
+        console.log('  Текст: ' + (item.text || ''));
+
+        var playData = {
+            url: url,
+            title: item.title || item.text || '',
+            quality: item.qualitys || item.quality,
+            isonline: true,
+            _sourceName: item.sourceName || 'unknown',
+            _bestQuality: true,
+            movie: movie,
+            card: movie
+        };
+
+        if (item.segments) playData.segments = item.segments;
+        if (item.subtitles) playData.subtitles = item.subtitles;
+        if (item.timeline) playData.timeline = item.timeline;
+        if (item.season) playData.season = item.season;
+        if (item.episode) playData.episode = item.episode;
+        if (item.voice_name) playData.voice_name = item.voice_name;
+        if (item.thumbnail) playData.thumbnail = item.thumbnail;
+
+        if (Lampa.Player && Lampa.Player.play) {
+            console.log('🚀 Запуск плеера...');
+            Lampa.Player.play(playData);
+        } else {
+            console.log('❌ Плеер не доступен');
+        }
     }
 
     // ============================================================
@@ -252,26 +428,22 @@
         function SmartLampac(object) {
             console.log('📦 Создание SmartLampac для: ' + (object.movie ? object.movie.title : 'unknown'));
 
-            // Сохраняем оригинальный объект
             var movie = object.movie || {};
             var isCollecting = false;
-            var allVideos = [];
+            var allItems = [];
 
-            // Вызываем оригинальный конструктор
             BaseLampac.call(this, object);
 
-            // Сохраняем оригинальный метод parse
             var originalParse = this.parse;
 
-            // Переопределяем parse
             this.parse = function(str) {
                 console.log('📥 parse() вызван для: ' + (object.balanser || 'unknown'));
 
-                // Парсим текущий ответ
                 try {
                     var $html = $('<div>' + str + '</div>');
-                    var videos = [];
+                    var items = [];
 
+                    // Собираем видео
                     $html.find('.videos__item').each(function() {
                         var $item = $(this);
                         try {
@@ -280,73 +452,50 @@
                             if (data.method === 'play' || data.method === 'call') {
                                 data.text = text;
                                 data.sourceName = object.balanser || 'unknown';
-                                videos.push(data);
+                                items.push(data);
                             }
                         } catch (e) {}
                     });
 
-                    if (videos.length > 0) {
-                        allVideos = allVideos.concat(videos);
-                        console.log('  📹 Добавлено видео из ' + (object.balanser || 'unknown') + ': ' + videos.length);
+                    // Собираем кнопки (озвучки)
+                    $html.find('.videos__button').each(function() {
+                        var $item = $(this);
+                        try {
+                            var data = JSON.parse($item.attr('data-json'));
+                            var text = $item.text().trim();
+                            data.text = text;
+                            data.sourceName = object.balanser || 'unknown';
+                            data.isButton = true;
+                            items.push(data);
+                        } catch (e) {}
+                    });
+
+                    if (items.length > 0) {
+                        allItems = allItems.concat(items);
+                        console.log('  📦 Добавлено элементов из ' + (object.balanser || 'unknown') + ': ' + items.length);
                     }
 
-                    // Если еще не собирали все источники
                     if (!isCollecting) {
                         isCollecting = true;
                         console.log('🔄 Начинаем сбор со всех источников...');
 
-                        collectAllSources(movie, function(allCollectedVideos) {
-                            console.log('📊 Собрано со всех источников: ' + allCollectedVideos.length);
+                        collectAllSources(movie, function(allCollectedItems) {
+                            console.log('📊 Собрано со всех источников: ' + allCollectedItems.length);
 
-                            // Объединяем с уже собранными
-                            var combined = allVideos.concat(allCollectedVideos);
-                            console.log('📊 Всего видео после объединения: ' + combined.length);
+                            var combined = allItems.concat(allCollectedItems);
+                            console.log('📊 Всего элементов после объединения: ' + combined.length);
 
                             if (combined.length === 0) {
-                                console.log('❌ Нет видео для воспроизведения');
+                                console.log('❌ Нет элементов для воспроизведения');
                                 return;
                             }
 
-                            // Выбираем лучшее видео
-                            selectBestVideo(combined).then(function(bestItem) {
-                                if (!bestItem) {
-                                    console.log('❌ Не удалось выбрать лучшее видео');
-                                    return;
-                                }
-
-                                console.log('▶️ ЗАПУСК ЛУЧШЕГО ВИДЕО:');
-                                console.log('  Качество: ' + (bestItem.quality || detectQuality(bestItem.text)) + 'p');
-                                console.log('  Источник: ' + bestItem.sourceName);
-                                console.log('  Текст: ' + bestItem.text);
-
-                                // Создаем данные для плеера
-                                var playData = {
-                                    url: bestItem.url || bestItem.stream,
-                                    title: bestItem.title || bestItem.text || '',
-                                    quality: bestItem.qualitys || bestItem.quality,
-                                    isonline: true,
-                                    _sourceName: bestItem.sourceName,
-                                    _bestQuality: true,
-                                    movie: movie,
-                                    card: movie
-                                };
-
-                                if (bestItem.segments) playData.segments = bestItem.segments;
-                                if (bestItem.subtitles) playData.subtitles = bestItem.subtitles;
-                                if (bestItem.timeline) playData.timeline = bestItem.timeline;
-                                if (bestItem.season) playData.season = bestItem.season;
-                                if (bestItem.episode) playData.episode = bestItem.episode;
-                                if (bestItem.voice_name) playData.voice_name = bestItem.voice_name;
-                                if (bestItem.thumbnail) playData.thumbnail = bestItem.thumbnail;
-
-                                // Запускаем плеер
-                                if (Lampa.Player && Lampa.Player.play) {
-                                    console.log('🚀 Запуск плеера...');
-                                    Lampa.Player.play(playData);
-                                } else {
-                                    console.log('❌ Плеер не доступен');
-                                }
-                            });
+                            var bestItem = selectBestVideo(combined);
+                            if (bestItem) {
+                                playVideo(bestItem, movie);
+                            } else {
+                                console.log('❌ Не удалось выбрать лучшее видео');
+                            }
                         });
                     }
 
@@ -354,7 +503,6 @@
                     console.log('❌ Ошибка парсинга: ' + e.message);
                 }
 
-                // Вызываем оригинальный parse
                 return originalParse.call(this, str);
             };
         }
@@ -379,12 +527,12 @@
                 var movie = e.data.movie;
 
                 if (!render || !movie) return;
-                if (render.find('.lampac-smart-button-v3').length > 0) return;
+                if (render.find('.lampac-smart-button-v4').length > 0) return;
 
                 console.log('  Кнопка для: ' + (movie.title || movie.name));
 
                 var btn = $(
-                    '<div class="full-start__button full-start-new__button selector view--online lampac-smart-button-v3" style="display:flex !important; opacity:1 !important; visibility:visible !important;">' +
+                    '<div class="full-start__button full-start-new__button selector view--online lampac-smart-button-v4" style="display:flex !important; opacity:1 !important; visibility:visible !important;">' +
                     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" style="width:24px;height:24px;">' +
                     '<path d="M13.5 2 4 14h6l-1.5 8L18 10h-6l1.5-8Z"></path>' +
                     '</svg>' +
@@ -396,42 +544,20 @@
                     console.log('🔘 Кнопка Smart Online нажата');
                     console.log('  Фильм: ' + (movie.title || movie.name));
 
-                    collectAllSources(movie, function(allVideos) {
-                        console.log('📊 Собрано видео: ' + allVideos.length);
+                    collectAllSources(movie, function(allItems) {
+                        console.log('📊 Собрано элементов: ' + allItems.length);
 
-                        if (allVideos.length === 0) {
+                        if (allItems.length === 0) {
                             if (Lampa.Noty && Lampa.Noty.show) {
                                 Lampa.Noty.show('Не найдено видео для просмотра');
                             }
                             return;
                         }
 
-                        selectBestVideo(allVideos).then(function(bestItem) {
-                            if (!bestItem) return;
-
-                            console.log('▶️ ЗАПУСК ЛУЧШЕГО ВИДЕО (по кнопке)');
-
-                            var playData = {
-                                url: bestItem.url || bestItem.stream,
-                                title: bestItem.title || bestItem.text || '',
-                                quality: bestItem.qualitys || bestItem.quality,
-                                isonline: true,
-                                _sourceName: bestItem.sourceName,
-                                _bestQuality: true,
-                                movie: movie,
-                                card: movie
-                            };
-
-                            if (bestItem.segments) playData.segments = bestItem.segments;
-                            if (bestItem.subtitles) playData.subtitles = bestItem.subtitles;
-                            if (bestItem.timeline) playData.timeline = bestItem.timeline;
-                            if (bestItem.season) playData.season = bestItem.season;
-                            if (bestItem.episode) playData.episode = bestItem.episode;
-                            if (bestItem.voice_name) playData.voice_name = bestItem.voice_name;
-                            if (bestItem.thumbnail) playData.thumbnail = bestItem.thumbnail;
-
-                            Lampa.Player.play(playData);
-                        });
+                        var bestItem = selectBestVideo(allItems);
+                        if (bestItem) {
+                            playVideo(bestItem, movie);
+                        }
                     });
                 });
 
@@ -450,16 +576,13 @@
     // ============================================================
 
     function init() {
-        console.log('🚀 Инициализация SmartOnline v3');
+        console.log('🚀 Инициализация SmartOnline v4');
         console.log('  Патчим компонент Lampac...');
 
-        // Патчим компонент
         patchLampacComponent();
-
-        // Добавляем кнопку
         addSmartButton();
 
-        console.log('✅ SmartOnline v3 готов к работе!');
+        console.log('✅ SmartOnline v4 готов к работе!');
         console.log('========================================');
     }
 
