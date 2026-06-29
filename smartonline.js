@@ -73,7 +73,7 @@
     var SMART_MANIFEST_VERSION = '2.0.0';
 
     // ============================================================
-    // ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ (без изменений)
+    // ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
     // ============================================================
 
     function detectBaseComponentFromManifest() {
@@ -239,13 +239,13 @@
         if (/(7680|8k|8[\s-]?k)/i.test(text)) return 7680;
 
         // 4K (2160p, 4K, UHD, 2160, 3840)
-        if (/(2160|4k|uhd|ultra[\s-]?hd|3840|ultrahd)/i.test(text)) return 2160;
+        if (/(2160|4k|uhd|ultra[\s-]?hd|3840|ultrahd|ultra\s?hd|4[\s-]?k)/i.test(text)) return 2160;
 
         // 1440p (2K, QHD, 1440)
-        if (/(1440|2k|qhd|wqhd|2560)/i.test(text)) return 1440;
+        if (/(1440|2k|qhd|wqhd|2560|2[\s-]?k)/i.test(text)) return 1440;
 
         // 1080p (Full HD, 1080, 1920, FHD)
-        if (/(1080|full[\s-]?hd|fhd|1920|fullhd)/i.test(text)) return 1080;
+        if (/(1080|full[\s-]?hd|fhd|1920|fullhd|full\s?hd)/i.test(text)) return 1080;
 
         // 720p (HD Ready, 720, 1280)
         if (/(720|hd[\s-]?ready|1280)/i.test(text)) return 720;
@@ -274,12 +274,12 @@
 
         var cacheKey = Lampa.Utils.hash(url);
         if (streamQualityCache[cacheKey]) {
-            debugLog('qualityDetection', '📦 Использую кэшированное качество: ' + streamQualityCache[cacheKey] + 'p');
+            debugLog('qualityDetection', '📦 Кэш: ' + streamQualityCache[cacheKey] + 'p для: ' + url.substring(0, 60) + '...');
             callback(streamQualityCache[cacheKey]);
             return;
         }
 
-        debugLog('qualityDetection', '🔍 Анализирую видеопоток: ' + url.substring(0, 100) + '...');
+        debugLog('qualityDetection', '🔍 Анализ потока: ' + url.substring(0, 80) + '...');
 
         try {
             var video = document.createElement('video');
@@ -290,7 +290,7 @@
 
             var timeout = setTimeout(function() {
                 video.remove();
-                debugLog('qualityDetection', '⏱️ Таймаут анализа, определяю по URL');
+                debugLog('qualityDetection', '⏱️ Таймаут, определяю по URL');
                 var qualityFromUrl = detectQualityFromText(url);
                 if (qualityFromUrl > 0) streamQualityCache[cacheKey] = qualityFromUrl;
                 callback(qualityFromUrl || 0);
@@ -328,7 +328,7 @@
             video.addEventListener('error', function(e) {
                 clearTimeout(timeout);
                 video.remove();
-                debugLog('qualityDetection', '❌ Ошибка загрузки видео');
+                debugLog('qualityDetection', '❌ Ошибка загрузки');
                 var qualityFromUrl = detectQualityFromText(url);
                 if (qualityFromUrl > 0) {
                     streamQualityCache[cacheKey] = qualityFromUrl;
@@ -342,7 +342,7 @@
             video.load();
 
         } catch (e) {
-            debugLog('qualityDetection', '❌ Ошибка анализа: ' + (e.message || 'неизвестная'));
+            debugLog('qualityDetection', '❌ Ошибка: ' + (e.message || 'неизвестная'));
             var qualityFromUrl = detectQualityFromText(url);
             if (qualityFromUrl > 0) {
                 streamQualityCache[cacheKey] = qualityFromUrl;
@@ -355,32 +355,67 @@
 
     /**
      * Определение качества с анализом потока
+     * Проверяет ВСЕ поля: text, title, name, label, url, stream, quality
      */
     function detectQualityWithStreamAnalysis(item, callback) {
         var url = item.url || item.stream || '';
 
-        // Сначала проверяем по тексту
+        // === 1. ПРОВЕРКА ВСЕХ ТЕКСТОВЫХ ПОЛЕЙ ===
         var textQuality = 0;
-        var textFields = [item && item.text, item && item.title, item && item.name, item && item.label];
+        var textFields = [
+            item && item.text,
+            item && item.title,
+            item && item.name,
+            item && item.label,
+            item && item.quality_text,
+            item && item.quality_label
+        ];
+
         textFields.forEach(function(field) {
             if (field) {
                 var q = detectQualityFromText(field);
-                if (q > textQuality) textQuality = q;
+                if (q > textQuality) {
+                    debugLog('qualityDetection', '  Текст "' + field + '" → ' + q + 'p');
+                    textQuality = q;
+                }
             }
         });
 
+        // === 2. ПРОВЕРКА URL И STREAM ===
         var urlQuality = detectQualityFromText(url);
-        var maxFromText = Math.max(textQuality, urlQuality);
+        if (urlQuality > 0) {
+            debugLog('qualityDetection', '  URL содержит качество: ' + urlQuality + 'p');
+        }
 
-        debugLog('qualityDetection', '📐 По названию: ' + maxFromText + 'p');
+        // === 3. ПРОВЕРКА ОБЪЕКТА quality ===
+        var qualityObjQuality = 0;
+        if (item && item.quality && Lampa.Arrays.isObject(item.quality)) {
+            Lampa.Arrays.getKeys(item.quality).forEach(function(q) {
+                var detected = detectQualityFromText(q);
+                if (detected > qualityObjQuality) {
+                    debugLog('qualityDetection', '  quality[' + q + '] → ' + detected + 'p');
+                    qualityObjQuality = detected;
+                }
+                // Также проверяем значение
+                var valQuality = detectQualityFromText(item.quality[q]);
+                if (valQuality > qualityObjQuality) {
+                    debugLog('qualityDetection', '  quality[' + q + ']=' + item.quality[q] + ' → ' + valQuality + 'p');
+                    qualityObjQuality = valQuality;
+                }
+            });
+        }
 
-        // Если есть URL, анализируем поток
+        var maxFromText = Math.max(textQuality, urlQuality, qualityObjQuality);
+
+        debugLog('qualityDetection', '📐 По тексту: ' + maxFromText + 'p');
+
+        // === 4. АНАЛИЗ ПОТОКА (если есть URL) ===
         if (url && url.indexOf('http') === 0) {
-            debugLog('qualityDetection', '🔍 Анализирую поток...');
+            debugLog('qualityDetection', '🔍 Анализ потока...');
             analyzeStreamQuality(url, function(streamQuality) {
                 debugLog('qualityDetection', '📐 По потоку: ' + streamQuality + 'p');
                 var finalQuality = Math.max(maxFromText, streamQuality);
-                debugLog('qualityDetection', '✅ Итоговое качество: ' + finalQuality + 'p');
+                debugLog('qualityDetection', '✅ Итог: ' + finalQuality + 'p');
                 callback(finalQuality);
             });
             return;
@@ -390,11 +425,10 @@
     }
 
     // ============================================================
-    // ВЕСА КАЧЕСТВА (ПРИОРИТЕТ 4K > 1080p > 720p...)
+    // ВЕСА КАЧЕСТВА (ПРИОРИТЕТ 4K > 1080p > 720p > 480p)
     // ============================================================
 
     function qualityWeight(quality) {
-        // Вес качества - чем выше качество, тем больше вес
         if (quality >= 7680) return 200;   // 8K
         if (quality >= 2160) return 150;   // 4K
         if (quality >= 1440) return 80;    // 2K/QHD
@@ -406,18 +440,28 @@
     }
 
     // ============================================================
-    // ВЕСА ИСТОЧНИКОВ
+    // ВЕСА ИСТОЧНИКОВ (4 источника)
     // ============================================================
 
     function sourceWeight(source) {
         var text = normalize(source);
         var weight = 0;
 
-        if (/phantom/.test(text)) weight = 10;
-        else if (/filmix/.test(text)) weight = 8;
-        else if (/alloha/.test(text)) weight = 6;
-        else if (/kinopub/.test(text)) weight = 4;
-        else debugLog('scoreCalculation', '📊 Источник: ' + text + ' (вес 0)');
+        if (/phantom/.test(text)) {
+            weight = 10;
+            debugLog('scoreCalculation', '📊 Источник: Phantom (вес 10)');
+        } else if (/filmix/.test(text)) {
+            weight = 8;
+            debugLog('scoreCalculation', '📊 Источник: Filmix (вес 8)');
+        } else if (/alloha/.test(text)) {
+            weight = 6;
+            debugLog('scoreCalculation', '📊 Источник: Alloha (вес 6)');
+        } else if (/kinopub/.test(text)) {
+            weight = 4;
+            debugLog('scoreCalculation', '📊 Источник: Kinopub (вес 4)');
+        } else {
+            debugLog('scoreCalculation', '📊 Источник: ' + text + ' (вес 0)');
+        }
 
         return weight;
     }
@@ -451,11 +495,10 @@
     // ============================================================
 
     function itemQuality(item, callback) {
-        debugLog('qualityDetection', '🔍 Анализирую элемент:', {
-            text: item.text || 'Нет текста',
-            title: item.title || 'Нет заголовка',
-            url: (item.url || '').substring(0, 80) + '...'
-        });
+        debugLog('qualityDetection', '🔍 Анализ элемента:');
+        debugLog('qualityDetection', '  text: ' + (item.text || 'Нет'));
+        debugLog('qualityDetection', '  title: ' + (item.title || 'Нет'));
+        debugLog('qualityDetection', '  url: ' + ((item.url || '').substring(0, 60) || 'Нет'));
 
         detectQualityWithStreamAnalysis(item, function(quality) {
             debugLog('qualityDetection', '📐 Итоговое качество: ' + quality + 'p');
@@ -512,23 +555,19 @@
                 itemQuality(item, function(quality) {
                     pendingCount++;
 
-                    // === ФИЛЬТРАЦИЯ: оставляем только самые качественные ===
-                    // Для начала: если качество 0 - исключаем
+                    // === ФИЛЬТРАЦИЯ: исключаем неизвестное качество ===
                     if (quality === 0) {
                         excludedCount++;
-                        debugLog('queueBuilding', '❌ Видео #' + (index + 1) + ' исключено (качество не определено)');
+                        debugLog('queueBuilding', '❌ Видео #' + (index + 1) + ' исключено (качество 0)');
                         return;
                     }
-
-                    // === ВТОРОЙ ПРОХОД: ОСТАВЛЯЕМ ТОЛЬКО САМОЕ ВЫСОКОЕ КАЧЕСТВО ===
-                    // Функция будет вызвана после сбора всех кандидатов
 
                     totalCandidates++;
 
                     var score = 0;
 
                     // === СБОР ОЦЕНОК ===
-                    var qWeight = qualityWeight(quality);  // Качество - самый важный параметр
+                    var qWeight = qualityWeight(quality);
                     score += qWeight;
 
                     var vWeight = voiceWeight(voiceName);
@@ -595,7 +634,7 @@
                         });
 
                         debugLog('queueBuilding', '🏆 ЛУЧШЕЕ КАЧЕСТВО: ' + maxQuality + 'p');
-                        debugLog('queueBuilding', '📋 Кандидатов с лучшим качеством: ' + filtered.length);
+                        debugLog('queueBuilding', '📋 Кандидатов: ' + filtered.length);
 
                         // Сортируем отфильтрованные по весу
                         filtered.sort(function(a, b) {
@@ -618,7 +657,7 @@
     }
 
     // ============================================================
-    // ОСТАЛЬНЫЕ ФУНКЦИИ (без изменений)
+    // ОСТАЛЬНЫЕ ФУНКЦИИ
     // ============================================================
 
     function clearPlayback(playback) {
@@ -677,7 +716,7 @@
         instance.orUrlReserve(play);
         if (play.quality && Lampa.Arrays.isObject(play.quality)) instance.setDefaultQuality(play);
 
-        debugLog('selection', '🎬 ЗАПУСК ПОТОКА:');
+        debugLog('selection', '🎬 ЗАПУСК:');
         debugLog('selection', '  Качество: ' + candidate.quality + 'p');
         debugLog('selection', '  Источник: ' + candidate.sourceName);
         debugLog('selection', '  Озвучка: ' + candidate.voiceName);
@@ -716,7 +755,7 @@
 
         instance.getFileUrl(candidate.item, function(json, jsonCall) {
             if (!json || !json.url) {
-                debugLog('always', '❌ Не удалось получить URL для кандидата');
+                debugLog('always', '❌ Не удалось получить URL');
                 failPlayback({
                     instance: instance,
                     state: state,
