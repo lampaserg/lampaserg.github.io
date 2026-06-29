@@ -6,17 +6,17 @@
     // ============================================================
 
     console.log('========================================');
-    console.log('🔍 SmartOnline v5 - ЗАПУСК');
+    console.log('🔍 SmartOnline v6 - ЗАПУСК');
     console.log('========================================');
 
-    if (window.smartonline_plugin_v5) {
+    if (window.smartonline_plugin_v6) {
         console.log('⚠️ Плагин уже запущен, пропускаем');
         return;
     }
-    window.smartonline_plugin_v5 = true;
+    window.smartonline_plugin_v6 = true;
 
     // ============================================================
-    // ПРИОРИТЕТЫ ИСТОЧНИКОВ (из настроек Lampa)
+    // ПРИОРИТЕТЫ ИСТОЧНИКОВ
     // ============================================================
 
     var SOURCE_PRIORITY = [
@@ -25,11 +25,6 @@
         { name: 'alloha', weight: 6, label: 'Alloha' },
         { name: 'kinopub', weight: 4, label: 'Kinopub' }
     ];
-
-    console.log('📊 Приоритеты источников:');
-    SOURCE_PRIORITY.forEach(function(s) {
-        console.log('  ' + s.label + ' (вес ' + s.weight + ')');
-    });
 
     // ============================================================
     // РАСШИРЕННОЕ ОПРЕДЕЛЕНИЕ КАЧЕСТВА
@@ -41,17 +36,18 @@
         if (!text) return 0;
 
         // 4K / 2160p
-        if (/(2160|4k|uhd|ultra[\s-]?hd|3840|ultrahd|4[\s-]?k)/i.test(text)) return 2160;
+        if (/(2160|4k|uhd|ultra[\s-]?hd|3840|ultrahd|4[\s-]?k|2160p)/i.test(text)) return 2160;
 
         // 1080p / Full HD
-        if (/(1080|full[\s-]?hd|fhd|1920|fullhd)/i.test(text)) return 1080;
+        if (/(1080|full[\s-]?hd|fhd|1920|fullhd|1080p)/i.test(text)) return 1080;
 
         // 720p / HD
-        if (/(720|hd[\s-]?ready|1280)/i.test(text)) return 720;
+        if (/(720|hd[\s-]?ready|1280|720p)/i.test(text)) return 720;
 
         // 480p / SD
-        if (/(480|sd|dvd|640|854)/i.test(text)) return 480;
+        if (/(480|sd|dvd|640|854|480p)/i.test(text)) return 480;
 
+        // Число с p (например "720p", "1080p")
         var match = text.match(/(\d{3,4})[pP]/);
         if (match) {
             var num = parseInt(match[1], 10);
@@ -61,35 +57,46 @@
         return 0;
     }
 
-    console.log('📐 Определение качества по: тексту, URL, quality объекту, названию');
-
     // ============================================================
-    // ГЛУБОКИЙ АНАЛИЗ КАЧЕСТВА
+    // ГЛУБОКИЙ АНАЛИЗ КАЧЕСТВА ЭЛЕМЕНТА
     // ============================================================
 
-    function getVideoQuality(item) {
+    function getItemQuality(item) {
         var quality = 0;
         var sources = [];
 
-        var fields = ['text', 'title', 'name', 'label', 'url', 'stream'];
-        fields.forEach(function(field) {
+        // 1. Проверяем все текстовые поля
+        var textFields = ['text', 'title', 'name', 'label', 'voice_name', 'quality_text'];
+        textFields.forEach(function(field) {
             if (item[field]) {
                 var q = detectQuality(item[field]);
                 if (q > quality) {
                     quality = q;
-                    sources.push(field + ': "' + (String(item[field]).substring(0, 50)) + '" → ' + q + 'p');
+                    sources.push(field + ': "' + String(item[field]).substring(0, 40) + '" → ' + q + 'p');
                 }
             }
         });
 
-        // Проверяем quality объект
+        // 2. Проверяем URL и stream
+        var urlFields = ['url', 'stream'];
+        urlFields.forEach(function(field) {
+            if (item[field]) {
+                var q = detectQuality(item[field]);
+                if (q > quality) {
+                    quality = q;
+                    sources.push(field + ': "' + String(item[field]).substring(0, 40) + '" → ' + q + 'p');
+                }
+            }
+        });
+
+        // 3. Проверяем quality объект
         var qualityObj = item.quality || item.qualitys;
         if (qualityObj && typeof qualityObj === 'object') {
             for (var key in qualityObj) {
-                var q = detectQuality(key);
-                if (q > quality) {
-                    quality = q;
-                    sources.push('quality key: "' + key + '" → ' + q + 'p');
+                var q1 = detectQuality(key);
+                if (q1 > quality) {
+                    quality = q1;
+                    sources.push('quality key: "' + key + '" → ' + q1 + 'p');
                 }
                 var q2 = detectQuality(qualityObj[key]);
                 if (q2 > quality) {
@@ -103,44 +110,34 @@
     }
 
     // ============================================================
-    // ПОЛУЧЕНИЕ СПИСКА ИСТОЧНИКОВ ИЗ LAMPA
+    // ПОЛУЧЕНИЕ СПИСКА ИСТОЧНИКОВ ИЗ BALANSERS_WITH_SEARCH
     // ============================================================
 
-    function getBalansersFromLampa(movie) {
+    function getBalansersList() {
         var sources = [];
 
-        // 1. Получаем активный балансер
-        var activeBalanser = Lampa.Storage.get('active_balanser', '');
-        if (activeBalanser) {
-            sources.push(activeBalanser);
+        // Пытаемся получить из balansers_with_search (устанавливается в компоненте)
+        if (window.balansers_with_search && Array.isArray(window.balansers_with_search)) {
+            console.log('📋 balansers_with_search:', window.balansers_with_search);
+            sources = window.balansers_with_search.slice();
         }
 
-        // 2. Получаем online_balanser
-        var onlineBalanser = Lampa.Storage.get('online_balanser', '');
-        if (onlineBalanser && onlineBalanser !== activeBalanser) {
-            sources.push(onlineBalanser);
+        // Если пусто, используем приоритетные
+        if (sources.length === 0) {
+            console.log('⚠️ balansers_with_search пуст, используем приоритетные');
+            sources = SOURCE_PRIORITY.map(function(p) { return p.name; });
         }
 
-        // 3. Добавляем приоритетные источники, если их нет в списке
-        SOURCE_PRIORITY.forEach(function(prio) {
-            var alreadyExists = sources.some(function(s) {
-                return s.toLowerCase().indexOf(prio.name) !== -1;
-            });
-            if (!alreadyExists) {
-                sources.push(prio.name);
-            }
-        });
-
-        // 4. Удаляем дубликаты
+        // Удаляем дубликаты
         var unique = [];
         sources.forEach(function(s) {
-            var lower = s.toLowerCase();
-            if (!unique.some(function(u) { return u.toLowerCase() === lower; })) {
+            var lower = String(s).toLowerCase();
+            if (!unique.some(function(u) { return String(u).toLowerCase() === lower; })) {
                 unique.push(s);
             }
         });
 
-        console.log('📋 Источники для проверки:', unique);
+        console.log('📋 Итоговый список источников:', unique);
         return unique;
     }
 
@@ -150,7 +147,7 @@
 
     function collectAllSources(movie, callback) {
         var allItems = [];
-        var sources = getBalansersFromLampa(movie);
+        var sources = getBalansersList();
         var totalSources = sources.length;
         var completed = 0;
 
@@ -184,26 +181,33 @@
             network.timeout(10000);
             network["native"](url, function(str) {
                 completed++;
-                console.log('  ✅ Ответ от ' + sourceName + ' получен');
+                console.log('  ✅ Ответ от ' + sourceName + ' получен (длина: ' + (str ? str.length : 0) + ')');
 
                 try {
                     var $html = $('<div>' + str + '</div>');
                     var count = 0;
 
+                    // Парсим .videos__item
                     $html.find('.videos__item').each(function() {
                         var $item = $(this);
                         try {
                             var data = JSON.parse($item.attr('data-json'));
                             var text = $item.text().trim();
+                            var season = $item.attr('s');
+                            var episode = $item.attr('e');
+
                             if (data.method === 'play' || data.method === 'call') {
                                 data.text = text;
                                 data.sourceName = sourceName;
+                                if (season) data.season = parseInt(season);
+                                if (episode) data.episode = parseInt(episode);
                                 allItems.push(data);
                                 count++;
                             }
                         } catch (e) {}
                     });
 
+                    // Парсим .videos__button (озвучки)
                     $html.find('.videos__button').each(function() {
                         var $item = $(this);
                         try {
@@ -250,20 +254,18 @@
                 results[source] = {
                     items: [],
                     maxQuality: 0,
-                    bestItem: null
+                    maxQualityItem: null,
+                    allQualities: []
                 };
             }
 
-            var qualityResult = getVideoQuality(item);
-            results[source].items.push({
-                item: item,
-                quality: qualityResult.quality,
-                sources: qualityResult.sources
-            });
+            var qualityResult = getItemQuality(item);
+            results[source].items.push(item);
+            results[source].allQualities.push(qualityResult.quality);
 
             if (qualityResult.quality > results[source].maxQuality) {
                 results[source].maxQuality = qualityResult.quality;
-                results[source].bestItem = item;
+                results[source].maxQualityItem = item;
             }
         });
 
@@ -278,26 +280,33 @@
         var bestSource = null;
         var bestQuality = 0;
         var bestWeight = -1;
+        var bestCount = 0;
 
         for (var source in analyzedResults) {
             var data = analyzedResults[source];
             var quality = data.maxQuality;
+            var count = data.items.length;
 
-            // Если качество 0 - пропускаем
-            if (quality === 0) continue;
+            // Если качество 0 - пропускаем (но если элементов нет, тоже пропускаем)
+            if (quality === 0 || count === 0) {
+                console.log('  ⚠️ ' + source + ': качество ' + quality + 'p, элементов ' + count + ' (пропускаем)');
+                continue;
+            }
 
-            // Определяем вес источника
             var priority = SOURCE_PRIORITY.find(function(p) {
                 return source.toLowerCase().indexOf(p.name) !== -1;
             });
             var weight = priority ? priority.weight : 0;
 
-            console.log('  📊 ' + source + ': качество ' + quality + 'p, вес ' + weight + ', элементов ' + data.items.length);
+            console.log('  📊 ' + source + ': качество ' + quality + 'p, вес ' + weight + ', элементов ' + count);
 
-            // Выбираем по: качество > вес
-            if (quality > bestQuality || (quality === bestQuality && weight > bestWeight)) {
+            // Выбираем: качество > вес > количество элементов
+            if (quality > bestQuality || 
+                (quality === bestQuality && weight > bestWeight) ||
+                (quality === bestQuality && weight === bestWeight && count > bestCount)) {
                 bestQuality = quality;
                 bestWeight = weight;
+                bestCount = count;
                 bestSource = source;
             }
         }
@@ -312,6 +321,11 @@
     function switchToSource(sourceName, movie) {
         console.log('🔄 ПЕРЕКЛЮЧЕНИЕ НА ИСТОЧНИК: ' + sourceName);
 
+        if (!sourceName) {
+            console.log('❌ Нет источника для переключения');
+            return;
+        }
+
         // Сохраняем выбранный источник
         Lampa.Storage.set('active_balanser', sourceName);
         Lampa.Storage.set('online_balanser', sourceName);
@@ -323,7 +337,7 @@
             Lampa.Storage.set('online_last_balanser', lastSelect);
         }
 
-        // Перезагружаем активность, чтобы применить источник
+        // Перезагружаем активность
         var active = Lampa.Activity.active();
         if (active) {
             console.log('  🔄 Перезагрузка активности...');
@@ -337,7 +351,7 @@
     }
 
     // ============================================================
-    // ОСНОВНАЯ ЛОГИКА - НАЙТИ ЛУЧШИЙ ИСТОЧНИК
+    // ОСНОВНАЯ ЛОГИКА
     // ============================================================
 
     function findBestSourceAndSwitch(movie) {
@@ -352,7 +366,6 @@
                 return;
             }
 
-            // Анализируем качество по источникам
             var analyzed = analyzeSourcesQuality(allItems);
 
             console.log('📊 АНАЛИЗ ИСТОЧНИКОВ:');
@@ -363,9 +376,19 @@
                 return;
             }
 
-            console.log('🏆 ЛУЧШИЙ ИСТОЧНИК: ' + bestSource + ' (качество ' + analyzed[bestSource].maxQuality + 'p)');
+            var bestData = analyzed[bestSource];
+            console.log('🏆 ЛУЧШИЙ ИСТОЧНИК: ' + bestSource + ' (качество ' + bestData.maxQuality + 'p, элементов ' + bestData.items.length + ')');
 
-            // Переключаемся на лучший источник
+            if (bestData.maxQualityItem) {
+                var item = bestData.maxQualityItem;
+                console.log('  Лучший элемент: ' + (item.text || item.title || ''));
+                console.log('  Качество найдено в:');
+                var qualityResult = getItemQuality(item);
+                qualityResult.sources.forEach(function(s) {
+                    console.log('    - ' + s);
+                });
+            }
+
             switchToSource(bestSource, movie);
         });
     }
@@ -400,19 +423,42 @@
 
             BaseLampac.call(this, object);
 
+            var originalInitialize = this.initialize;
             var originalParse = this.parse;
 
-            this.parse = function(str) {
-                console.log('📥 parse() вызван для: ' + (object.balanser || 'unknown'));
+            // Перехватываем initialize, чтобы получить список балансеров
+            this.initialize = function() {
+                console.log('📥 initialize() вызван');
 
-                // Если еще не собирали все источники
+                // Сохраняем оригинальный метод
+                var self = this;
+
+                // Вызываем оригинальный initialize
+                var result = originalInitialize.call(this);
+
+                // После инициализации запускаем поиск лучшего источника
                 if (!isCollecting) {
                     isCollecting = true;
-                    // Запускаем поиск лучшего источника
-                    findBestSourceAndSwitch(movie);
+
+                    // Получаем список источников из balansers_with_search
+                    var network = new Lampa.Reguest();
+                    network.timeout(10000);
+                    network.silent('https://ab2024.ru/lite/withsearch', function(json) {
+                        if (json && Array.isArray(json)) {
+                            window.balansers_with_search = json;
+                            console.log('📋 Получен список источников:', json);
+                        }
+                        findBestSourceAndSwitch(movie);
+                    }, function() {
+                        console.log('⚠️ Не удалось получить список источников, используем приоритетные');
+                        findBestSourceAndSwitch(movie);
+                    }, false, { dataType: 'json' });
                 }
 
-                // Вызываем оригинальный parse
+                return result;
+            };
+
+            this.parse = function(str) {
                 return originalParse.call(this, str);
             };
         }
@@ -425,11 +471,11 @@
     }
 
     // ============================================================
-    // КНОПКА "НАЙТИ ЛУЧШИЙ ИСТОЧНИК"
+    // КНОПКА
     // ============================================================
 
     function addSmartButton() {
-        console.log('🔘 Добавляем кнопку "Найти лучший источник"...');
+        console.log('🔘 Добавляем кнопку "Лучший источник"...');
 
         Lampa.Listener.follow('full', function(e) {
             if (e.type === 'complite') {
@@ -437,12 +483,10 @@
                 var movie = e.data.movie;
 
                 if (!render || !movie) return;
-                if (render.find('.lampac-smart-button-v5').length > 0) return;
-
-                console.log('  Кнопка для: ' + (movie.title || movie.name));
+                if (render.find('.lampac-smart-button-v6').length > 0) return;
 
                 var btn = $(
-                    '<div class="full-start__button full-start-new__button selector view--online lampac-smart-button-v5" style="display:flex !important; opacity:1 !important; visibility:visible !important;">' +
+                    '<div class="full-start__button full-start-new__button selector view--online lampac-smart-button-v6" style="display:flex !important; opacity:1 !important; visibility:visible !important;">' +
                     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" style="width:24px;height:24px;">' +
                     '<path d="M13.5 2 4 14h6l-1.5 8L18 10h-6l1.5-8Z"></path>' +
                     '</svg>' +
@@ -452,7 +496,19 @@
 
                 btn.on('hover:enter', function() {
                     console.log('🔘 Кнопка "Лучший источник" нажата');
-                    findBestSourceAndSwitch(movie);
+                    // Получаем список источников перед поиском
+                    var network = new Lampa.Reguest();
+                    network.timeout(10000);
+                    network.silent('https://ab2024.ru/lite/withsearch', function(json) {
+                        if (json && Array.isArray(json)) {
+                            window.balansers_with_search = json;
+                            console.log('📋 Получен список источников:', json);
+                        }
+                        findBestSourceAndSwitch(movie);
+                    }, function() {
+                        console.log('⚠️ Не удалось получить список источников, используем приоритетные');
+                        findBestSourceAndSwitch(movie);
+                    }, false, { dataType: 'json' });
                 });
 
                 var container = render.find('.full-start__buttons, .full-start-new__buttons, .buttons--container').eq(0);
@@ -470,13 +526,12 @@
     // ============================================================
 
     function init() {
-        console.log('🚀 Инициализация SmartOnline v5');
-        console.log('  Патчим компонент Lampac...');
+        console.log('🚀 Инициализация SmartOnline v6');
 
         patchLampacComponent();
         addSmartButton();
 
-        console.log('✅ SmartOnline v5 готов к работе!');
+        console.log('✅ SmartOnline v6 готов к работе!');
         console.log('========================================');
     }
 
