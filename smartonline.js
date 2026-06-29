@@ -1,8 +1,8 @@
 (function () {
     'use strict';
 
-    if (window.smartonline_plugin_v3) return;
-    window.smartonline_plugin_v3 = true;
+    if (window.smartonline_plugin_v4) return;
+    window.smartonline_plugin_v4 = true;
 
     // ============================================================
     // НАСТРОЙКИ
@@ -23,7 +23,7 @@
     }
 
     // ============================================================
-    // ПРИОРИТЕТЫ ИСТОЧНИКОВ
+    // ПРИОРИТЕТЫ
     // ============================================================
 
     var SOURCE_PRIORITY = [
@@ -41,6 +41,23 @@
             }
         }
         return null;
+    }
+
+    var VOICE_PRIORITY = {
+        'hdrezka': 20,
+        'dub': 15,
+        'lostfilm': 10,
+        'cube': 13
+    };
+
+    function getVoicePriority(name) {
+        var text = (name || '').toLowerCase();
+        for (var key in VOICE_PRIORITY) {
+            if (text.indexOf(key) !== -1) {
+                return VOICE_PRIORITY[key];
+            }
+        }
+        return 0;
     }
 
     // ============================================================
@@ -160,7 +177,7 @@
         var totalSources = sources.length;
         var completed = 0;
 
-        debugLog('📊 Начинаем сбор со всех источников: ' + sources.join(', '));
+        debugLog('📊 Сбор со всех источников: ' + sources.join(', '));
 
         if (totalSources === 0) {
             callback([]);
@@ -170,7 +187,6 @@
         sources.forEach(function(sourceName) {
             debugLog('🔎 Запрос к источнику: ' + sourceName);
 
-            // Формируем URL для запроса к источнику
             var query = [];
             query.push('id=' + encodeURIComponent(movie.id));
             if (movie.imdb_id) query.push('imdb_id=' + (movie.imdb_id || ''));
@@ -183,10 +199,9 @@
             query.push('year=' + ((movie.release_date || movie.first_air_date || '0000') + '').slice(0, 4));
             query.push('source=' + (movie.source || 'tmdb'));
 
-            // Получаем URL источника
-            var sourceUrl = 'https://ab2024.ru/lite/' + sourceName + '?' + query.join('&');
-
-            debugLog('  📡 Запрос: ' + sourceUrl);
+            // Используем правильный хост
+            var host = 'https://ab2024.ru';
+            var sourceUrl = host + '/lite/' + sourceName + '?' + query.join('&');
 
             var network = new Lampa.Reguest();
             network.timeout(10000);
@@ -195,25 +210,40 @@
                 debugLog('  ✅ Ответ от ' + sourceName + ' получен');
 
                 try {
-                    // Парсим ответ
-                    var videos = [];
                     var $html = $('<div>' + str + '</div>');
                     $html.find('.videos__item').each(function() {
                         var $item = $(this);
                         try {
                             var data = JSON.parse($item.attr('data-json'));
                             var text = $item.text().trim();
+                            var season = $item.attr('s');
+                            var episode = $item.attr('e');
+
                             if (data.method === 'play' || data.method === 'call') {
                                 data.text = text;
                                 data.sourceName = sourceName;
-                                videos.push(data);
+                                if (episode) data.episode = parseInt(episode);
+                                if (season) data.season = parseInt(season);
+                                allVideos.push(data);
                             }
                         } catch (e) {}
                     });
 
-                    if (videos.length > 0) {
-                        debugLog('  📹 Найдено видео: ' + videos.length + ' в ' + sourceName);
-                        allVideos = allVideos.concat(videos);
+                    // Также парсим кнопки (озвучки)
+                    $html.find('.videos__button').each(function() {
+                        var $item = $(this);
+                        try {
+                            var data = JSON.parse($item.attr('data-json'));
+                            var text = $item.text().trim();
+                            data.text = text;
+                            data.sourceName = sourceName;
+                            data.isButton = true;
+                            // Сохраняем кнопки отдельно для озвучек
+                        } catch (e) {}
+                    });
+
+                    if (allVideos.length > 0) {
+                        debugLog('  📹 Найдено видео: ' + allVideos.length + ' в ' + sourceName);
                     } else {
                         debugLog('  ⚠️ Видео не найдены в ' + sourceName);
                     }
@@ -221,7 +251,6 @@
                     debugLog('  ❌ Ошибка парсинга ' + sourceName + ': ' + e.message);
                 }
 
-                // Проверяем, все ли источники обработаны
                 if (completed === totalSources) {
                     debugLog('📊 Все источники обработаны. Всего видео: ' + allVideos.length);
                     callback(allVideos);
@@ -240,12 +269,192 @@
     }
 
     // ============================================================
+    // ПЕРЕХВАТ КОМПОНЕНТА LAMPAC
+    // ============================================================
+
+    var originalComponent = null;
+    var isComponentPatched = false;
+
+    function patchLampacComponent() {
+        if (isComponentPatched) return;
+        if (!Lampa.Component || !Lampa.Component.get) return;
+
+        var BaseLampac = Lampa.Component.get('lampac');
+        if (!BaseLampac) {
+            setTimeout(patchLampacComponent, 500);
+            return;
+        }
+
+        isComponentPatched = true;
+
+        function SmartLampac(object) {
+            // Сохраняем объект фильма
+            var movie = object.movie || {};
+
+            // Создаем состояние для сбора данных
+            var allVideos = [];
+            var allButtons = [];
+            var sourcesProcessed = 0;
+            var totalSources = 0;
+            var isCollecting = false;
+            var bestSelected = false;
+
+            // Вызываем оригинальный конструктор
+            BaseLampac.call(this, object);
+
+            // Сохраняем оригинальный метод parse
+            var originalParse = this.parse;
+
+            // Переопределяем parse для сбора данных
+            this.parse = function(str) {
+                debugLog('📥 parse() вызван');
+
+                // Парсим текущий ответ
+                try {
+                    var $html = $('<div>' + str + '</div>');
+                    var videos = [];
+                    var buttons = [];
+
+                    $html.find('.videos__item').each(function() {
+                        var $item = $(this);
+                        try {
+                            var data = JSON.parse($item.attr('data-json'));
+                            var text = $item.text().trim();
+                            if (data.method === 'play' || data.method === 'call') {
+                                data.text = text;
+                                data.sourceName = object.balanser || 'unknown';
+                                videos.push(data);
+                            }
+                        } catch (e) {}
+                    });
+
+                    $html.find('.videos__button').each(function() {
+                        var $item = $(this);
+                        try {
+                            var data = JSON.parse($item.attr('data-json'));
+                            var text = $item.text().trim();
+                            data.text = text;
+                            data.sourceName = object.balanser || 'unknown';
+                            buttons.push(data);
+                        } catch (e) {}
+                    });
+
+                    // Сохраняем видео и кнопки
+                    if (videos.length > 0) {
+                        allVideos = allVideos.concat(videos);
+                        debugLog('📹 Добавлено видео из ' + (object.balanser || 'unknown') + ': ' + videos.length);
+                    }
+                    if (buttons.length > 0) {
+                        allButtons = allButtons.concat(buttons);
+                    }
+
+                    // Проверяем, нужно ли продолжать сбор
+                    if (!isCollecting) {
+                        isCollecting = true;
+
+                        // Получаем список всех источников
+                        var sources = [];
+                        var activeBalanser = Lampa.Storage.get('active_balanser', '');
+                        var onlineBalanser = Lampa.Storage.get('online_balanser', '');
+
+                        if (activeBalanser) sources.push(activeBalanser);
+                        if (onlineBalanser && onlineBalanser !== activeBalanser) sources.push(onlineBalanser);
+
+                        // Если источники не определены, используем все приоритетные
+                        if (sources.length === 0) {
+                            sources = ['phantom', 'filmix', 'alloha', 'kinopub'];
+                        }
+
+                        totalSources = sources.length;
+                        debugLog('📊 Всего источников для проверки: ' + totalSources);
+
+                        // Собираем данные со всех источников
+                        collectAllVideosFromSources(sources, movie, function(allCollectedVideos) {
+                            debugLog('📊 Собрано видео со всех источников: ' + allCollectedVideos.length);
+
+                            // Объединяем с уже собранными
+                            allVideos = allVideos.concat(allCollectedVideos);
+
+                            // Выбираем лучшее видео
+                            selectBestVideo(allVideos, function(bestItem) {
+                                if (bestItem) {
+                                    debugLog('🏆 ВЫБРАНО ЛУЧШЕЕ ВИДЕО:');
+                                    debugLog('  Источник: ' + bestItem.sourceName);
+                                    debugLog('  Качество: ' + (bestItem.quality || detectQualityFromText(bestItem.text)) + 'p');
+
+                                    // Автоматически запускаем лучшее видео
+                                    autoPlayBestVideo(bestItem);
+                                } else {
+                                    debugLog('❌ Не найдено подходящего видео');
+                                }
+                            });
+                        });
+                    }
+
+                } catch (e) {
+                    debugLog('❌ Ошибка парсинга: ' + e.message);
+                }
+
+                // Вызываем оригинальный parse
+                return originalParse.call(this, str);
+            };
+
+            // Функция автоматического воспроизведения лучшего видео
+            function autoPlayBestVideo(bestItem) {
+                if (bestSelected) return;
+                bestSelected = true;
+
+                debugLog('▶️ Автозапуск лучшего видео');
+
+                // Получаем URL видео
+                var url = bestItem.url || bestItem.stream;
+                if (!url) {
+                    debugLog('❌ Нет URL для воспроизведения');
+                    return;
+                }
+
+                // Создаем данные для плеера
+                var playData = {
+                    url: url,
+                    title: bestItem.title || bestItem.text || '',
+                    quality: bestItem.qualitys || bestItem.quality,
+                    isonline: true,
+                    _sourceName: bestItem.sourceName,
+                    _bestQuality: true,
+                    movie: movie,
+                    card: movie
+                };
+
+                if (bestItem.segments) playData.segments = bestItem.segments;
+                if (bestItem.subtitles) playData.subtitles = bestItem.subtitles;
+                if (bestItem.timeline) playData.timeline = bestItem.timeline;
+                if (bestItem.season) playData.season = bestItem.season;
+                if (bestItem.episode) playData.episode = bestItem.episode;
+                if (bestItem.voice_name) playData.voice_name = bestItem.voice_name;
+                if (bestItem.thumbnail) playData.thumbnail = bestItem.thumbnail;
+
+                // Запускаем плеер
+                if (Lampa.Player && Lampa.Player.play) {
+                    Lampa.Player.play(playData);
+                } else {
+                    debugLog('❌ Плеер не доступен');
+                }
+            }
+        }
+
+        SmartLampac.prototype = Object.create(BaseLampac.prototype);
+        SmartLampac.prototype.constructor = SmartLampac;
+
+        Lampa.Component.add('lampac', SmartLampac);
+        debugLog('✅ Компонент Lampac успешно пропатчен');
+    }
+
+    // ============================================================
     // ВЫБОР ЛУЧШЕГО ВИДЕО
     // ============================================================
 
     function selectBestVideo(videos, callback) {
         if (!videos || videos.length === 0) {
-            debugLog('❌ Нет видео для выбора');
             callback(null);
             return;
         }
@@ -265,7 +474,7 @@
                 });
 
                 if (pendingCount === videos.length) {
-                    // Сортируем по качеству (от высшего к низшему)
+                    // Сортируем по качеству
                     analyzed.sort(function(a, b) {
                         return b.quality - a.quality;
                     });
@@ -297,133 +506,19 @@
     }
 
     // ============================================================
-    // ПЕРЕХВАТ ПЛЕЕРА
-    // ============================================================
-
-    var originalPlayerPlay = null;
-    var isPatched = false;
-
-    function patchPlayer() {
-        if (isPatched) return;
-        if (!Lampa.Player || !Lampa.Player.play) return;
-        isPatched = true;
-
-        originalPlayerPlay = Lampa.Player.play;
-
-        Lampa.Player.play = function(data) {
-            debugLog('🎬 Перехват плеера');
-
-            // Проверяем, что это онлайн-плеер
-            if (!data || !data.isonline) {
-                return originalPlayerPlay.call(this, data);
-            }
-
-            // Получаем список источников
-            var sources = [];
-            var movie = data.movie || data.card || {};
-
-            // Определяем источники для поиска
-            var activeBalanser = Lampa.Storage.get('active_balanser', '');
-            var onlineBalanser = Lampa.Storage.get('online_balanser', '');
-
-            if (activeBalanser) {
-                sources.push(activeBalanser);
-            }
-            if (onlineBalanser && onlineBalanser !== activeBalanser) {
-                sources.push(onlineBalanser);
-            }
-
-            // Если источники не определены, используем все приоритетные
-            if (sources.length === 0) {
-                sources = ['phantom', 'filmix', 'alloha', 'kinopub'];
-            }
-
-            debugLog('📋 Источники для поиска: ' + sources.join(', '));
-
-            // Если видео уже содержит информацию об источнике
-            if (data._sourceName) {
-                debugLog('📌 Видео уже имеет источник: ' + data._sourceName);
-                return originalPlayerPlay.call(this, data);
-            }
-
-            // Сохраняем оригинальные данные
-            var originalData = data;
-
-            // Показываем загрузку
-            if (Lampa.Loading && Lampa.Loading.start) {
-                Lampa.Loading.start();
-            }
-
-            // Собираем видео со всех источников
-            collectAllVideosFromSources(sources, movie, function(allVideos) {
-                if (Lampa.Loading && Lampa.Loading.stop) {
-                    Lampa.Loading.stop();
-                }
-
-                if (allVideos.length === 0) {
-                    debugLog('❌ Видео не найдены ни в одном источнике');
-                    if (Lampa.Noty && Lampa.Noty.show) {
-                        Lampa.Noty.show('Не найдено видео для просмотра');
-                    }
-                    return;
-                }
-
-                // Выбираем лучшее видео
-                selectBestVideo(allVideos, function(bestItem) {
-                    if (!bestItem) {
-                        debugLog('❌ Не удалось выбрать лучшее видео');
-                        return;
-                    }
-
-                    debugLog('🎯 ВЫБРАНО ЛУЧШЕЕ ВИДЕО:');
-                    debugLog('  Источник: ' + bestItem.sourceName);
-                    debugLog('  Качество: ' + (bestItem.quality || detectQualityFromText(bestItem.text)) + 'p');
-                    debugLog('  Текст: ' + bestItem.text);
-
-                    // Создаем новый объект для плеера
-                    var playData = {
-                        url: bestItem.url || bestItem.stream,
-                        title: bestItem.title || bestItem.text || '',
-                        quality: bestItem.qualitys || bestItem.quality,
-                        isonline: true,
-                        _sourceName: bestItem.sourceName,
-                        _bestQuality: true,
-                        movie: movie,
-                        card: movie
-                    };
-
-                    // Копируем остальные поля
-                    if (bestItem.segments) playData.segments = bestItem.segments;
-                    if (bestItem.subtitles) playData.subtitles = bestItem.subtitles;
-                    if (bestItem.timeline) playData.timeline = bestItem.timeline;
-                    if (bestItem.season) playData.season = bestItem.season;
-                    if (bestItem.episode) playData.episode = bestItem.episode;
-                    if (bestItem.voice_name) playData.voice_name = bestItem.voice_name;
-                    if (bestItem.thumbnail) playData.thumbnail = bestItem.thumbnail;
-
-                    debugLog('▶️ Запуск плеера с выбранным видео');
-                    originalPlayerPlay.call(Lampa.Player, playData);
-                });
-            });
-        };
-
-        debugLog('✅ Плеер успешно пропатчен');
-    }
-
-    // ============================================================
     // ИНИЦИАЛИЗАЦИЯ
     // ============================================================
 
     function init() {
-        debugLog('🚀 Инициализация SmartOnline v3');
+        debugLog('🚀 Инициализация SmartOnline v4');
 
-        // Патчим плеер
-        patchPlayer();
+        // Патчим компонент Lampac
+        patchLampacComponent();
 
-        // Добавляем кнопку в карточку
+        // Добавляем кнопку "Smart Online" в карточку
         addSmartButton();
 
-        debugLog('✅ SmartOnline v3 готов к работе');
+        debugLog('✅ SmartOnline v4 готов к работе');
     }
 
     function addSmartButton() {
@@ -435,11 +530,11 @@
                 if (!render || !movie) return;
 
                 // Проверяем, есть ли уже кнопка
-                if (render.find('.lampac-smart-button-v3').length > 0) return;
+                if (render.find('.lampac-smart-button-v4').length > 0) return;
 
                 // Создаем кнопку
                 var btn = $(
-                    '<div class="full-start__button full-start-new__button selector view--online lampac-smart-button-v3" style="display:flex !important; opacity:1 !important; visibility:visible !important;">' +
+                    '<div class="full-start__button full-start-new__button selector view--online lampac-smart-button-v4" style="display:flex !important; opacity:1 !important; visibility:visible !important;">' +
                     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" style="width:24px;height:24px;">' +
                     '<path d="M13.5 2 4 14h6l-1.5 8L18 10h-6l1.5-8Z"></path>' +
                     '</svg>' +
@@ -448,7 +543,7 @@
                 );
 
                 btn.on('hover:enter', function() {
-                    debugLog('🔘 Нажата кнопка Smart Online для: ' + (movie.title || movie.name));
+                    debugLog('🔘 Кнопка Smart Online нажата для: ' + (movie.title || movie.name));
 
                     // Получаем список источников
                     var sources = [];
@@ -479,9 +574,7 @@
 
                         // Выбираем лучшее видео
                         selectBestVideo(allVideos, function(bestItem) {
-                            if (!bestItem) {
-                                return;
-                            }
+                            if (!bestItem) return;
 
                             // Создаем данные для плеера
                             var playData = {
