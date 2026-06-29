@@ -1,168 +1,12 @@
 (function () {
     'use strict';
 
+    // ============================================================
+    // ОРИГИНАЛЬНЫЙ КОД ПЛАГИНА (без изменений)
+    // ============================================================
+
     if (window.smartonline_plugin_v2) return;
     window.smartonline_plugin_v2 = true;
-
-    // ============================================================
-    // ПРИОРИТЕТЫ ИСТОЧНИКОВ
-    // ============================================================
-
-    var SOURCE_PRIORITY = [
-        { name: 'phantom', weight: 10, label: 'Phantom' },
-        { name: 'filmix', weight: 8, label: 'Filmix' },
-        { name: 'alloha', weight: 6, label: 'Alloha' },
-        { name: 'kinopub', weight: 4, label: 'Kinopub' }
-    ];
-
-    // ============================================================
-    // ОПРЕДЕЛЕНИЕ КАЧЕСТВА
-    // ============================================================
-
-    function detectQuality(value) {
-        var text = normalize(value);
-        if (!text) return 0;
-
-        // 4K / 2160p
-        if (/(2160|4k|uhd|ultra[\s-]?hd|3840|ultrahd|4[\s-]?k)/i.test(text)) return 2160;
-
-        // 1080p / Full HD
-        if (/(1080|full[\s-]?hd|fhd|1920|fullhd)/i.test(text)) return 1080;
-
-        // 720p / HD
-        if (/(720|hd[\s-]?ready|1280)/i.test(text)) return 720;
-
-        // 480p / SD
-        if (/(480|sd|640|854)/i.test(text)) return 480;
-
-        return 0;
-    }
-
-    function getItemQuality(item) {
-        var quality = 0;
-
-        // Проверяем все текстовые поля
-        var textFields = ['text', 'title', 'name', 'label', 'voice_name'];
-        textFields.forEach(function(field) {
-            if (item[field]) {
-                var q = detectQuality(item[field]);
-                if (q > quality) quality = q;
-            }
-        });
-
-        // Проверяем URL
-        var urlFields = ['url', 'stream'];
-        urlFields.forEach(function(field) {
-            if (item[field]) {
-                var q = detectQuality(item[field]);
-                if (q > quality) quality = q;
-            }
-        });
-
-        // Проверяем quality объект
-        var qualityObj = item.quality || item.qualitys;
-        if (qualityObj && typeof qualityObj === 'object') {
-            for (var key in qualityObj) {
-                var q1 = detectQuality(key);
-                if (q1 > quality) quality = q1;
-                var q2 = detectQuality(qualityObj[key]);
-                if (q2 > quality) quality = q2;
-            }
-        }
-
-        return quality;
-    }
-
-    function getBalansersList() {
-        var sources = [];
-
-        var activeBalanser = Lampa.Storage.get('active_balanser', '');
-        var onlineBalanser = Lampa.Storage.get('online_balanser', '');
-
-        if (activeBalanser) sources.push(activeBalanser);
-        if (onlineBalanser && onlineBalanser !== activeBalanser) sources.push(onlineBalanser);
-
-        SOURCE_PRIORITY.forEach(function(prio) {
-            var exists = sources.some(function(s) {
-                return s.toLowerCase().indexOf(prio.name) !== -1;
-            });
-            if (!exists) sources.push(prio.name);
-        });
-
-        var unique = [];
-        sources.forEach(function(s) {
-            var lower = s.toLowerCase();
-            if (!unique.some(function(u) { return u.toLowerCase() === lower; })) {
-                unique.push(s);
-            }
-        });
-
-        return unique;
-    }
-
-    function collectAllSources(movie, callback) {
-        var allVideos = [];
-        var sources = getBalansersList();
-        var totalSources = sources.length;
-        var completed = 0;
-
-        if (!movie) {
-            callback([]);
-            return;
-        }
-
-        sources.forEach(function(sourceName) {
-            var query = [];
-            query.push('id=' + encodeURIComponent(movie.id));
-            if (movie.imdb_id) query.push('imdb_id=' + (movie.imdb_id || ''));
-            if (movie.kinopoisk_id) query.push('kinopoisk_id=' + (movie.kinopoisk_id || ''));
-            if (movie.tmdb_id) query.push('tmdb_id=' + (movie.tmdb_id || ''));
-            query.push('title=' + encodeURIComponent(movie.title || movie.name));
-            query.push('original_title=' + encodeURIComponent(movie.original_title || movie.original_name));
-            query.push('serial=' + (movie.name ? 1 : 0));
-            query.push('original_language=' + (movie.original_language || ''));
-            query.push('year=' + ((movie.release_date || movie.first_air_date || '0000') + '').slice(0, 4));
-            query.push('source=' + (movie.source || 'tmdb'));
-
-            var host = 'https://ab2024.ru';
-            var url = host + '/lite/' + sourceName + '?' + query.join('&');
-
-            var network = new Lampa.Reguest();
-            network.timeout(10000);
-            network["native"](url, function(str) {
-                completed++;
-
-                try {
-                    var $html = $('<div>' + str + '</div>');
-                    $html.find('.videos__item').each(function() {
-                        var $item = $(this);
-                        try {
-                            var data = JSON.parse($item.attr('data-json'));
-                            var text = $item.text().trim();
-                            if (data.method === 'play' || data.method === 'call') {
-                                data.text = text;
-                                data.sourceName = sourceName;
-                                allVideos.push(data);
-                            }
-                        } catch (e) {}
-                    });
-                } catch (e) {}
-
-                if (completed === totalSources) {
-                    callback(allVideos);
-                }
-            }, function() {
-                completed++;
-                if (completed === totalSources) {
-                    callback(allVideos);
-                }
-            }, false, { dataType: 'text' });
-        });
-    }
-
-    // ============================================================
-    // ОСТАЛЬНЫЕ ФУНКЦИИ (ОРИГИНАЛЬНЫЕ)
-    // ============================================================
 
     var PLAYBACK_TIMEOUT_MS = 12000;
     var CONFIRM_OK_MS = 15000;
@@ -356,6 +200,29 @@
         return all[id];
     }
 
+    // ============================================================
+    // ОПРЕДЕЛЕНИЕ КАЧЕСТВА
+    // ============================================================
+
+    function detectQuality(value) {
+        var text = normalize(value);
+        if (!text) return 0;
+
+        // 2160p (4K, UHD, 2160, 3840)
+        if (/(2160|4k|uhd|ultra[\s-]?hd|3840)/i.test(text)) return 2160;
+
+        // 1080p (Full HD, 1080, 1920)
+        if (/(1080|full[\s-]?hd|fhd|1920)/i.test(text)) return 1080;
+
+        // 720p (HD Ready, 720, 1280)
+        if (/(720|hd[\s-]?ready|1280)/i.test(text)) return 720;
+
+        // 480p (SD, 480, 640, 854)
+        if (/(480|sd|640|854)/i.test(text)) return 480;
+
+        return 0;
+    }
+
     function qualityWeight(quality) {
         if (quality >= 2160) return 100;
         if (quality >= 1080) return 50;
@@ -393,6 +260,31 @@
         return Lampa.Storage.get('active_balanser', '') || Lampa.Storage.get('online_balanser', '');
     }
 
+    function itemQuality(item) {
+        var max = 0;
+
+        if (item && item.quality && Lampa.Arrays.isObject(item.quality)) {
+            Lampa.Arrays.getKeys(item.quality).forEach(function (q) {
+                var detected = detectQuality(q + ' ' + item.quality[q]);
+                if (detected > max) max = detected;
+            });
+        }
+
+        var textFields = [item && item.text, item && item.title, item && item.name, item && item.label];
+        textFields.forEach(function (field) {
+            var detected = detectQuality(field);
+            if (detected > max) max = detected;
+        });
+
+        var urlFields = [item && item.url, item && item.stream];
+        urlFields.forEach(function (field) {
+            var detected = detectQuality(field);
+            if (detected > max) max = detected;
+        });
+
+        return max;
+    }
+
     function rankVoices(buttons, sourceName, context) {
         var sourceKey = keyify(sourceName);
 
@@ -425,7 +317,7 @@
             var voiceName = item.voice_name || item.text || fallbackVoice || '';
             var voiceKey = keyify(voiceName);
             var sourceKey = keyify(sourceName);
-            var quality = getItemQuality(item);
+            var quality = itemQuality(item);
 
             if (quality !== 2160 && quality !== 1080) return;
 
@@ -466,6 +358,10 @@
             return b.score - a.score;
         });
     }
+
+    // ============================================================
+    // ОСТАЛЬНЫЕ ФУНКЦИИ (ОРИГИНАЛЬНЫЕ)
+    // ============================================================
 
     function clearPlayback(playback) {
         if (!playback) return;
@@ -632,6 +528,10 @@
         return true;
     }
 
+    // ============================================================
+    // SMART ACTIVITY
+    // ============================================================
+
     function smartActivity(movie) {
         var clarification = getClarification(movie);
 
@@ -647,6 +547,10 @@
             clarification: clarification ? true : false
         };
     }
+
+    // ============================================================
+    // UI: HEAD BUTTON
+    // ============================================================
 
     function addHeadButton() {
         if (runtime.headButtonReady) return;
@@ -683,113 +587,6 @@
     }
 
     // ============================================================
-    // ОСНОВНАЯ ЛОГИКА: НАЙТИ И ПЕРЕКЛЮЧИТЬ НА ЛУЧШИЙ ИСТОЧНИК
-    // ============================================================
-
-    function findAndSwitchBestSource(movie) {
-        console.log('🎯 SmartOnline: Поиск лучшего источника для:', movie.title || movie.name);
-
-        collectAllSources(movie, function(allVideos) {
-            if (allVideos.length === 0) {
-                console.log('❌ SmartOnline: Видео не найдены');
-                return;
-            }
-
-            // Анализируем качество по источникам
-            var sourceQuality = {};
-
-            allVideos.forEach(function(item) {
-                var source = item.sourceName || 'unknown';
-                var quality = getItemQuality(item);
-
-                if (!sourceQuality[source]) {
-                    sourceQuality[source] = { maxQuality: 0, count: 0 };
-                }
-
-                if (quality > sourceQuality[source].maxQuality) {
-                    sourceQuality[source].maxQuality = quality;
-                }
-                sourceQuality[source].count++;
-            });
-
-            // Выбираем лучший источник
-            var bestSource = null;
-            var bestQuality = 0;
-            var bestWeight = -1;
-
-            for (var source in sourceQuality) {
-                var data = sourceQuality[source];
-                var quality = data.maxQuality;
-
-                if (quality === 0) continue;
-
-                var priority = SOURCE_PRIORITY.find(function(p) {
-                    return source.toLowerCase().indexOf(p.name) !== -1;
-                });
-                var weight = priority ? priority.weight : 0;
-
-                console.log('  📊 ' + source + ': качество ' + quality + 'p, вес ' + weight + ', элементов ' + data.count);
-
-                if (quality > bestQuality ||
-                    (quality === bestQuality && weight > bestWeight)) {
-                    bestQuality = quality;
-                    bestWeight = weight;
-                    bestSource = source;
-                }
-            }
-
-            if (!bestSource) {
-                console.log('❌ SmartOnline: Лучший источник не найден');
-                return;
-            }
-
-            console.log('🏆 SmartOnline: Лучший источник:', bestSource, '(качество ' + bestQuality + 'p)');
-
-            // Переключаем на лучший источник
-            console.log('🔄 SmartOnline: Переключение на', bestSource);
-
-            // Сохраняем в хранилище
-            Lampa.Storage.set('active_balanser', bestSource);
-            Lampa.Storage.set('online_balanser', bestSource);
-
-            var lastSelect = Lampa.Storage.cache('online_last_balanser', 3000, {});
-            if (movie && movie.id) {
-                lastSelect[movie.id] = bestSource;
-                Lampa.Storage.set('online_last_balanser', lastSelect);
-            }
-
-            // Показываем уведомление
-            if (Lampa.Noty && Lampa.Noty.show) {
-                Lampa.Noty.show('🔊 Выбран источник: ' + bestSource);
-            }
-
-            // ПЕРЕЗАГРУЖАЕМ АКТИВНОСТЬ, ЧТОБЫ ПОКАЗАТЬ ВИДЕО ИЗ ЭТОГО ИСТОЧНИКА
-            var active = Lampa.Activity.active();
-            if (active) {
-                // Обновляем параметры активности
-                if (active.params) {
-                    active.params.balanser = bestSource;
-                }
-                // Пересоздаем активность с новым источником
-                Lampa.Activity.replace({
-                    url: active.url || '',
-                    title: active.title || '',
-                    component: active.component || 'lampac',
-                    search: active.search || (movie ? movie.title : ''),
-                    search_one: active.search_one || (movie ? movie.title : ''),
-                    search_two: active.search_two || (movie ? movie.original_title : ''),
-                    movie: movie,
-                    page: active.page || 1,
-                    balanser: bestSource,
-                    clarification: active.clarification || false
-                });
-            }
-
-            console.log('✅ SmartOnline: Переключено на', bestSource);
-        });
-    }
-
-    // ============================================================
     // UI: FULL BUTTON
     // ============================================================
 
@@ -803,13 +600,12 @@
                     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" style="width:24px;height:24px;">' +
                         '<path d="M13.5 2 4 14h6l-1.5 8L18 10h-6l1.5-8Z"></path>' +
                     '</svg>' +
-                    '<span>Лучший источник</span>' +
+                    '<span>' + Lampa.Lang.translate('lampac_smart_watch') + '</span>' +
                 '</div>'
             );
 
             btn.on('hover:enter', function () {
-                console.log('🔘 Кнопка "Лучший источник" нажата');
-                findAndSwitchBestSource(movie);
+                Lampa.Activity.push(smartActivity(movie));
             });
 
             return btn;
@@ -819,6 +615,7 @@
             if (!data || !data.render || !data.render.length || !data.movie) return;
 
             var render = data.render;
+
             render.find('.lampac-smart-button').remove();
 
             var buttonsContainer = render.find('.full-start__buttons, .full-start-new__buttons, [class*="buttons-container"]').eq(0);
@@ -1089,7 +886,7 @@
     }
 
     // ============================================================
-    // COMPONENT
+    // COMPONENT (ОСНОВНОЕ ИЗМЕНЕНИЕ)
     // ============================================================
 
     function installComponent() {
@@ -1102,6 +899,10 @@
         runtime.componentReady = true;
 
         function SmartLampac(object) {
+            // Сохраняем movie для поиска источников
+            var movie = object.movie || {};
+            var searchDone = false;
+
             BaseLampac.call(this, object);
 
             var self = this;
@@ -1124,8 +925,245 @@
                 }
             };
 
-            var movie = object.movie || {};
-            var bestSourceFound = false;
+            // ============================================================
+            // НОВАЯ ФУНКЦИЯ: ПОЛУЧЕНИЕ СПИСКА ВСЕХ ИСТОЧНИКОВ
+            // ============================================================
+
+            function getAvailableBalansers(callback) {
+                console.log('🔍 SmartOnline: Получение списка всех источников...');
+
+                var network = new Lampa.Reguest();
+                network.timeout(10000);
+                network.silent('https://ab2024.ru/lite/withsearch', function(json) {
+                    if (json && Array.isArray(json)) {
+                        console.log('📋 SmartOnline: Найдено источников:', json.length);
+                        callback(json);
+                    } else {
+                        console.log('⚠️ SmartOnline: Не удалось получить список, используем приоритетные');
+                        callback(['phantom', 'filmix', 'alloha', 'kinopub']);
+                    }
+                }, function() {
+                    console.log('⚠️ SmartOnline: Ошибка запроса, используем приоритетные');
+                    callback(['phantom', 'filmix', 'alloha', 'kinopub']);
+                }, false, { dataType: 'json' });
+            }
+
+            // ============================================================
+            // НОВАЯ ФУНКЦИЯ: СБОР ВИДЕО СО ВСЕХ ИСТОЧНИКОВ
+            // ============================================================
+
+            function collectVideosFromAllSources(balansers, movie, callback) {
+                var allVideos = [];
+                var total = balansers.length;
+                var completed = 0;
+
+                console.log('🔎 SmartOnline: Сбор видео из ' + total + ' источников...');
+
+                if (!movie) {
+                    callback([]);
+                    return;
+                }
+
+                balansers.forEach(function(sourceName) {
+                    var query = [];
+                    query.push('id=' + encodeURIComponent(movie.id));
+                    if (movie.imdb_id) query.push('imdb_id=' + (movie.imdb_id || ''));
+                    if (movie.kinopoisk_id) query.push('kinopoisk_id=' + (movie.kinopoisk_id || ''));
+                    if (movie.tmdb_id) query.push('tmdb_id=' + (movie.tmdb_id || ''));
+                    query.push('title=' + encodeURIComponent(movie.title || movie.name));
+                    query.push('original_title=' + encodeURIComponent(movie.original_title || movie.original_name));
+                    query.push('serial=' + (movie.name ? 1 : 0));
+                    query.push('original_language=' + (movie.original_language || ''));
+                    query.push('year=' + ((movie.release_date || movie.first_air_date || '0000') + '').slice(0, 4));
+                    query.push('source=' + (movie.source || 'tmdb'));
+
+                    var url = 'https://ab2024.ru/lite/' + sourceName + '?' + query.join('&');
+
+                    var network = new Lampa.Reguest();
+                    network.timeout(8000);
+                    network["native"](url, function(str) {
+                        completed++;
+                        try {
+                            var $html = $('<div>' + str + '</div>');
+                            $html.find('.videos__item').each(function() {
+                                var $item = $(this);
+                                try {
+                                    var data = JSON.parse($item.attr('data-json'));
+                                    var text = $item.text().trim();
+                                    if (data.method === 'play' || data.method === 'call') {
+                                        data.text = text;
+                                        data.sourceName = sourceName;
+                                        allVideos.push(data);
+                                    }
+                                } catch (e) {}
+                            });
+                        } catch (e) {}
+
+                        if (completed === total) {
+                            console.log('📊 SmartOnline: Всего собрано видео: ' + allVideos.length);
+                            callback(allVideos);
+                        }
+                    }, function() {
+                        completed++;
+                        if (completed === total) {
+                            console.log('📊 SmartOnline: Всего собрано видео: ' + allVideos.length);
+                            callback(allVideos);
+                        }
+                    }, false, { dataType: 'text' });
+                });
+            }
+
+            // ============================================================
+            // НОВАЯ ФУНКЦИЯ: АНАЛИЗ КАЧЕСТВА И ВЫБОР ЛУЧШЕГО ИСТОЧНИКА
+            // ============================================================
+
+            function findBestSource(videos) {
+                if (!videos || videos.length === 0) return null;
+
+                var sourceQuality = {};
+
+                videos.forEach(function(item) {
+                    var source = item.sourceName || 'unknown';
+                    var quality = itemQuality(item);
+
+                    if (!sourceQuality[source]) {
+                        sourceQuality[source] = { maxQuality: 0, count: 0, items: [] };
+                    }
+
+                    if (quality > sourceQuality[source].maxQuality) {
+                        sourceQuality[source].maxQuality = quality;
+                    }
+                    sourceQuality[source].count++;
+                    sourceQuality[source].items.push(item);
+                });
+
+                var bestSource = null;
+                var bestQuality = 0;
+                var bestWeight = -1;
+
+                for (var source in sourceQuality) {
+                    var data = sourceQuality[source];
+                    var quality = data.maxQuality;
+
+                    if (quality === 0) continue;
+
+                    var priority = SOURCE_PRIORITY.find(function(p) {
+                        return source.toLowerCase().indexOf(p.name) !== -1;
+                    });
+                    var weight = priority ? priority.weight : 0;
+
+                    console.log('  📊 ' + source + ': качество ' + quality + 'p, вес ' + weight + ', элементов ' + data.count);
+
+                    if (quality > bestQuality ||
+                        (quality === bestQuality && weight > bestWeight)) {
+                        bestQuality = quality;
+                        bestWeight = weight;
+                        bestSource = source;
+                    }
+                }
+
+                if (bestSource) {
+                    console.log('🏆 SmartOnline: Лучший источник - ' + bestSource + ' (качество ' + bestQuality + 'p)');
+                }
+
+                return bestSource;
+            }
+
+            // ============================================================
+            // НОВАЯ ФУНКЦИЯ: ПЕРЕКЛЮЧЕНИЕ ИСТОЧНИКА
+            // ============================================================
+
+            function switchToBestSource(bestSource) {
+                if (!bestSource) return;
+
+                console.log('🔄 SmartOnline: Переключение на ' + bestSource);
+
+                Lampa.Storage.set('active_balanser', bestSource);
+                Lampa.Storage.set('online_balanser', bestSource);
+
+                if (movie && movie.id) {
+                    var lastSelect = Lampa.Storage.cache('online_last_balanser', 3000, {});
+                    lastSelect[movie.id] = bestSource;
+                    Lampa.Storage.set('online_last_balanser', lastSelect);
+                }
+
+                if (Lampa.Noty && Lampa.Noty.show) {
+                    Lampa.Noty.show('🔊 Выбран источник: ' + bestSource);
+                }
+
+                // Перезагружаем активность с новым источником
+                var active = Lampa.Activity.active();
+                if (active) {
+                    Lampa.Activity.replace({
+                        url: active.url || '',
+                        title: active.title || '',
+                        component: active.component || 'lampac',
+                        search: active.search || (movie ? movie.title : ''),
+                        search_one: active.search_one || (movie ? movie.title : ''),
+                        search_two: active.search_two || (movie ? movie.original_title : ''),
+                        movie: movie,
+                        page: active.page || 1,
+                        balanser: bestSource,
+                        clarification: active.clarification || false
+                    });
+                }
+            }
+
+            // ============================================================
+            // ЗАПУСК ПОИСКА ЛУЧШЕГО ИСТОЧНИКА
+            // ============================================================
+
+            function startBestSourceSearch() {
+                if (searchDone || state.manualMode) return;
+                searchDone = true;
+
+                console.log('🎯 SmartOnline: Запуск поиска лучшего источника для:', movie.title || movie.name);
+
+                getAvailableBalansers(function(balansers) {
+                    collectVideosFromAllSources(balansers, movie, function(videos) {
+                        var bestSource = findBestSource(videos);
+                        if (bestSource) {
+                            switchToBestSource(bestSource);
+                        } else {
+                            console.log('❌ SmartOnline: Лучший источник не найден');
+                        }
+                    });
+                });
+            }
+
+            // ============================================================
+            // ПЕРЕОПРЕДЕЛЕНИЕ PARSE (СОХРАНЯЕМ ВСЮ ОРИГИНАЛЬНУЮ ЛОГИКУ)
+            // ============================================================
+
+            this.parse = function (str) {
+                var parsed = inspect(str);
+
+                if (parsed && maybeSwitchVoice(parsed)) return;
+
+                // ЗАПУСКАЕМ ПОИСК ЛУЧШЕГО ИСТОЧНИКА
+                if (!searchDone && !state.manualMode) {
+                    setTimeout(function() {
+                        startBestSourceSearch();
+                    }, 500);
+                }
+
+                var result = baseParse.call(this, str);
+
+                if (parsed && parsed.videos && parsed.videos.length) {
+                    var currentVideos = parsed.videos.filter(function(v) {
+                        return v.method === 'play' || v.method === 'call';
+                    });
+                    if (currentVideos.length > 0 && !state.manualMode && !state.autoStarted && !movie.name) {
+                        maybeAutoplay(parsed);
+                    }
+                }
+
+                return result;
+            };
+
+            // ============================================================
+            // ОРИГИНАЛЬНЫЕ ФУНКЦИИ (БЕЗ ИЗМЕНЕНИЙ)
+            // ============================================================
 
             function stopAuto() {
                 clearTimeout(state.autoTimer);
@@ -1253,161 +1291,31 @@
                 return tryVoiceByIndex(state.voiceIndex);
             }
 
-            // ============================================================
-            // ОСНОВНАЯ ЛОГИКА: ПОИСК ЛУЧШЕГО ИСТОЧНИКА
-            // ============================================================
+            var maybeAutoplay = function(parsed) {
+                if (!parsed || !parsed.videos || !parsed.videos.length) return;
+                if (state.manualMode || state.autoStarted) return;
+                if (object.movie && object.movie.name) return;
 
-            function findBestSource() {
-                if (bestSourceFound) return;
-                bestSourceFound = true;
+                stopAuto();
+                state.sourceName = getActiveSource();
 
-                console.log('🎯 SmartOnline: Поиск лучшего источника для:', movie.title || movie.name);
+                state.autoTimer = setTimeout(function () {
+                    if (state.manualMode || state.autoStarted) return;
 
-                collectAllSources(movie, function(allVideos) {
-                    if (allVideos.length === 0) {
-                        console.log('❌ SmartOnline: Видео не найдены');
-                        return;
-                    }
+                    state.autoStarted = false;
+                    state.currentCandidate = null;
+                    state.statsContext = state.statsContext || {
+                        mediaType: object.movie && object.movie.number_of_seasons ? 'tv' : 'movie',
+                        sourceKey: ''
+                    };
+                    state.statsContext.sourceKey = keyify(state.sourceName || '');
+                    state.queue = buildQueue(parsed.videos, state.sourceName, self.getChoice().voice_name || '', state.statsContext);
+                    state.queueIndex = -1;
 
-                    var sourceQuality = {};
+                    if (!state.queue.length) return;
 
-                    allVideos.forEach(function(item) {
-                        var source = item.sourceName || 'unknown';
-                        var quality = getItemQuality(item);
-
-                        if (!sourceQuality[source]) {
-                            sourceQuality[source] = { maxQuality: 0, count: 0 };
-                        }
-
-                        if (quality > sourceQuality[source].maxQuality) {
-                            sourceQuality[source].maxQuality = quality;
-                        }
-                        sourceQuality[source].count++;
-                    });
-
-                    var bestSource = null;
-                    var bestQuality = 0;
-                    var bestWeight = -1;
-
-                    for (var source in sourceQuality) {
-                        var data = sourceQuality[source];
-                        var quality = data.maxQuality;
-
-                        if (quality === 0) continue;
-
-                        var priority = SOURCE_PRIORITY.find(function(p) {
-                            return source.toLowerCase().indexOf(p.name) !== -1;
-                        });
-                        var weight = priority ? priority.weight : 0;
-
-                        console.log('  📊 ' + source + ': качество ' + quality + 'p, вес ' + weight + ', элементов ' + data.count);
-
-                        if (quality > bestQuality ||
-                            (quality === bestQuality && weight > bestWeight)) {
-                            bestQuality = quality;
-                            bestWeight = weight;
-                            bestSource = source;
-                        }
-                    }
-
-                    if (!bestSource) {
-                        console.log('❌ SmartOnline: Лучший источник не найден');
-                        return;
-                    }
-
-                    console.log('🏆 SmartOnline: Лучший источник:', bestSource, '(качество ' + bestQuality + 'p)');
-
-                    // Переключаем на лучший источник
-                    Lampa.Storage.set('active_balanser', bestSource);
-                    Lampa.Storage.set('online_balanser', bestSource);
-
-                    var lastSelect = Lampa.Storage.cache('online_last_balanser', 3000, {});
-                    if (movie && movie.id) {
-                        lastSelect[movie.id] = bestSource;
-                        Lampa.Storage.set('online_last_balanser', lastSelect);
-                    }
-
-                    if (Lampa.Noty && Lampa.Noty.show) {
-                        Lampa.Noty.show('🔊 Выбран источник: ' + bestSource);
-                    }
-
-                    // ПЕРЕЗАГРУЖАЕМ АКТИВНОСТЬ
-                    var active = Lampa.Activity.active();
-                    if (active) {
-                        console.log('🔄 SmartOnline: Перезагрузка активности с источником:', bestSource);
-
-                        var params = {
-                            url: active.url || '',
-                            title: active.title || '',
-                            component: active.component || 'lampac',
-                            search: active.search || (movie ? movie.title : ''),
-                            search_one: active.search_one || (movie ? movie.title : ''),
-                            search_two: active.search_two || (movie ? movie.original_title : ''),
-                            movie: movie,
-                            page: active.page || 1,
-                            balanser: bestSource,
-                            clarification: active.clarification || false
-                        };
-
-                        if (active.params) {
-                            params = Object.assign({}, active.params, params);
-                        }
-
-                        Lampa.Activity.replace(params);
-                    }
-
-                    console.log('✅ SmartOnline: Переключено на', bestSource);
-                });
-            }
-
-            // ============================================================
-            // ПЕРЕОПРЕДЕЛЕНИЕ PARSE
-            // ============================================================
-
-            this.parse = function (str) {
-                var parsed = inspect(str);
-
-                if (parsed && maybeSwitchVoice(parsed)) return;
-
-                // Запускаем поиск лучшего источника (один раз)
-                if (!bestSourceFound && !state.manualMode) {
-                    // Небольшая задержка
-                    setTimeout(function() {
-                        findBestSource();
-                    }, 300);
-                }
-
-                // Если это фильм (не сериал) и есть видео, запускаем автовоспроизведение
-                if (parsed && parsed.videos && parsed.videos.length) {
-                    var currentVideos = parsed.videos.filter(function(v) {
-                        return v.method === 'play' || v.method === 'call';
-                    });
-                    if (currentVideos.length > 0 && !state.manualMode && !state.autoStarted && !movie.name) {
-                        // Оригинальная логика автовоспроизведения
-                        stopAuto();
-                        state.sourceName = getActiveSource();
-
-                        state.autoTimer = setTimeout(function () {
-                            if (state.manualMode || state.autoStarted) return;
-
-                            state.autoStarted = false;
-                            state.currentCandidate = null;
-                            state.statsContext = state.statsContext || {
-                                mediaType: object.movie && object.movie.number_of_seasons ? 'tv' : 'movie',
-                                sourceKey: ''
-                            };
-                            state.statsContext.sourceKey = keyify(state.sourceName || '');
-                            state.queue = buildQueue(parsed.videos, state.sourceName, self.getChoice().voice_name || '', state.statsContext);
-                            state.queueIndex = -1;
-
-                            if (!state.queue.length) return;
-
-                            playNextCandidate(self, state, 'autostart');
-                        }, 150);
-                    }
-                }
-
-                return baseParse.call(this, str);
+                    playNextCandidate(self, state, 'autostart');
+                }, 150);
             };
 
             this._lampacSmart = {
@@ -1419,6 +1327,7 @@
         SmartLampac.prototype.constructor = SmartLampac;
 
         Lampa.Component.add(smartComponentName(), SmartLampac);
+        console.log('✅ SmartOnline: Компонент установлен');
         return true;
     }
 
