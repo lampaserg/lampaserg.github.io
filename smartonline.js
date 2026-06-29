@@ -13,7 +13,6 @@
     var FAIL_NOTIFY_KEY = 'lampac_smart_fail_notified_v2';
     var MANIFEST_SYNC_LIMIT = 6;
     var CFG_NOTIFY_RUNTIME = 'lampac_smart_notify_runtime';
-    var CFG_QUALITY_TARGET = 'lampac_smart_quality_target';
     var CFG_TIMEOUT_FAIL = 'lampac_smart_timeout_fail';
     var CFG_TIMEOUT_CONFIRM = 'lampac_smart_timeout_confirm';
     var CFG_STATS_SCOPE = 'lampac_smart_stats_scope';
@@ -198,18 +197,26 @@
     }
 
     // ============================================================
-    // ОПРЕДЕЛЕНИЕ КАЧЕСТВА
+    // ОПРЕДЕЛЕНИЕ КАЧЕСТВА С ПОГРЕШНОСТЬЮ
     // ============================================================
 
     function detectQuality(value) {
         var text = normalize(value);
         if (!text) return 0;
 
-        // Только 2160p и 1080p считаются валидными
-        if (/(2160|4k|uhd)/i.test(text)) return 2160;
-        if (/1080/i.test(text)) return 1080;
+        // 2160p (4K, UHD, 2160) — погрешность
+        if (/(2160|4k|uhd|ultra[\s-]?hd|3840)/i.test(text)) return 2160;
 
-        // Все остальные качества исключаются (возвращаем 0)
+        // 1080p (Full HD, 1080) — погрешность
+        if (/(1080|full[\s-]?hd|fhd|1920)/i.test(text)) return 1080;
+
+        // 720p (HD Ready, 720) — исключается
+        if (/(720|hd[\s-]?ready|1280)/i.test(text)) return 0;
+
+        // 480p (SD, 480) — исключается
+        if (/(480|sd|640|854)/i.test(text)) return 0;
+
+        // Все остальные — исключаются
         return 0;
     }
 
@@ -237,7 +244,7 @@
     }
 
     // ============================================================
-    // ВЕСА ОЗВУЧЕК
+    // ВЕСА ОЗВУЧЕК (БЕЗ АНГЛИЙСКОЙ)
     // ============================================================
 
     function voiceWeight(name) {
@@ -254,11 +261,14 @@
         // === РУССКАЯ ОЗВУЧКА ===
         if (/(\u0440\u0443\u0441|\u0440\u043E\u0441|russian)/i.test(text)) score += 8;
 
-        // === ДОПОЛНИТЕЛЬНЫЕ ===
+        // === ДОПОЛНИТЕЛЬНЫЕ ПОПУЛЯРНЫЕ ===
         if (/(novamedia|amedia|jaskier|tvshows|kulibin)/i.test(text)) score += 5;
 
         // === СУБТИТРЫ И ОРИГИНАЛ (низкий приоритет) ===
         if (/(\u0441\u0443\u0431\u0442|sub\b|subtitle|original|\u043E\u0440\u0438\u0433\u0456\u043D|orig)/i.test(text)) score -= 10;
+
+        // === ИСКЛЮЧАЕМ АНГЛИЙСКУЮ ОЗВУЧКУ ===
+        if (/english|eng|en\b/i.test(text) && !/russian|рус/.test(text)) score -= 100;
 
         return score;
     }
@@ -382,7 +392,7 @@
     }
 
     // ============================================================
-    // ОСТАЛЬНЫЕ ФУНКЦИИ (без изменений)
+    // ОСТАЛЬНЫЕ ФУНКЦИИ
     // ============================================================
 
     function clearPlayback(playback) {
@@ -613,7 +623,7 @@
     }
 
     // ============================================================
-    // UI: FULL BUTTON
+    // UI: FULL BUTTON (ОДНА КНОПКА)
     // ============================================================
 
     function addFullButton() {
@@ -652,6 +662,10 @@
 
             var btn = buildButton(movie);
             var parent = root.parent();
+
+            // Удаляем старую кнопку Smart Online, если она уже есть
+            parent.find('.lampac-smart-button').remove();
+
             if (parent && parent.length && parent.is('[class*="buttons"]'))
                 root.after(btn);
             else
@@ -662,6 +676,10 @@
             if (!data || !data.render || !data.render.length || !data.movie) return;
 
             var render = data.render;
+
+            // Удаляем все старые кнопки Smart Online
+            render.find('.lampac-smart-button').remove();
+
             var viewTorrent = render.find('.view--torrent');
             if (viewTorrent.length) {
                 insertNearAnchor(viewTorrent.eq(0), data.movie);
@@ -676,6 +694,7 @@
 
             var buttons = render.find('.full-start__buttons, .full-start-new__buttons, [class*="full-start"][class*="buttons"]').eq(0);
             if (buttons.length) {
+                buttons.find('.lampac-smart-button').remove();
                 if (!hasSmartInScope(buttons))
                     buttons.append(buildButton(data.movie));
                 return;
@@ -695,8 +714,12 @@
                 var active = Lampa.Activity.active();
                 if (!active || active.component !== 'full' || !active.activity || !active.activity.render) return;
 
+                // Удаляем старые кнопки перед добавлением новой
+                var render = active.activity.render();
+                render.find('.lampac-smart-button').remove();
+
                 addButton({
-                    render: active.activity.render(),
+                    render: render,
                     movie: active.card
                 });
             } catch (e) {}
@@ -704,15 +727,21 @@
 
         Lampa.Listener.follow('full', function (e) {
             if (e.type === 'complite') {
+                var render = e.object.activity.render();
+                render.find('.lampac-smart-button').remove();
                 addButton({
-                    render: e.object.activity.render().find('.view--torrent'),
+                    render: render,
                     movie: e.data.movie
                 });
             }
         });
 
         Lampa.Listener.follow('activity', function (e) {
-            if (e && e.type === 'start') setTimeout(injectFromActive, 30);
+            if (e && e.type === 'start') {
+                setTimeout(function() {
+                    injectFromActive();
+                }, 100);
+            }
         });
 
         injectFromActive();
@@ -733,7 +762,6 @@
             lampac_smart_manual: { ru: 'Ручной режим', en: 'Manual mode', uk: 'Ручний режим' },
             lampac_smart_settings_title: { ru: 'Настройки Smart Online', en: 'Smart Online settings', uk: 'Налаштування Smart Online' },
             lampac_smart_settings_noty: { ru: 'Показывать служебные уведомления', en: 'Runtime notifications', uk: 'Показувати службові сповіщення' },
-            lampac_smart_settings_quality: { ru: 'Целевое качество', en: 'Target quality', uk: 'Цільова якість' },
             lampac_smart_settings_fail_timeout: { ru: 'Таймаут неудачного старта (сек.)', en: 'Fail timeout (sec)', uk: 'Таймаут невдалого старту (сек.)' },
             lampac_smart_settings_confirm_timeout: { ru: 'Таймаут подтверждения (сек.)', en: 'Confirm timeout (sec)', uk: 'Таймаут підтвердження (сек.)' },
             lampac_smart_settings_scope: { ru: 'Профиль статистики', en: 'Stats profile', uk: 'Профіль статистики' },
