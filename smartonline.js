@@ -14,7 +14,8 @@
         qualityDetection: true,
         queueBuilding: true,
         scoreCalculation: true,
-        selection: true
+        selection: true,
+        sourcesAnalysis: true
     };
 
     function debugLog(category, message, data) {
@@ -26,6 +27,7 @@
         else if (category === 'queueBuilding') prefix = '📋 [Очередь]';
         else if (category === 'scoreCalculation') prefix = '⚖️ [Вес]';
         else if (category === 'selection') prefix = '🎯 [Выбор]';
+        else if (category === 'sourcesAnalysis') prefix = '🔎 [Источники]';
         else if (category === 'always') prefix = '📢 [SmartOnline]';
 
         if (data !== undefined) {
@@ -229,7 +231,6 @@
 
     /**
      * Определяет качество по тексту (название, URL)
-     * Поддерживает все популярные форматы
      */
     function detectQualityFromText(value) {
         var text = normalize(value);
@@ -267,19 +268,16 @@
 
     /**
      * Анализирует видеопоток через video элемент
-     * Определяет реальное разрешение видео
      */
     function analyzeStreamQuality(url, callback) {
         if (!url) { callback(0); return; }
 
         var cacheKey = Lampa.Utils.hash(url);
         if (streamQualityCache[cacheKey]) {
-            debugLog('qualityDetection', '📦 Кэш: ' + streamQualityCache[cacheKey] + 'p для: ' + url.substring(0, 60) + '...');
+            debugLog('qualityDetection', '📦 Кэш: ' + streamQualityCache[cacheKey] + 'p');
             callback(streamQualityCache[cacheKey]);
             return;
         }
-
-        debugLog('qualityDetection', '🔍 Анализ потока: ' + url.substring(0, 80) + '...');
 
         try {
             var video = document.createElement('video');
@@ -290,7 +288,6 @@
 
             var timeout = setTimeout(function() {
                 video.remove();
-                debugLog('qualityDetection', '⏱️ Таймаут, определяю по URL');
                 var qualityFromUrl = detectQualityFromText(url);
                 if (qualityFromUrl > 0) streamQualityCache[cacheKey] = qualityFromUrl;
                 callback(qualityFromUrl || 0);
@@ -306,8 +303,6 @@
                 var width = video.videoWidth || 0;
                 var height = video.videoHeight || 0;
 
-                debugLog('qualityDetection', '📺 Разрешение: ' + width + 'x' + height);
-
                 var quality = 0;
                 if (height >= 7680) quality = 7680;
                 else if (height >= 2160) quality = 2160;
@@ -316,8 +311,6 @@
                 else if (height >= 720) quality = 720;
                 else if (height >= 576) quality = 576;
                 else if (height >= 480) quality = 480;
-
-                debugLog('qualityDetection', '📐 Качество по потоку: ' + quality + 'p');
 
                 if (quality > 0) streamQualityCache[cacheKey] = quality;
 
@@ -328,7 +321,6 @@
             video.addEventListener('error', function(e) {
                 clearTimeout(timeout);
                 video.remove();
-                debugLog('qualityDetection', '❌ Ошибка загрузки');
                 var qualityFromUrl = detectQualityFromText(url);
                 if (qualityFromUrl > 0) {
                     streamQualityCache[cacheKey] = qualityFromUrl;
@@ -342,7 +334,6 @@
             video.load();
 
         } catch (e) {
-            debugLog('qualityDetection', '❌ Ошибка: ' + (e.message || 'неизвестная'));
             var qualityFromUrl = detectQualityFromText(url);
             if (qualityFromUrl > 0) {
                 streamQualityCache[cacheKey] = qualityFromUrl;
@@ -355,7 +346,7 @@
 
     /**
      * Определение качества с анализом потока
-     * Проверяет ВСЕ поля: text, title, name, label, url, stream, quality
+     * Проверяет ВСЕ поля
      */
     function detectQualityWithStreamAnalysis(item, callback) {
         var url = item.url || item.stream || '';
@@ -374,48 +365,30 @@
         textFields.forEach(function(field) {
             if (field) {
                 var q = detectQualityFromText(field);
-                if (q > textQuality) {
-                    debugLog('qualityDetection', '  Текст "' + field + '" → ' + q + 'p');
-                    textQuality = q;
-                }
+                if (q > textQuality) textQuality = q;
             }
         });
 
-        // === 2. ПРОВЕРКА URL И STREAM ===
+        // === 2. ПРОВЕРКА URL ===
         var urlQuality = detectQualityFromText(url);
-        if (urlQuality > 0) {
-            debugLog('qualityDetection', '  URL содержит качество: ' + urlQuality + 'p');
-        }
 
         // === 3. ПРОВЕРКА ОБЪЕКТА quality ===
         var qualityObjQuality = 0;
         if (item && item.quality && Lampa.Arrays.isObject(item.quality)) {
             Lampa.Arrays.getKeys(item.quality).forEach(function(q) {
                 var detected = detectQualityFromText(q);
-                if (detected > qualityObjQuality) {
-                    debugLog('qualityDetection', '  quality[' + q + '] → ' + detected + 'p');
-                    qualityObjQuality = detected;
-                }
-                // Также проверяем значение
+                if (detected > qualityObjQuality) qualityObjQuality = detected;
                 var valQuality = detectQualityFromText(item.quality[q]);
-                if (valQuality > qualityObjQuality) {
-                    debugLog('qualityDetection', '  quality[' + q + ']=' + item.quality[q] + ' → ' + valQuality + 'p');
-                    qualityObjQuality = valQuality;
-                }
+                if (valQuality > qualityObjQuality) qualityObjQuality = valQuality;
             });
         }
 
         var maxFromText = Math.max(textQuality, urlQuality, qualityObjQuality);
 
-        debugLog('qualityDetection', '📐 По тексту: ' + maxFromText + 'p');
-
-        // === 4. АНАЛИЗ ПОТОКА (если есть URL) ===
+        // === 4. АНАЛИЗ ПОТОКА ===
         if (url && url.indexOf('http') === 0) {
-            debugLog('qualityDetection', '🔍 Анализ потока...');
             analyzeStreamQuality(url, function(streamQuality) {
-                debugLog('qualityDetection', '📐 По потоку: ' + streamQuality + 'p');
                 var finalQuality = Math.max(maxFromText, streamQuality);
-                debugLog('qualityDetection', '✅ Итог: ' + finalQuality + 'p');
                 callback(finalQuality);
             });
             return;
@@ -425,45 +398,49 @@
     }
 
     // ============================================================
-    // ВЕСА КАЧЕСТВА (ПРИОРИТЕТ 4K > 1080p > 720p > 480p)
+    // ВЕСА КАЧЕСТВА
     // ============================================================
 
     function qualityWeight(quality) {
-        if (quality >= 7680) return 200;   // 8K
-        if (quality >= 2160) return 150;   // 4K
-        if (quality >= 1440) return 80;    // 2K/QHD
-        if (quality >= 1080) return 50;    // 1080p
-        if (quality >= 720) return 20;     // 720p
-        if (quality >= 576) return 10;     // 576p
-        if (quality >= 480) return 5;      // 480p
+        if (quality >= 7680) return 200;
+        if (quality >= 2160) return 150;
+        if (quality >= 1440) return 80;
+        if (quality >= 1080) return 50;
+        if (quality >= 720) return 20;
+        if (quality >= 576) return 10;
+        if (quality >= 480) return 5;
         return 0;
     }
 
     // ============================================================
-    // ВЕСА ИСТОЧНИКОВ (4 источника)
+    // ПРИОРИТЕТЫ ИСТОЧНИКОВ (ПО ПОРЯДКУ)
     // ============================================================
 
-    function sourceWeight(source) {
+    var SOURCE_PRIORITY = [
+        { name: 'phantom', weight: 10, label: 'Phantom' },
+        { name: 'filmix', weight: 8, label: 'Filmix' },
+        { name: 'alloha', weight: 6, label: 'Alloha' },
+        { name: 'kinopub', weight: 4, label: 'Kinopub' }
+    ];
+
+    function getSourcePriority(source) {
         var text = normalize(source);
-        var weight = 0;
-
-        if (/phantom/.test(text)) {
-            weight = 10;
-            debugLog('scoreCalculation', '📊 Источник: Phantom (вес 10)');
-        } else if (/filmix/.test(text)) {
-            weight = 8;
-            debugLog('scoreCalculation', '📊 Источник: Filmix (вес 8)');
-        } else if (/alloha/.test(text)) {
-            weight = 6;
-            debugLog('scoreCalculation', '📊 Источник: Alloha (вес 6)');
-        } else if (/kinopub/.test(text)) {
-            weight = 4;
-            debugLog('scoreCalculation', '📊 Источник: Kinopub (вес 4)');
-        } else {
-            debugLog('scoreCalculation', '📊 Источник: ' + text + ' (вес 0)');
+        for (var i = 0; i < SOURCE_PRIORITY.length; i++) {
+            if (text.indexOf(SOURCE_PRIORITY[i].name) !== -1) {
+                return SOURCE_PRIORITY[i];
+            }
         }
+        return null;
+    }
 
-        return weight;
+    function sourceWeight(source) {
+        var priority = getSourcePriority(source);
+        if (priority) {
+            debugLog('scoreCalculation', '📊 Источник: ' + priority.label + ' (вес ' + priority.weight + ')');
+            return priority.weight;
+        }
+        debugLog('scoreCalculation', '📊 Источник: ' + source + ' (вес 0)');
+        return 0;
     }
 
     // ============================================================
@@ -495,62 +472,67 @@
     // ============================================================
 
     function itemQuality(item, callback) {
-        debugLog('qualityDetection', '🔍 Анализ элемента:');
-        debugLog('qualityDetection', '  text: ' + (item.text || 'Нет'));
-        debugLog('qualityDetection', '  title: ' + (item.title || 'Нет'));
-        debugLog('qualityDetection', '  url: ' + ((item.url || '').substring(0, 60) || 'Нет'));
-
         detectQualityWithStreamAnalysis(item, function(quality) {
-            debugLog('qualityDetection', '📐 Итоговое качество: ' + quality + 'p');
             callback(quality);
         });
     }
 
     // ============================================================
-    // ФИЛЬТРАЦИЯ И СОРТИРОВКА
+    // СБОР ВСЕХ ПОТОКОВ СО ВСЕХ ИСТОЧНИКОВ
     // ============================================================
 
-    function rankVoices(buttons, sourceName, context) {
-        var sourceKey = keyify(sourceName);
+    function collectAllVideos(parsed, currentSource, callback) {
+        var allVideos = [];
+        var allButtons = [];
 
-        return buttons.map(function(button, index) {
-            var title = button.text || '';
-            var score = voiceWeight(title) + statsWeight('voices', keyify(title), context) + statsWeight('sources', sourceKey, context);
-            if (button.active) score += 1;
-            return {
-                index: index,
-                title: title,
-                url: button.url,
-                active: !!button.active,
-                score: score
-            };
-        }).sort(function(a, b) {
-            return b.score - a.score;
-        });
+        debugLog('sourcesAnalysis', '🔎 Сбор потоков из источника: ' + currentSource);
+
+        // Собираем видео из текущего источника
+        if (parsed && parsed.videos) {
+            var sourceVideos = parsed.videos.filter(function(v) {
+                return v.method === 'play' || v.method === 'call';
+            });
+
+            if (sourceVideos.length > 0) {
+                debugLog('sourcesAnalysis', '  Найдено видео: ' + sourceVideos.length);
+                allVideos = allVideos.concat(sourceVideos);
+            }
+
+            // Добавляем кнопки (озвучки)
+            if (parsed.buttons) {
+                allButtons = allButtons.concat(parsed.buttons);
+            }
+        }
+
+        callback(allVideos, allButtons);
     }
 
-    function bestVoice(buttons, sourceName, context) {
-        return rankVoices(buttons, sourceName, context)[0] || null;
-    }
-
     // ============================================================
-    // ПОСТРОЕНИЕ ОЧЕРЕДИ (С ПРИОРИТЕТОМ КАЧЕСТВА)
+    // ПОСТРОЕНИЕ ОЧЕРЕДИ (СБОР СО ВСЕХ ИСТОЧНИКОВ)
     // ============================================================
 
-    function buildQueue(videos, sourceName, fallbackVoice, context) {
+    function buildQueueFromAllSources(videos, sourceName, fallbackVoice, context) {
         var map = {};
         var totalCandidates = 0;
         var excludedCount = 0;
-        var pendingCount = 0;
 
-        debugLog('queueBuilding', '🚀 Построение очереди для: ' + sourceName);
+        debugLog('queueBuilding', '🚀 Построение очереди из ВСЕХ источников');
         debugLog('queueBuilding', '📊 Всего видео: ' + videos.length);
 
         return new Promise(function(resolve) {
+            if (!videos || videos.length === 0) {
+                debugLog('queueBuilding', '❌ Нет видео для анализа');
+                resolve([]);
+                return;
+            }
+
+            var pendingCount = 0;
+
             videos.forEach(function(item, index) {
                 var voiceName = item.voice_name || item.text || fallbackVoice || '';
                 var voiceKey = keyify(voiceName);
-                var sourceKey = keyify(sourceName);
+                var sourceNameLower = normalize(sourceName);
+                var sourceKey = keyify(sourceNameLower);
 
                 itemQuality(item, function(quality) {
                     pendingCount++;
@@ -573,7 +555,7 @@
                     var vWeight = voiceWeight(voiceName);
                     score += vWeight;
 
-                    var sWeight = sourceWeight(sourceName);
+                    var sWeight = sourceWeight(sourceNameLower);
                     score += sWeight;
 
                     var statsVoice = statsWeight('voices', voiceKey, context);
@@ -592,7 +574,7 @@
                     else if (/iframe|embed/.test(urlHint)) formatBonus = -4;
                     score += formatBonus;
 
-                    debugLog('queueBuilding', '--- Видео #' + (index + 1) + ' ---');
+                    debugLog('queueBuilding', '--- Видео #' + (index + 1) + ' [' + sourceName + '] ---');
                     debugLog('queueBuilding', '  Качество: ' + quality + 'p (вес ' + qWeight + ')');
                     debugLog('queueBuilding', '  Озвучка: ' + voiceName + ' (вес ' + vWeight + ')');
                     debugLog('queueBuilding', '  Источник: ' + sourceName + ' (вес ' + sWeight + ')');
@@ -607,7 +589,8 @@
                         voiceName: voiceName,
                         statsContext: context,
                         quality: quality,
-                        score: score
+                        score: score,
+                        sourcePriority: getSourcePriority(sourceNameLower)
                     };
 
                     if (!map[candidate.id] || map[candidate.id].score < candidate.score) {
@@ -621,23 +604,30 @@
                         debugLog('queueBuilding', '  Исключено: ' + excludedCount);
 
                         var sorted = Object.keys(map).map(function(id) { return map[id]; }).sort(function(a, b) {
-                            // Сначала сортируем по качеству (от высшего к низшему)
+                            // 1. Сначала по качеству (от высшего к низшему)
                             if (a.quality !== b.quality) return b.quality - a.quality;
-                            // Затем по общему весу
+                            // 2. Затем по приоритету источника
+                            var aPrio = a.sourcePriority ? a.sourcePriority.weight : 0;
+                            var bPrio = b.sourcePriority ? b.sourcePriority.weight : 0;
+                            if (aPrio !== bPrio) return bPrio - aPrio;
+                            // 3. Затем по общему весу
                             return b.score - a.score;
                         });
 
-                        // === ВТОРОЙ ПРОХОД: ОСТАВЛЯЕМ ТОЛЬКО САМЫЕ ВЫСОКИЕ КАЧЕСТВА ===
+                        // === ОСТАВЛЯЕМ ТОЛЬКО САМЫЕ ВЫСОКИЕ КАЧЕСТВА ===
                         var maxQuality = sorted.length > 0 ? sorted[0].quality : 0;
                         var filtered = sorted.filter(function(c) {
                             return c.quality === maxQuality;
                         });
 
                         debugLog('queueBuilding', '🏆 ЛУЧШЕЕ КАЧЕСТВО: ' + maxQuality + 'p');
-                        debugLog('queueBuilding', '📋 Кандидатов: ' + filtered.length);
+                        debugLog('queueBuilding', '📋 Кандидатов с лучшим качеством: ' + filtered.length);
 
-                        // Сортируем отфильтрованные по весу
+                        // Сортируем отфильтрованные по приоритету источника и весу
                         filtered.sort(function(a, b) {
+                            var aPrio = a.sourcePriority ? a.sourcePriority.weight : 0;
+                            var bPrio = b.sourcePriority ? b.sourcePriority.weight : 0;
+                            if (aPrio !== bPrio) return bPrio - aPrio;
                             return b.score - a.score;
                         });
 
@@ -1216,7 +1206,9 @@
                 statsContext: {
                     mediaType: object.movie && object.movie.number_of_seasons ? 'tv' : 'movie',
                     sourceKey: ''
-                }
+                },
+                allVideos: [],
+                allButtons: []
             };
 
             debugLog('always', '📦 Компонент Smart инициализирован');
@@ -1354,10 +1346,24 @@
                 if (object.movie && object.movie.name) return;
 
                 debugLog('always', '🚀 Запущен автовыбор');
-                debugLog('queueBuilding', '📊 Доступно видео: ' + parsed.videos.length);
+
+                // Собираем ВСЕ видео из этого источника
+                var currentSource = getActiveSource();
+                debugLog('sourcesAnalysis', '🔎 Анализ источника: ' + currentSource);
+
+                // Сохраняем все видео
+                state.allVideos = parsed.videos.filter(function(v) {
+                    return v.method === 'play' || v.method === 'call';
+                });
+
+                if (parsed.buttons) {
+                    state.allButtons = parsed.buttons;
+                }
+
+                debugLog('sourcesAnalysis', '📊 Найдено видео: ' + state.allVideos.length);
 
                 stopAuto();
-                state.sourceName = getActiveSource();
+                state.sourceName = currentSource;
 
                 state.autoTimer = setTimeout(function() {
                     if (state.manualMode || state.autoStarted) return;
@@ -1370,19 +1376,24 @@
                     };
                     state.statsContext.sourceKey = keyify(state.sourceName || '');
 
-                    buildQueue(parsed.videos, state.sourceName, self.getChoice().voice_name || '', state.statsContext)
-                        .then(function(queue) {
-                            state.queue = queue;
-                            state.queueIndex = -1;
+                    // Строим очередь из ВСЕХ собранных видео
+                    buildQueueFromAllSources(
+                        state.allVideos,
+                        state.sourceName,
+                        self.getChoice().voice_name || '',
+                        state.statsContext
+                    ).then(function(queue) {
+                        state.queue = queue;
+                        state.queueIndex = -1;
 
-                            if (!state.queue.length) {
-                                debugLog('always', '❌ Нет кандидатов в очереди');
-                                return;
-                            }
+                        if (!state.queue.length) {
+                            debugLog('always', '❌ Нет кандидатов в очереди');
+                            return;
+                        }
 
-                            debugLog('always', '📊 Очередь построена, кандидатов: ' + state.queue.length);
-                            playNextCandidate(self, state, 'autostart');
-                        });
+                        debugLog('always', '📊 Очередь построена, кандидатов: ' + state.queue.length);
+                        playNextCandidate(self, state, 'autostart');
+                    });
                 }, 150);
             }
 
@@ -1396,7 +1407,16 @@
                 if (parsed && maybeSwitchVoice(parsed)) return;
 
                 var result = baseParse.call(this, str);
-                if (parsed && parsed.videos && parsed.videos.length) maybeAutoplay(parsed);
+                if (parsed && parsed.videos && parsed.videos.length) {
+                    // Сохраняем видео для последующего анализа
+                    state.allVideos = parsed.videos.filter(function(v) {
+                        return v.method === 'play' || v.method === 'call';
+                    });
+                    if (parsed.buttons) {
+                        state.allButtons = parsed.buttons;
+                    }
+                    maybeAutoplay(parsed);
+                }
                 return result;
             };
         }
