@@ -204,16 +204,16 @@
         var text = normalize(value);
         if (!text) return 0;
 
-        // 2160p (4K, UHD, 2160) — погрешность
+        // 2160p (4K, UHD, 2160, 3840) — погрешность
         if (/(2160|4k|uhd|ultra[\s-]?hd|3840)/i.test(text)) return 2160;
 
-        // 1080p (Full HD, 1080) — погрешность
+        // 1080p (Full HD, 1080, 1920) — погрешность
         if (/(1080|full[\s-]?hd|fhd|1920)/i.test(text)) return 1080;
 
-        // 720p (HD Ready, 720) — исключается
+        // 720p (HD Ready, 720, 1280) — исключается
         if (/(720|hd[\s-]?ready|1280)/i.test(text)) return 0;
 
-        // 480p (SD, 480) — исключается
+        // 480p (SD, 480, 640, 854) — исключается
         if (/(480|sd|640|854)/i.test(text)) return 0;
 
         // Все остальные — исключаются
@@ -244,7 +244,7 @@
     }
 
     // ============================================================
-    // ВЕСА ОЗВУЧЕК (БЕЗ АНГЛИЙСКОЙ)
+    // ВЕСА ОЗВУЧЕК
     // ============================================================
 
     function voiceWeight(name) {
@@ -255,20 +255,18 @@
 
         // === ПРИОРИТЕТНЫЕ ОЗВУЧКИ ===
         if (/hdrezka|hd.rezka|rezka/.test(text)) score += 20;
+
+        // === КУБИК В КУБЕ (вес 13) ===
+        if (/(\u043A\u0443\u0431\u0438\u043A|cube|куб|kubik)/i.test(text)) score += 13;
+
         if (/(\u0434\u0443\u0431\u043B\u044F\u0436|dub\b)/i.test(text)) score += 15;
         if (/lostfilm|lost.film/.test(text)) score += 10;
-
-        // === РУССКАЯ ОЗВУЧКА ===
-        if (/(\u0440\u0443\u0441|\u0440\u043E\u0441|russian)/i.test(text)) score += 8;
-
-        // === ДОПОЛНИТЕЛЬНЫЕ ПОПУЛЯРНЫЕ ===
-        if (/(novamedia|amedia|jaskier|tvshows|kulibin)/i.test(text)) score += 5;
 
         // === СУБТИТРЫ И ОРИГИНАЛ (низкий приоритет) ===
         if (/(\u0441\u0443\u0431\u0442|sub\b|subtitle|original|\u043E\u0440\u0438\u0433\u0456\u043D|orig)/i.test(text)) score -= 10;
 
         // === ИСКЛЮЧАЕМ АНГЛИЙСКУЮ ОЗВУЧКУ ===
-        if (/english|eng|en\b/i.test(text) && !/russian|рус/.test(text)) score -= 100;
+        if (/english|eng|en\b/i.test(text) && !/russian|rus/.test(text)) score -= 100;
 
         return score;
     }
@@ -356,7 +354,7 @@
 
             // === СБОР ОЦЕНОК ===
             score += qualityWeight(quality);              // 100 или 50
-            score += voiceWeight(voiceName);              // 20/15/10 и т.д.
+            score += voiceWeight(voiceName);              // 20/15/13/10
             score += sourceWeight(sourceName);            // 10/8/6/4
             score += statsWeight('voices', voiceKey, context);
             score += statsWeight('sources', sourceKey, context);
@@ -623,7 +621,7 @@
     }
 
     // ============================================================
-    // UI: FULL BUTTON (ОДНА КНОПКА)
+    // UI: FULL BUTTON (ОДНА ВИДИМАЯ КНОПКА)
     // ============================================================
 
     function addFullButton() {
@@ -632,8 +630,8 @@
 
         function buildButton(movie) {
             var btn = $(
-                '<div class="full-start__button full-start-new__button selector view--online lampac-smart-button" data-subtitle="' + Lampa.Lang.translate('lampac_smart_descr') + '">' +
-                    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">' +
+                '<div class="full-start__button full-start-new__button selector view--online lampac-smart-button" style="display:flex !important; opacity:1 !important; visibility:visible !important;" data-subtitle="' + Lampa.Lang.translate('lampac_smart_descr') + '">' +
+                    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" style="width:24px;height:24px;">' +
                         '<path d="M13.5 2 4 14h6l-1.5 8L18 10h-6l1.5-8Z"></path>' +
                     '</svg>' +
                     '<span>' + Lampa.Lang.translate('lampac_smart_watch') + '</span>' +
@@ -647,32 +645,7 @@
             return btn;
         }
 
-        function hasSmartInScope(scope) {
-            if (!scope || !scope.length) return false;
-            return scope.find('.lampac-smart-button').length > 0;
-        }
-
-        function insertNearAnchor(anchor, movie) {
-            if (!anchor || !anchor.length || !movie) return;
-
-            var root = anchor.eq(0);
-            var panel = root.closest('.full-start, .full, .activity, .full-start-new').eq(0);
-            if (panel.length && hasSmartInScope(panel)) return;
-            if (!panel.length && root.parent().find('.lampac-smart-button').length) return;
-
-            var btn = buildButton(movie);
-            var parent = root.parent();
-
-            // Удаляем старую кнопку Smart Online, если она уже есть
-            parent.find('.lampac-smart-button').remove();
-
-            if (parent && parent.length && parent.is('[class*="buttons"]'))
-                root.after(btn);
-            else
-                root.append(btn);
-        }
-
-        function addButton(data) {
+        function addButtonToCard(data) {
             if (!data || !data.render || !data.render.length || !data.movie) return;
 
             var render = data.render;
@@ -680,33 +653,32 @@
             // Удаляем все старые кнопки Smart Online
             render.find('.lampac-smart-button').remove();
 
-            var viewTorrent = render.find('.view--torrent');
-            if (viewTorrent.length) {
-                insertNearAnchor(viewTorrent.eq(0), data.movie);
-                return;
+            // Ищем контейнер с кнопками
+            var buttonsContainer = render.find('.full-start__buttons, .full-start-new__buttons, [class*="buttons-container"]').eq(0);
+
+            if (!buttonsContainer.length) {
+                buttonsContainer = render.find('.buttons--container').eq(0);
             }
 
-            var firstOnlineButton = render.find('.lampac--button, .full-start__button.view--online').eq(0);
-            if (firstOnlineButton.length) {
-                insertNearAnchor(firstOnlineButton, data.movie);
-                return;
+            if (!buttonsContainer.length) {
+                // Если контейнер не найден, создаем его
+                buttonsContainer = $('<div class="full-start__buttons" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;"></div>');
+                render.append(buttonsContainer);
             }
 
-            var buttons = render.find('.full-start__buttons, .full-start-new__buttons, [class*="full-start"][class*="buttons"]').eq(0);
-            if (buttons.length) {
-                buttons.find('.lampac-smart-button').remove();
-                if (!hasSmartInScope(buttons))
-                    buttons.append(buildButton(data.movie));
-                return;
-            }
+            // Добавляем кнопку
+            var btn = buildButton(data.movie);
+            buttonsContainer.append(btn);
 
-            var firstAction = render.find('.button--play, .full-start__button, .full-start-new__button, .selector').eq(0);
-            if (firstAction.length) {
-                insertNearAnchor(firstAction, data.movie);
-                return;
-            }
+            // Убеждаемся, что кнопка видима
+            btn.css({
+                'display': 'flex !important',
+                'opacity': '1 !important',
+                'visibility': 'visible !important'
+            });
 
-            insertNearAnchor(render.eq(0), data.movie);
+            // Убираем стиль display:none у контейнера, если он есть
+            buttonsContainer.css('display', 'flex');
         }
 
         function injectFromActive() {
@@ -714,39 +686,64 @@
                 var active = Lampa.Activity.active();
                 if (!active || active.component !== 'full' || !active.activity || !active.activity.render) return;
 
-                // Удаляем старые кнопки перед добавлением новой
                 var render = active.activity.render();
+                var movie = active.card;
+
+                if (!movie) return;
+
+                // Удаляем старые кнопки
                 render.find('.lampac-smart-button').remove();
 
-                addButton({
+                // Добавляем новую кнопку
+                addButtonToCard({
                     render: render,
-                    movie: active.card
+                    movie: movie
                 });
-            } catch (e) {}
+            } catch (e) {
+                console.warn('[SmartOnline] injectFromActive error:', e);
+            }
         }
 
+        // Подписываемся на событие открытия карточки
         Lampa.Listener.follow('full', function (e) {
             if (e.type === 'complite') {
                 var render = e.object.activity.render();
                 render.find('.lampac-smart-button').remove();
-                addButton({
-                    render: render,
-                    movie: e.data.movie
-                });
-            }
-        });
 
-        Lampa.Listener.follow('activity', function (e) {
-            if (e && e.type === 'start') {
                 setTimeout(function() {
-                    injectFromActive();
+                    addButtonToCard({
+                        render: render,
+                        movie: e.data.movie
+                    });
                 }, 100);
             }
         });
 
-        injectFromActive();
+        // Подписываемся на смену активности
+        Lampa.Listener.follow('activity', function (e) {
+            if (e && e.type === 'start') {
+                setTimeout(function() {
+                    injectFromActive();
+                }, 200);
+            }
+        });
 
-        runtime.fullTicker = setInterval(injectFromActive, 1500);
+        // Добавляем кнопку при загрузке
+        setTimeout(injectFromActive, 500);
+
+        // Периодическая проверка (на случай, если кнопка пропала)
+        runtime.fullTicker = setInterval(function() {
+            var active = Lampa.Activity.active();
+            if (active && active.component === 'full' && active.activity && active.activity.render) {
+                var render = active.activity.render();
+                if (render.find('.lampac-smart-button').length === 0 && active.card) {
+                    addButtonToCard({
+                        render: render,
+                        movie: active.card
+                    });
+                }
+            }
+        }, 3000);
     }
 
     // ============================================================
