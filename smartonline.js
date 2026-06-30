@@ -6,12 +6,8 @@
     // Версия: 1.0.0
     // ============================================================
 
-    console.log('%c═══════════════════════════════════════════════════════════', 'color: #4fc3f7; font-weight: bold; font-size: 14px;');
-    console.log('%c🔍 АНАЛИЗ ИСТОЧНИКОВ И КАЧЕСТВА', 'color: #4fc3f7; font-weight: bold; font-size: 16px;');
-    console.log('%c═══════════════════════════════════════════════════════════', 'color: #4fc3f7; font-weight: bold; font-size: 14px;');
-
     if (window.source_analyzer_loaded) {
-        console.log('%c⚠️ Плагин уже запущен', 'color: #ff9800;');
+        console.log('⚠️ Плагин-логгер уже запущен');
         return;
     }
     window.source_analyzer_loaded = true;
@@ -210,14 +206,18 @@
     }
 
     // ============================================================
-    // АНАЛИЗ И ВЫВОД
+    // АНАЛИЗ И ВЫВОД В КОНСОЛЬ
     // ============================================================
 
     function analyzeAndLog(movie) {
         console.log('');
+        console.log('%c═══════════════════════════════════════════════════════════', 'color: #4fc3f7; font-weight: bold; font-size: 14px;');
+        console.log('%c🔍 АНАЛИЗ ИСТОЧНИКОВ И КАЧЕСТВА', 'color: #4fc3f7; font-weight: bold; font-size: 16px;');
+        console.log('%c═══════════════════════════════════════════════════════════', 'color: #4fc3f7; font-weight: bold; font-size: 14px;');
+        console.log('');
 
         getBalansersList(function(balansers) {
-            console.log('%c📋 СПИСОК ИСТОЧНИКОВ ДЛЯ ПРОВЕРКИ: ' + balansers.length, 'color: #4fc3f7; font-weight: bold;');
+            console.log('%c📋 СПИСОК ИСТОЧНИКОВ (' + balansers.length + '):', 'color: #4fc3f7; font-weight: bold;');
             balansers.forEach(function(s, i) {
                 console.log('  ' + (i + 1) + '. ' + s);
             });
@@ -248,7 +248,6 @@
                         grouped[source].bestQualitySource = qualityResult.source;
                     }
 
-                    // Считаем вес
                     var voiceW = getVoiceWeight(item.voice_name || item.text || '');
                     var sourceW = getSourceWeight(source);
                     grouped[source].totalScore += qualityResult.quality + voiceW + sourceW;
@@ -341,50 +340,45 @@
     }
 
     // ============================================================
-    // ПЕРЕХВАТ КОМПОНЕНТА
+    // КНОПКА В КАРТОЧКЕ
     // ============================================================
 
-    var isPatched = false;
+    function addAnalyzerButton() {
+        console.log('🔘 Добавляем кнопку "Анализ источников"...');
 
-    function patchLampacComponent() {
-        if (isPatched) return;
-        if (!Lampa.Component || !Lampa.Component.get) {
-            setTimeout(patchLampacComponent, 500);
-            return;
-        }
+        Lampa.Listener.follow('full', function(e) {
+            if (e.type === 'complite') {
+                var render = e.object.activity.render();
+                var movie = e.data.movie;
 
-        var BaseLampac = Lampa.Component.get('lampac');
-        if (!BaseLampac) {
-            setTimeout(patchLampacComponent, 500);
-            return;
-        }
+                if (!render || !movie) return;
+                if (render.find('.source-analyzer-button').length > 0) return;
 
-        isPatched = true;
+                var btn = $(
+                    '<div class="full-start__button full-start-new__button selector view--online source-analyzer-button" style="display:flex !important; opacity:1 !important; visibility:visible !important; background: rgba(79, 195, 247, 0.2) !important; border: 1px solid #4fc3f7 !important;">' +
+                    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" style="width:24px;height:24px;">' +
+                    '<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>' +
+                    '</svg>' +
+                    '<span style="color: #4fc3f7;">Анализ источников</span>' +
+                    '</div>'
+                );
 
-        function SmartLampac(object) {
-            var movie = object.movie || {};
-            var analyzed = false;
+                btn.on('hover:enter', function() {
+                    console.log('🔘 Кнопка "Анализ источников" нажата для:', movie.title || movie.name);
+                    analyzeAndLog(movie);
+                    if (Lampa.Noty && Lampa.Noty.show) {
+                        Lampa.Noty.show('📊 Анализ запущен, смотри консоль');
+                    }
+                });
 
-            BaseLampac.call(this, object);
-
-            var originalParse = this.parse;
-
-            this.parse = function(str) {
-                if (!analyzed && movie && movie.id) {
-                    analyzed = true;
-                    setTimeout(function() {
-                        analyzeAndLog(movie);
-                    }, 1000);
+                var container = render.find('.full-start__buttons, .full-start-new__buttons, .buttons--container').eq(0);
+                if (container.length) {
+                    container.append(btn);
+                } else {
+                    render.append(btn);
                 }
-
-                return originalParse.call(this, str);
-            };
-        }
-
-        SmartLampac.prototype = Object.create(BaseLampac.prototype);
-        SmartLampac.prototype.constructor = SmartLampac;
-
-        Lampa.Component.add('lampac', SmartLampac);
+            }
+        });
     }
 
     // ============================================================
@@ -393,7 +387,8 @@
 
     function init() {
         console.log('%c✅ Плагин-логгер инициализирован', 'color: #76ff03; font-weight: bold;');
-        patchLampacComponent();
+        console.log('📌 Нажмите кнопку "Анализ источников" в карточке фильма');
+        addAnalyzerButton();
     }
 
     if (window.appready) {
