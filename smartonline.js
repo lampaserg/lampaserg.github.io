@@ -35,6 +35,238 @@
 
     var SMART_MANIFEST_VERSION = '2.0.0';
 
+    // ============================================================
+    // ПРИОРИТЕТЫ ИСТОЧНИКОВ
+    // ============================================================
+
+    var SOURCE_PRIORITY = [
+        { name: 'phantom', weight: 10, label: 'Phantom' },
+        { name: 'filmix', weight: 8, label: 'Filmix' },
+        { name: 'alloha', weight: 6, label: 'Alloha' },
+        { name: 'kinopub', weight: 4, label: 'Kinopub' }
+    ];
+
+    // ============================================================
+    // ПРИОРИТЕТЫ ОЗВУЧЕК (HDRezka - МАКСИМАЛЬНЫЙ ВЕС)
+    // ============================================================
+
+    var VOICE_PRIORITY = [
+        { name: 'hdrezka', weight: 100, label: 'HDRezka' },
+        { name: 'dub', weight: 15, label: 'Дубляж' },
+        { name: 'cube', weight: 13, label: 'Кубик в Кубе' },
+        { name: 'lostfilm', weight: 10, label: 'LostFilm' }
+    ];
+
+    // ============================================================
+    // ОПРЕДЕЛЕНИЕ КАЧЕСТВА
+    // ============================================================
+
+    function detectQuality(value) {
+        var text = normalize(value);
+        if (!text) return 0;
+
+        // 2160p (4K) — ВЫСОКИЙ ПРИОРИТЕТ
+        if (/(2160|4k|uhd|ultra[\s-]?hd|3840)/i.test(text)) return 2160;
+
+        // 1080p (Full HD)
+        if (/(1080|full[\s-]?hd|fhd|1920)/i.test(text)) return 1080;
+
+        // 720p
+        if (/(720|hd[\s-]?ready|1280)/i.test(text)) return 720;
+
+        // 480p
+        if (/(480|sd|640|854)/i.test(text)) return 480;
+
+        return 0;
+    }
+
+    function getItemQuality(item) {
+        var quality = 0;
+        var sources = [];
+
+        var textFields = ['text', 'title', 'name', 'label', 'voice_name'];
+        textFields.forEach(function(field) {
+            if (item[field]) {
+                var q = detectQuality(item[field]);
+                if (q > quality) {
+                    quality = q;
+                    sources.push(field + ': "' + String(item[field]).substring(0, 30) + '" → ' + q + 'p');
+                }
+            }
+        });
+
+        var urlFields = ['url', 'stream'];
+        urlFields.forEach(function(field) {
+            if (item[field]) {
+                var q = detectQuality(item[field]);
+                if (q > quality) {
+                    quality = q;
+                    sources.push(field + ': "' + String(item[field]).substring(0, 30) + '" → ' + q + 'p');
+                }
+            }
+        });
+
+        var qualityObj = item.quality || item.qualitys;
+        if (qualityObj && typeof qualityObj === 'object') {
+            for (var key in qualityObj) {
+                var q1 = detectQuality(key);
+                if (q1 > quality) {
+                    quality = q1;
+                    sources.push('quality key: "' + key + '" → ' + q1 + 'p');
+                }
+                var q2 = detectQuality(qualityObj[key]);
+                if (q2 > quality) {
+                    quality = q2;
+                    sources.push('quality value: "' + qualityObj[key] + '" → ' + q2 + 'p');
+                }
+            }
+        }
+
+        return { quality: quality, sources: sources };
+    }
+
+    // ============================================================
+    // НОВЫЕ ВЕСА (HDRezka - 100, 2160p - 90, 1080p - 50)
+    // ============================================================
+
+    function qualityWeight(quality) {
+        if (quality >= 2160) return 90;   // 4K — высокий вес
+        if (quality >= 1080) return 50;   // 1080p — средний вес
+        if (quality >= 720) return 20;    // 720p — низкий вес
+        if (quality >= 480) return 5;     // 480p — минимальный вес
+        return 0;
+    }
+
+    function sourceWeight(source) {
+        var text = normalize(source);
+        if (/phantom/.test(text)) return 10;
+        if (/filmix/.test(text)) return 8;
+        if (/alloha/.test(text)) return 6;
+        if (/kinopub/.test(text)) return 4;
+        return 0;
+    }
+
+    function voiceWeight(name) {
+        var text = normalize(name);
+        var score = 0;
+
+        if (!text) return score;
+
+        // === HDRezka — МАКСИМАЛЬНЫЙ ВЕС 100 ===
+        if (/hdrezka|hd.rezka|rezka/.test(text)) score += 100;
+
+        // === ОСТАЛЬНЫЕ ОЗВУЧКИ ===
+        if (/(\u0434\u0443\u0431\u043B\u044F\u0436|dub\b)/i.test(text)) score += 15;
+        if (/(\u043A\u0443\u0431\u0438\u043A|cube|куб|kubik)/i.test(text)) score += 13;
+        if (/lostfilm|lost.film/.test(text)) score += 10;
+
+        // === СУБТИТРЫ И ОРИГИНАЛ (низкий приоритет) ===
+        if (/(\u0441\u0443\u0431\u0442|sub\b|subtitle|original|\u043E\u0440\u0438\u0433\u0456\u043D|orig)/i.test(text)) score -= 10;
+
+        // === ИСКЛЮЧАЕМ АНГЛИЙСКУЮ ОЗВУЧКУ ===
+        if (/english|eng|en\b/i.test(text) && !/russian|rus/.test(text)) score -= 100;
+
+        return score;
+    }
+
+    function getActiveSource() {
+        return Lampa.Storage.get('active_balanser', '') || Lampa.Storage.get('online_balanser', '');
+    }
+
+    // ============================================================
+    // АНАЛИЗ КАЧЕСТВА ИТЕМА
+    // ============================================================
+
+    function itemQuality(item) {
+        return getItemQuality(item).quality;
+    }
+
+    // ============================================================
+    // ФИЛЬТРАЦИЯ И СОРТИРОВКА (С НОВЫМИ ВЕСАМИ)
+    // ============================================================
+
+    function rankVoices(buttons, sourceName, context) {
+        var sourceKey = keyify(sourceName);
+
+        return buttons.map(function (button, index) {
+            var title = button.text || '';
+            var score = voiceWeight(title) + statsWeight('voices', keyify(title), context) + statsWeight('sources', sourceKey, context);
+
+            if (button.active) score += 1;
+
+            return {
+                index: index,
+                title: title,
+                url: button.url,
+                active: !!button.active,
+                score: score
+            };
+        }).sort(function (a, b) {
+            return b.score - a.score;
+        });
+    }
+
+    function bestVoice(buttons, sourceName, context) {
+        return rankVoices(buttons, sourceName, context)[0] || null;
+    }
+
+    function buildQueue(videos, sourceName, fallbackVoice, context) {
+        var map = {};
+
+        videos.forEach(function (item) {
+            var voiceName = item.voice_name || item.text || fallbackVoice || '';
+            var voiceKey = keyify(voiceName);
+            var sourceKey = keyify(sourceName);
+            var quality = itemQuality(item);
+
+            // === ФИЛЬТРАЦИЯ: оставляем 2160p и 1080p ===
+            if (quality !== 2160 && quality !== 1080) return;
+
+            if (!item || (!item.url && !item.stream)) return;
+
+            var score = 0;
+
+            // === СБОР ОЦЕНОК С НОВЫМИ ВЕСАМИ ===
+            score += qualityWeight(quality);              // 90 (4K) или 50 (1080p)
+            score += voiceWeight(voiceName);              // 100 (HDRezka) или меньше
+            score += sourceWeight(sourceName);            // 10/8/6/4
+            score += statsWeight('voices', voiceKey, context);
+            score += statsWeight('sources', sourceKey, context);
+            score += item.method === 'play' ? 10 : 4;
+
+            // Формат
+            var urlHint = normalize(item.url || item.stream || '');
+            if (/m3u8/.test(urlHint)) score += 4;
+            if (/mp4/.test(urlHint)) score += 2;
+            if (/iframe|embed/.test(urlHint)) score -= 4;
+
+            var candidate = {
+                id: Lampa.Utils.hash([sourceKey, voiceKey, item.url || item.stream || item.text || Math.random()].join('::')),
+                item: item,
+                sourceKey: sourceKey,
+                sourceName: sourceName || '',
+                voiceKey: voiceKey,
+                voiceName: voiceName,
+                statsContext: context,
+                quality: quality,
+                score: score
+            };
+
+            if (!map[candidate.id] || map[candidate.id].score < candidate.score) {
+                map[candidate.id] = candidate;
+            }
+        });
+
+        // Сортировка по убыванию оценки
+        return Object.keys(map).map(function (id) { return map[id]; }).sort(function (a, b) {
+            return b.score - a.score;
+        });
+    }
+
+    // ============================================================
+    // ОСТАЛЬНЫЕ ФУНКЦИИ (БЕЗ ИЗМЕНЕНИЙ)
+    // ============================================================
+
     function detectBaseComponentFromManifest() {
         if (!window.Lampa || !Lampa.Manifest) return '';
 
@@ -197,200 +429,7 @@
     }
 
     // ============================================================
-    // ОПРЕДЕЛЕНИЕ КАЧЕСТВА С ПОГРЕШНОСТЬЮ
-    // ============================================================
-
-    function detectQuality(value) {
-        var text = normalize(value);
-        if (!text) return 0;
-
-        // 2160p (4K, UHD, 2160, 3840) — погрешность
-        if (/(2160|4k|uhd|ultra[\s-]?hd|3840)/i.test(text)) return 2160;
-
-        // 1080p (Full HD, 1080, 1920) — погрешность
-        if (/(1080|full[\s-]?hd|fhd|1920)/i.test(text)) return 1080;
-
-        // 720p (HD Ready, 720, 1280) — исключается
-        if (/(720|hd[\s-]?ready|1280)/i.test(text)) return 0;
-
-        // 480p (SD, 480, 640, 854) — исключается
-        if (/(480|sd|640|854)/i.test(text)) return 0;
-
-        // Все остальные — исключаются
-        return 0;
-    }
-
-    // ============================================================
-    // ВЕСА КАЧЕСТВА
-    // ============================================================
-
-    function qualityWeight(quality) {
-        if (quality >= 2160) return 100;  // 2160p (4K) — максимальный вес
-        if (quality >= 1080) return 50;   // 1080p (Full HD) — средний вес
-        return 0;                          // Все остальные — исключаются
-    }
-
-    // ============================================================
-    // ВЕСА ИСТОЧНИКОВ
-    // ============================================================
-
-    function sourceWeight(source) {
-        var text = normalize(source);
-        if (/phantom/.test(text)) return 10;   // Наивысший приоритет
-        if (/filmix/.test(text)) return 8;     // Высокий приоритет
-        if (/alloha/.test(text)) return 6;     // Средний приоритет
-        if (/kinopub/.test(text)) return 4;    // Базовый приоритет
-        return 0;
-    }
-
-    // ============================================================
-    // ВЕСА ОЗВУЧЕК
-    // ============================================================
-
-    function voiceWeight(name) {
-        var text = normalize(name);
-        var score = 0;
-
-        if (!text) return score;
-
-        // === ПРИОРИТЕТНЫЕ ОЗВУЧКИ ===
-        if (/hdrezka|hd.rezka|rezka/.test(text)) score += 20;
-
-        // === КУБИК В КУБЕ (вес 13) ===
-        if (/(\u043A\u0443\u0431\u0438\u043A|cube|куб|kubik)/i.test(text)) score += 13;
-
-        if (/(\u0434\u0443\u0431\u043B\u044F\u0436|dub\b)/i.test(text)) score += 15;
-        if (/lostfilm|lost.film/.test(text)) score += 10;
-
-        // === СУБТИТРЫ И ОРИГИНАЛ (низкий приоритет) ===
-        if (/(\u0441\u0443\u0431\u0442|sub\b|subtitle|original|\u043E\u0440\u0438\u0433\u0456\u043D|orig)/i.test(text)) score -= 10;
-
-        // === ИСКЛЮЧАЕМ АНГЛИЙСКУЮ ОЗВУЧКУ ===
-        if (/english|eng|en\b/i.test(text) && !/russian|rus/.test(text)) score -= 100;
-
-        return score;
-    }
-
-    function getActiveSource() {
-        return Lampa.Storage.get('active_balanser', '') || Lampa.Storage.get('online_balanser', '');
-    }
-
-    // ============================================================
-    // АНАЛИЗ КАЧЕСТВА ИТЕМА
-    // ============================================================
-
-    function itemQuality(item) {
-        var max = 0;
-
-        // Проверяем качество из объекта quality
-        if (item && item.quality && Lampa.Arrays.isObject(item.quality)) {
-            Lampa.Arrays.getKeys(item.quality).forEach(function (q) {
-                var detected = detectQuality(q + ' ' + item.quality[q]);
-                if (detected > max) max = detected;
-            });
-        }
-
-        // Проверяем текстовые поля
-        var textFields = [item && item.text, item && item.title, item && item.name, item && item.label];
-        textFields.forEach(function (field) {
-            var detected = detectQuality(field);
-            if (detected > max) max = detected;
-        });
-
-        // Проверяем URL
-        var urlFields = [item && item.url, item && item.stream];
-        urlFields.forEach(function (field) {
-            var detected = detectQuality(field);
-            if (detected > max) max = detected;
-        });
-
-        return max;
-    }
-
-    // ============================================================
-    // ФИЛЬТРАЦИЯ И СОРТИРОВКА
-    // ============================================================
-
-    function rankVoices(buttons, sourceName, context) {
-        var sourceKey = keyify(sourceName);
-
-        return buttons.map(function (button, index) {
-            var title = button.text || '';
-            var score = voiceWeight(title) + statsWeight('voices', keyify(title), context) + statsWeight('sources', sourceKey, context);
-
-            if (button.active) score += 1;
-
-            return {
-                index: index,
-                title: title,
-                url: button.url,
-                active: !!button.active,
-                score: score
-            };
-        }).sort(function (a, b) {
-            return b.score - a.score;
-        });
-    }
-
-    function bestVoice(buttons, sourceName, context) {
-        return rankVoices(buttons, sourceName, context)[0] || null;
-    }
-
-    function buildQueue(videos, sourceName, fallbackVoice, context) {
-        var map = {};
-
-        videos.forEach(function (item) {
-            var voiceName = item.voice_name || item.text || fallbackVoice || '';
-            var voiceKey = keyify(voiceName);
-            var sourceKey = keyify(sourceName);
-            var quality = itemQuality(item);
-
-            // === ФИЛЬТРАЦИЯ: исключаем все, кроме 2160p и 1080p ===
-            if (quality !== 2160 && quality !== 1080) return;
-
-            if (!item || (!item.url && !item.stream)) return;
-
-            var score = 0;
-
-            // === СБОР ОЦЕНОК ===
-            score += qualityWeight(quality);              // 100 или 50
-            score += voiceWeight(voiceName);              // 20/15/13/10
-            score += sourceWeight(sourceName);            // 10/8/6/4
-            score += statsWeight('voices', voiceKey, context);
-            score += statsWeight('sources', sourceKey, context);
-            score += item.method === 'play' ? 10 : 4;
-
-            // Формат
-            var urlHint = normalize(item.url || item.stream || '');
-            if (/m3u8/.test(urlHint)) score += 4;
-            if (/mp4/.test(urlHint)) score += 2;
-            if (/iframe|embed/.test(urlHint)) score -= 4;
-
-            var candidate = {
-                id: Lampa.Utils.hash([sourceKey, voiceKey, item.url || item.stream || item.text || Math.random()].join('::')),
-                item: item,
-                sourceKey: sourceKey,
-                sourceName: sourceName || '',
-                voiceKey: voiceKey,
-                voiceName: voiceName,
-                statsContext: context,
-                quality: quality,
-                score: score
-            };
-
-            if (!map[candidate.id] || map[candidate.id].score < candidate.score) {
-                map[candidate.id] = candidate;
-            }
-        });
-
-        // Сортировка по убыванию оценки
-        return Object.keys(map).map(function (id) { return map[id]; }).sort(function (a, b) {
-            return b.score - a.score;
-        });
-    }
-
-    // ============================================================
-    // ОСТАЛЬНЫЕ ФУНКЦИИ
+    // ОСТАЛЬНЫЕ ФУНКЦИИ (БЕЗ ИЗМЕНЕНИЙ)
     // ============================================================
 
     function clearPlayback(playback) {
@@ -508,7 +547,7 @@
     }
 
     // ============================================================
-    // PLAYER HOOKS
+    // PLAYER HOOKS (БЕЗ ИЗМЕНЕНИЙ)
     // ============================================================
 
     function installPlayerHooks() {
@@ -563,7 +602,7 @@
     }
 
     // ============================================================
-    // SMART ACTIVITY
+    // SMART ACTIVITY (БЕЗ ИЗМЕНЕНИЙ)
     // ============================================================
 
     function smartActivity(movie) {
@@ -583,7 +622,7 @@
     }
 
     // ============================================================
-    // UI: HEAD BUTTON
+    // UI: HEAD BUTTON (БЕЗ ИЗМЕНЕНИЙ)
     // ============================================================
 
     function addHeadButton() {
@@ -621,7 +660,7 @@
     }
 
     // ============================================================
-    // UI: FULL BUTTON (ОДНА ВИДИМАЯ КНОПКА)
+    // UI: FULL BUTTON (БЕЗ ИЗМЕНЕНИЙ)
     // ============================================================
 
     function addFullButton() {
@@ -650,10 +689,8 @@
 
             var render = data.render;
 
-            // Удаляем все старые кнопки Smart Online
             render.find('.lampac-smart-button').remove();
 
-            // Ищем контейнер с кнопками
             var buttonsContainer = render.find('.full-start__buttons, .full-start-new__buttons, [class*="buttons-container"]').eq(0);
 
             if (!buttonsContainer.length) {
@@ -661,23 +698,19 @@
             }
 
             if (!buttonsContainer.length) {
-                // Если контейнер не найден, создаем его
                 buttonsContainer = $('<div class="full-start__buttons" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;"></div>');
                 render.append(buttonsContainer);
             }
 
-            // Добавляем кнопку
             var btn = buildButton(data.movie);
             buttonsContainer.append(btn);
 
-            // Убеждаемся, что кнопка видима
             btn.css({
                 'display': 'flex !important',
                 'opacity': '1 !important',
                 'visibility': 'visible !important'
             });
 
-            // Убираем стиль display:none у контейнера, если он есть
             buttonsContainer.css('display', 'flex');
         }
 
@@ -691,10 +724,8 @@
 
                 if (!movie) return;
 
-                // Удаляем старые кнопки
                 render.find('.lampac-smart-button').remove();
 
-                // Добавляем новую кнопку
                 addButtonToCard({
                     render: render,
                     movie: movie
@@ -704,7 +735,6 @@
             }
         }
 
-        // Подписываемся на событие открытия карточки
         Lampa.Listener.follow('full', function (e) {
             if (e.type === 'complite') {
                 var render = e.object.activity.render();
@@ -719,7 +749,6 @@
             }
         });
 
-        // Подписываемся на смену активности
         Lampa.Listener.follow('activity', function (e) {
             if (e && e.type === 'start') {
                 setTimeout(function() {
@@ -728,10 +757,8 @@
             }
         });
 
-        // Добавляем кнопку при загрузке
         setTimeout(injectFromActive, 500);
 
-        // Периодическая проверка (на случай, если кнопка пропала)
         runtime.fullTicker = setInterval(function() {
             var active = Lampa.Activity.active();
             if (active && active.component === 'full' && active.activity && active.activity.render) {
@@ -747,7 +774,7 @@
     }
 
     // ============================================================
-    // LANG
+    // LANG (БЕЗ ИЗМЕНЕНИЙ)
     // ============================================================
 
     function addLang() {
@@ -768,7 +795,7 @@
     }
 
     // ============================================================
-    // SETTINGS
+    // SETTINGS (БЕЗ ИЗМЕНЕНИЙ)
     // ============================================================
 
     function registerSettings() {
@@ -845,7 +872,7 @@
     }
 
     // ============================================================
-    // MANIFEST
+    // MANIFEST (БЕЗ ИЗМЕНЕНИЙ)
     // ============================================================
 
     function registerManifest() {
@@ -932,7 +959,7 @@
     }
 
     // ============================================================
-    // COMPONENT
+    // COMPONENT (ОСНОВНАЯ ЛОГИКА С НОВЫМИ ВЕСАМИ)
     // ============================================================
 
     function installComponent() {
@@ -966,6 +993,22 @@
                     sourceKey: ''
                 }
             };
+
+            // ============================================================
+            // ВЫВОД В КОНСОЛЬ ПРИ ВЫБОРЕ
+            // ============================================================
+
+            function logSelection(candidate) {
+                console.log('');
+                console.log('%c═══════════════════════════════════════════════════════════', 'color: #4fc3f7;');
+                console.log('%c🎯 ВЫБРАННЫЙ ПОТОК', 'color: #76ff03; font-weight: bold; font-size: 14px;');
+                console.log('  📐 Качество: ' + candidate.quality + 'p' + (candidate.quality >= 2160 ? ' (4K)' : ''));
+                console.log('  🎤 Озвучка: ' + candidate.voiceName + ' (вес ' + voiceWeight(candidate.voiceName) + ')');
+                console.log('  📦 Источник: ' + candidate.sourceName + ' (вес ' + sourceWeight(candidate.sourceName) + ')');
+                console.log('  ⚖️ Общий вес: ' + candidate.score);
+                console.log('%c═══════════════════════════════════════════════════════════', 'color: #4fc3f7;');
+                console.log('');
+            }
 
             function stopAuto() {
                 clearTimeout(state.autoTimer);
@@ -1111,10 +1154,18 @@
                         sourceKey: ''
                     };
                     state.statsContext.sourceKey = keyify(state.sourceName || '');
-                    state.queue = buildQueue(parsed.videos, state.sourceName, self.getChoice().voice_name || '', state.statsContext);
+
+                    // === СТРОИМ ОЧЕРЕДЬ С НОВЫМИ ВЕСАМИ ===
+                    var queue = buildQueue(parsed.videos, state.sourceName, self.getChoice().voice_name || '', state.statsContext);
+                    state.queue = queue;
                     state.queueIndex = -1;
 
                     if (!state.queue.length) return;
+
+                    // === ЛОГГИРУЕМ ВЫБРАННЫЙ ПОТОК ===
+                    if (state.queue.length > 0) {
+                        logSelection(state.queue[0]);
+                    }
 
                     playNextCandidate(self, state, 'autostart');
                 }, 150);
@@ -1143,7 +1194,7 @@
     }
 
     // ============================================================
-    // BOOT
+    // BOOT (БЕЗ ИЗМЕНЕНИЙ)
     // ============================================================
 
     function ensureRuntime() {
