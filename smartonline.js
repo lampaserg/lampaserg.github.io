@@ -1,7 +1,7 @@
 /**
  * Online Source Manager
- * Версия: 9.5.0
- * Автоматическая сортировка при открытии балансера
+ * Версия: 9.6.0
+ * Однократная сортировка при открытии балансера и смене источника
  */
 
 (function() {
@@ -11,6 +11,8 @@
     window.online_source_manager_loaded = true;
 
     var DEBUG = true;
+    var sortTimer = null;
+    var lastSource = '';
 
     function log() {
         if (!DEBUG) return;
@@ -24,7 +26,7 @@
     }
 
     log('========================================');
-    log('Online Source Manager v9.5.0');
+    log('Online Source Manager v9.6.0');
     log('Приоритет: hdrezka -> Дубляж -> LostFilm -> Кубик -> Остальные');
     log('========================================');
 
@@ -180,7 +182,6 @@
             data.push({ $el: $el, text: text, active: active, num: num });
         });
 
-        // Сортируем по убыванию номера сезона
         data.sort(function(a, b) {
             if (a.active && !b.active) return -1;
             if (!a.active && b.active) return 1;
@@ -325,15 +326,14 @@
     }
 
     // ============================================================
-    // 7. ГЛАВНАЯ ФУНКЦИЯ - сортировка при открытии балансера
+    // 7. ГЛАВНАЯ ФУНКЦИЯ - однократная сортировка
     // ============================================================
     function sortAll() {
         log('========================================');
-        log('СОРТИРОВКА ПРИ ОТКРЫТИИ БАЛАНСЕРА');
+        log('СОРТИРОВКА');
         log('========================================');
 
         try {
-            // Сортируем всё, что есть на странице
             sortSeasonsInFilter();
             sortVoicesInFilter();
             sortSourcesInFilter();
@@ -349,23 +349,53 @@
     }
 
     // ============================================================
-    // 8. АКТИВНОЕ СЛЕЖЕНИЕ ЗА ПОЯВЛЕНИЕМ БАЛАНСЕРА
+    // 8. СЛЕЖЕНИЕ ЗА ОТКРЫТИЕМ БАЛАНСЕРА (однократно)
     // ============================================================
-    function startWatching() {
-        log('Запуск слежения за балансером...');
+    function waitForBalancer() {
+        log('Ожидание открытия балансера...');
 
-        // Проверяем появление .selectbox (фильтры) и .online-prestige--full (видео)
         var checkInterval = setInterval(function() {
             var hasSelectbox = $('.selectbox').length > 0;
             var hasPrestige = $('.online-prestige--full').length > 1;
 
             if (hasSelectbox || hasPrestige) {
-                log('Обнаружен балансер или фильтры, сортируем...');
+                log('Балансер открыт, сортируем...');
+                clearInterval(checkInterval);
                 sortAll();
-            }
-        }, 500);
 
-        // MutationObserver для мгновенной реакции
+                // После первой сортировки начинаем следить за сменой источника
+                watchSourceChange();
+            }
+        }, 300);
+
+        // Останавливаем проверку через 30 секунд, чтобы не висела вечно
+        setTimeout(function() {
+            clearInterval(checkInterval);
+            log('Ожидание балансера завершено по таймауту');
+        }, 30000);
+    }
+
+    // ============================================================
+    // 9. СЛЕЖЕНИЕ ЗА СМЕНОЙ ИСТОЧНИКА
+    // ============================================================
+    function watchSourceChange() {
+        log('Слежение за сменой источника...');
+
+        // Следим за кликами по источникам в меню "Сортировать"
+        $(document).on('hover:enter', '.selectbox-item', function() {
+            var parentContainer = $(this).parent().parent();
+            var title = parentContainer.find('.selectbox__title').text().trim();
+
+            if (title.indexOf('Источник') !== -1 || 
+                title.indexOf('Source') !== -1 || 
+                title.indexOf('Сортировать') !== -1) {
+                log('Смена источника, сортируем...');
+                clearTimeout(sortTimer);
+                sortTimer = setTimeout(sortAll, 500);
+            }
+        });
+
+        // Следим за изменением DOM (перезагрузка контента при смене источника)
         var observer = new MutationObserver(function(mutations) {
             var shouldSort = false;
 
@@ -377,12 +407,10 @@
                         var node = nodes[j];
                         if (node.nodeType === 1) {
                             var $node = $(node);
-                            // Проверяем появление фильтров или видео
-                            if ($node.is('.selectbox') || 
+                            if ($node.is('.online-prestige--full') || 
+                                $node.find('.online-prestige--full').length ||
                                 $node.is('.selectbox-item') ||
-                                $node.is('.online-prestige--full') ||
-                                $node.find('.selectbox').length ||
-                                $node.find('.online-prestige--full').length) {
+                                $node.find('.selectbox-item').length) {
                                 shouldSort = true;
                                 break;
                             }
@@ -393,9 +421,9 @@
             }
 
             if (shouldSort) {
-                log('Обнаружены изменения в DOM, сортируем...');
-                clearTimeout(window._sortTimer);
-                window._sortTimer = setTimeout(sortAll, 300);
+                log('Обновление контента, сортируем...');
+                clearTimeout(sortTimer);
+                sortTimer = setTimeout(sortAll, 500);
             }
         });
 
@@ -403,37 +431,6 @@
             childList: true,
             subtree: true
         });
-
-        log('Слежение запущено');
-    }
-
-    // ============================================================
-    // 9. Слежение за сменой источника (переключение балансера)
-    // ============================================================
-    function watchSourceChange() {
-        // Следим за кликами по источникам в меню "Сортировать"
-        $(document).on('hover:enter', '.selectbox-item', function() {
-            var parentContainer = $(this).parent().parent();
-            var title = parentContainer.find('.selectbox__title').text().trim();
-
-            if (title.indexOf('Источник') !== -1 || 
-                title.indexOf('Source') !== -1 || 
-                title.indexOf('Сортировать') !== -1) {
-                log('Смена источника, сортируем...');
-                setTimeout(sortAll, 500);
-            }
-        });
-
-        // Следим за изменением URL (смена балансера)
-        var lastUrl = '';
-        setInterval(function() {
-            var currentUrl = window.location.href;
-            if (currentUrl !== lastUrl) {
-                lastUrl = currentUrl;
-                // Небольшая задержка для загрузки контента
-                setTimeout(sortAll, 800);
-            }
-        }, 1000);
 
         log('Слежение за сменой источника запущено');
     }
@@ -452,16 +449,8 @@
 
         log('Lampa готова');
 
-        // Первичная сортировка с задержками
-        setTimeout(sortAll, 500);
-        setTimeout(sortAll, 1500);
-        setTimeout(sortAll, 3000);
-        setTimeout(sortAll, 5000);
-        setTimeout(sortAll, 8000);
-
-        // Запускаем слежение
-        startWatching();
-        watchSourceChange();
+        // Ждём открытия балансера
+        waitForBalancer();
 
         log('========================================');
         log('ИНИЦИАЛИЗАЦИЯ ЗАВЕРШЕНА');
