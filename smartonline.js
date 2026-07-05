@@ -47,117 +47,95 @@
     }
 
     // ============================================================
-    // ПОЛУЧЕНИЕ СПИСКА БАЛАНСЕРОВ ИЗ LAMPA
+    // ПОЛУЧЕНИЕ ВСЕХ БАЛАНСЕРОВ ИЗ LAMPA
     // ============================================================
 
-    function getBalansersFromLampa() {
-        var sources = [];
-        
-        // Получаем из хранилища Lampa
+    function getAllBalansers(callback) {
+        // Получаем все синхронизированные балансеры
+        var allBalansers = [];
+        var syncKeys = Lampa.Storage.syncKeys ? Lampa.Storage.syncKeys() : [];
+
+        // Ищем ключи с online_choice_
+        syncKeys.forEach(function(key) {
+            if (key.indexOf('online_choice_') === 0) {
+                var name = key.replace('online_choice_', '');
+                if (name && allBalansers.indexOf(name) === -1) {
+                    allBalansers.push(name);
+                }
+            }
+        });
+
+        // Добавляем основные балансеры, если их нет
+        var mainBalansers = ['phantom', 'fxapi', 'filmix', 'alloha', 'kinopub', 'rezka', 'kodik'];
+        mainBalansers.forEach(function(name) {
+            if (allBalansers.indexOf(name) === -1) {
+                allBalansers.push(name);
+            }
+        });
+
+        // Получаем из хранилища
         var activeBalanser = Lampa.Storage.get('active_balanser', '');
         var onlineBalanser = Lampa.Storage.get('online_balanser', '');
 
-        if (activeBalanser) sources.push(activeBalanser);
-        if (onlineBalanser && onlineBalanser !== activeBalanser) sources.push(onlineBalanser);
-
-        // Если источников нет - добавляем основные
-        if (sources.length === 0) {
-            sources = ['phantom', 'fxapi', 'alloha', 'kinopub'];
+        if (activeBalanser && allBalansers.indexOf(activeBalanser) === -1) {
+            allBalansers.push(activeBalanser);
+        }
+        if (onlineBalanser && onlineBalanser !== activeBalanser && allBalansers.indexOf(onlineBalanser) === -1) {
+            allBalansers.push(onlineBalanser);
         }
 
-        // Убираем дубликаты
-        var unique = [];
-        sources.forEach(function(s) {
-            var lower = s.toLowerCase();
-            if (!unique.some(function(u) { return u.toLowerCase() === lower; })) {
-                unique.push(s);
-            }
-        });
-
-        return unique;
+        callback(allBalansers);
     }
 
     // ============================================================
-    // ОСНОВНАЯ ЛОГИКА: ПОИСК ЛУЧШЕГО БАЛАНСЕРА
+    // АВТОВЫБОР ЛУЧШЕГО БАЛАНСЕРА
     // ============================================================
 
     function findBestBalanser(movie) {
-        var balansers = getBalansersFromLampa();
-        
-        console.log('🔍 Поиск лучшего балансера для:', movie.title || movie.name);
-        console.log('📋 Балансеры из Lampa:', balansers);
-
-        var logLines = [];
-        logLines.push('═══════════════════════════════════════════════════════════');
-        logLines.push('🔍 ПОИСК ЛУЧШЕГО БАЛАНСЕРА ДЛЯ: ' + (movie.title || movie.name));
-        logLines.push('📋 Балансеров: ' + balansers.length + ' (' + balansers.join(', ') + ')');
-        logLines.push('═══════════════════════════════════════════════════════════');
-
-        // Просто переключаемся на первый доступный балансер
-        // и открываем онлайн с ним
-        if (balansers.length === 0) {
-            Lampa.Noty.show('❌ Нет доступных балансеров');
-            return;
-        }
-
-        // Для сериалов и фильмов просто открываем онлайн с текущим балансером
-        // Пользователь сам выберет нужный через стандартный интерфейс
-        var balanser = balansers[0];
-        
-        logLines.push('📌 Используется балансер: ' + balanser);
-        logLines.push('═══════════════════════════════════════════════════════════');
-        console.log(logLines.join('\n'));
-
-        // Открываем онлайн с балансером
-        var id = Lampa.Utils.hash(movie.number_of_seasons ? movie.original_name : movie.original_title);
-        var all = Lampa.Storage.get('clarification_search', {});
-
-        Lampa.Activity.push({
-            url: '',
-            title: Lampa.Lang.translate('title_online'),
-            component: 'lampac',
-            search: all[id] ? all[id] : movie.title,
-            search_one: movie.title,
-            search_two: movie.original_title,
-            movie: movie,
-            page: 1,
-            balanser: balanser,
-            clarification: all[id] ? true : false
-        });
-
-        if (Lampa.Noty && Lampa.Noty.show) {
-            Lampa.Noty.show('🔊 Открыт балансер: ' + balanser);
-        }
-    }
-
-    // ============================================================
-    // ПОКАЗ СПИСКА БАЛАНСЕРОВ (ДЛЯ РУЧНОГО ВЫБОРА)
-    // ============================================================
-
-    function showBalansersMenu(movie) {
-        var balansers = getBalansersFromLampa();
-
-        if (balansers.length === 0) {
-            Lampa.Noty.show('❌ Нет доступных балансеров');
-            return;
-        }
-
-        var items = balansers.map(function(b) {
-            return {
-                title: b.charAt(0).toUpperCase() + b.slice(1),
-                value: b
-            };
-        });
-
-        Lampa.Select.show({
-            title: 'Выберите балансер',
-            items: items,
-            onSelect: function(item) {
-                switchToBalanser(item.value, movie);
-            },
-            onBack: function() {
-                Lampa.Controller.toggle('content');
+        getAllBalansers(function(balansers) {
+            if (!balansers || balansers.length === 0) {
+                Lampa.Noty.show('❌ Нет доступных балансеров');
+                return;
             }
+
+            console.log('🔍 Поиск лучшего балансера для:', movie.title || movie.name);
+            console.log('📋 Все балансеры:', balansers);
+
+            var logLines = [];
+            logLines.push('═══════════════════════════════════════════════════════════');
+            logLines.push('🔍 ПОИСК ЛУЧШЕГО БАЛАНСЕРА ДЛЯ: ' + (movie.title || movie.name));
+            logLines.push('📋 Балансеров: ' + balansers.length + ' (' + balansers.join(', ') + ')');
+            logLines.push('═══════════════════════════════════════════════════════════');
+
+            // Если балансеров много, показываем меню для выбора
+            if (balansers.length > 1) {
+                var items = balansers.map(function(b) {
+                    return {
+                        title: b.charAt(0).toUpperCase() + b.slice(1),
+                        value: b
+                    };
+                });
+
+                Lampa.Select.show({
+                    title: 'Выберите балансер',
+                    items: items,
+                    onSelect: function(item) {
+                        switchToBalanser(item.value, movie);
+                    },
+                    onBack: function() {
+                        Lampa.Controller.toggle('content');
+                    }
+                });
+                return;
+            }
+
+            // Если только один балансер - просто открываем
+            var balanser = balansers[0];
+            logLines.push('📌 Используется балансер: ' + balanser);
+            logLines.push('═══════════════════════════════════════════════════════════');
+            console.log(logLines.join('\n'));
+
+            switchToBalanser(balanser, movie);
         });
     }
 
@@ -214,20 +192,17 @@
                 if (!render || !movie) return;
                 if (render.find('.lampac-balanser-button').length > 0) return;
 
-                var isSerial = !!(movie && movie.name);
-                var label = isSerial ? '📺 Выбрать балансер' : '🎬 Выбрать балансер';
-
                 var btn = $(
                     '<div class="full-start__button full-start-new__button selector view--online lampac-balanser-button" style="display:flex !important; opacity:1 !important; visibility:visible !important; background: rgba(33, 150, 243, 0.12) !important; border: 1px solid #2196F3 !important;">' +
                     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#2196F3" style="width:24px;height:24px;">' +
                     '<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>' +
                     '</svg>' +
-                    '<span style="color: #2196F3;">' + label + '</span>' +
+                    '<span style="color: #2196F3;">📺 Выбрать балансер</span>' +
                     '</div>'
                 );
 
                 btn.on('hover:enter', function() {
-                    showBalansersMenu(movie);
+                    findBestBalanser(movie);
                 });
 
                 var container = render.find('.full-start__buttons, .full-start-new__buttons, .buttons--container').eq(0);
