@@ -1,7 +1,7 @@
 /**
  * Online Source Manager
- * Версия: 3.2.0
- * Исправлена инициализация
+ * Версия: 3.3.0
+ * Исправлен доступ к компонентам
  */
 
 (function() {
@@ -29,7 +29,7 @@
     }
 
     log('========================================');
-    log('Online Source Manager v3.2.0');
+    log('Online Source Manager v3.3.0');
     log('Приоритет: hdrezka → Дубляж → LostFilm → Кубик → Остальные');
     log('Минимальное качество: 1080p');
     log('========================================');
@@ -60,7 +60,7 @@
     };
 
     // ============================================================
-    // 3. Приоритет озвучек (как в Smart Online)
+    // 3. Приоритет озвучек
     // ============================================================
     function voiceWeight(name) {
         if (!name) return 0;
@@ -481,22 +481,79 @@
     }
 
     // ============================================================
-    // 9. Патч для сортировки озвучек в сериалах
+    // 9. Получение компонентов (НОВЫЙ СПОСОБ)
+    // ============================================================
+    function getAllComponents() {
+        var components = [];
+
+        // Способ 1: через Lampa.Component._components (если есть)
+        if (Lampa.Component._components) {
+            for (var name in Lampa.Component._components) {
+                components.push({ name: name, comp: Lampa.Component._components[name] });
+            }
+        }
+
+        // Способ 2: через Lampa.Component.get для известных имён
+        var knownComponents = ['lampac', 'lampacskaz', 'online', 'lampac_online', 'lampac_smart'];
+        for (var i = 0; i < knownComponents.length; i++) {
+            var name = knownComponents[i];
+            try {
+                var comp = Lampa.Component.get(name);
+                if (comp) {
+                    // Проверяем, не добавлен ли уже
+                    var exists = false;
+                    for (var j = 0; j < components.length; j++) {
+                        if (components[j].name === name) {
+                            exists = true;
+                            break;
+                        }
+                    }
+                    if (!exists) {
+                        components.push({ name: name, comp: comp });
+                    }
+                }
+            } catch(e) {}
+        }
+
+        // Способ 3: через Lampa.Component.getAll (если есть)
+        if (typeof Lampa.Component.getAll === 'function') {
+            try {
+                var all = Lampa.Component.getAll();
+                if (all) {
+                    for (var name in all) {
+                        var exists = false;
+                        for (var j = 0; j < components.length; j++) {
+                            if (components[j].name === name) {
+                                exists = true;
+                                break;
+                            }
+                        }
+                        if (!exists) {
+                            components.push({ name: name, comp: all[name] });
+                        }
+                    }
+                }
+            } catch(e) {}
+        }
+
+        return components;
+    }
+
+    // ============================================================
+    // 10. Патч для сортировки озвучек в сериалах
     // ============================================================
     function patchVoiceSorting() {
         log('patchVoiceSorting: начало');
 
-        // Проверяем наличие Lampa.Component
         if (!window.Lampa || !Lampa.Component) {
             logError('Lampa.Component не найден, пропускаем');
             return;
         }
 
-        // Патчим Lampa.Filter для сортировки озвучек
+        // Патчим Lampa.Filter
         if (Lampa.Filter && Lampa.Filter.prototype) {
             var filterProto = Lampa.Filter.prototype;
 
-            // Патчим set
             if (typeof filterProto.set === 'function' && !filterProto._voiceSetPatched) {
                 filterProto._voiceSetPatched = true;
                 var originalSet = filterProto.set;
@@ -528,7 +585,6 @@
                 };
             }
 
-            // Патчим onSelect
             if (typeof filterProto.onSelect === 'function' && !filterProto._voiceSelectPatched) {
                 filterProto._voiceSelectPatched = true;
                 var originalOnSelect = filterProto.onSelect;
@@ -556,104 +612,99 @@
             }
         }
 
-        // Патчим компоненты
-        if (Lampa.Component && Lampa.Component._components) {
-            var comps = Lampa.Component._components;
-            var targetComponents = ['lampac', 'lampacskaz', 'online', 'lampac_online', 'bwa'];
-            var patchedCount = 0;
+        // Получаем все компоненты
+        var components = getAllComponents();
+        log('patchVoiceSorting: найдено компонентов:', components.length);
 
-            log('patchVoiceSorting: найдено компонентов:', Object.keys(comps).length);
+        var targetComponents = ['lampac', 'lampacskaz', 'online', 'lampac_online', 'bwa', 'lampac_smart'];
+        var patchedCount = 0;
 
-            for (var name in comps) {
-                var isTarget = false;
-                for (var t = 0; t < targetComponents.length; t++) {
-                    if (name.toLowerCase().indexOf(targetComponents[t]) === 0) {
-                        isTarget = true;
-                        break;
-                    }
-                }
-                if (!isTarget) continue;
+        for (var c = 0; c < components.length; c++) {
+            var item = components[c];
+            var name = item.name;
+            var comp = item.comp;
 
-                var comp = comps[name];
-                if (!comp || !comp.prototype) continue;
-                var proto = comp.prototype;
-
-                log('patchVoiceSorting: патчим компонент ' + name);
-
-                // Патчим parse для озвучек
-                if (typeof proto.parse === 'function' && !proto._voiceParsePatched) {
-                    proto._voiceParsePatched = true;
-                    var originalParse = proto.parse;
-                    patchedCount++;
-                    log('patchVoiceSorting: патчим parse для ' + name);
-
-                    proto.parse = function(str) {
-                        var result = originalParse.call(this, str);
-
-                        try {
-                            var $html = $('<div>' + str + '</div>');
-                            var buttons = $html.find('.videos__button');
-
-                            if (buttons.length > 1) {
-                                var voiceButtons = [];
-                                buttons.each(function() {
-                                    var $item = $(this);
-                                    try {
-                                        var data = JSON.parse($item.attr('data-json'));
-                                        data.text = $item.text().trim();
-                                        data.active = $item.hasClass('active');
-                                        voiceButtons.push(data);
-                                    } catch(e) {}
-                                });
-
-                                if (voiceButtons.length > 1) {
-                                    log('parse: найдено ' + voiceButtons.length + ' озвучек в ' + name);
-                                    sortVoices(voiceButtons);
-                                }
-                            }
-                        } catch(e) {}
-
-                        return result;
-                    };
-                }
-
-                // Патчим display для видео в фильмах
-                if (typeof proto.display === 'function' && !proto._voiceDisplayPatched) {
-                    proto._voiceDisplayPatched = true;
-                    var originalDisplay = proto.display;
-                    patchedCount++;
-                    log('patchVoiceSorting: патчим display для ' + name);
-
-                    proto.display = function(videos) {
-                        log('display: вызван для ' + name + ', видео: ' + (videos ? videos.length : 0));
-                        var sorted = sortVideos(videos);
-                        return originalDisplay.call(this, sorted);
-                    };
-                }
-
-                // Патчим startSource для источников
-                if (typeof proto.startSource === 'function' && !comp._osm_patched) {
-                    comp._osm_patched = true;
-                    var originalStart = proto.startSource;
-                    patchedCount++;
-                    log('patchVoiceSorting: патчим startSource для ' + name);
-
-                    proto.startSource = function(json) {
-                        log('startSource: вызван для ' + name + ', источников: ' + (json ? json.length : 0));
-                        var processed = window.processSources(json);
-                        return originalStart.call(this, processed);
-                    };
+            var isTarget = false;
+            for (var t = 0; t < targetComponents.length; t++) {
+                if (name.toLowerCase().indexOf(targetComponents[t]) === 0) {
+                    isTarget = true;
+                    break;
                 }
             }
+            if (!isTarget) continue;
 
-            log('patchVoiceSorting: пропатчено ' + patchedCount + ' компонентов');
-        } else {
-            logError('patchVoiceSorting: Lampa.Component._components не найден');
+            if (!comp || !comp.prototype) continue;
+            var proto = comp.prototype;
+
+            log('patchVoiceSorting: патчим компонент ' + name);
+
+            // Патчим parse
+            if (typeof proto.parse === 'function' && !proto._voiceParsePatched) {
+                proto._voiceParsePatched = true;
+                var originalParse = proto.parse;
+                patchedCount++;
+
+                proto.parse = function(str) {
+                    var result = originalParse.call(this, str);
+                    try {
+                        var $html = $('<div>' + str + '</div>');
+                        var buttons = $html.find('.videos__button');
+                        if (buttons.length > 1) {
+                            var voiceButtons = [];
+                            buttons.each(function() {
+                                var $item = $(this);
+                                try {
+                                    var data = JSON.parse($item.attr('data-json'));
+                                    data.text = $item.text().trim();
+                                    data.active = $item.hasClass('active');
+                                    voiceButtons.push(data);
+                                } catch(e) {}
+                            });
+                            if (voiceButtons.length > 1) {
+                                log('parse: найдено ' + voiceButtons.length + ' озвучек в ' + name);
+                                sortVoices(voiceButtons);
+                            }
+                        }
+                    } catch(e) {}
+                    return result;
+                };
+                log('patchVoiceSorting: патчим parse для ' + name);
+            }
+
+            // Патчим display
+            if (typeof proto.display === 'function' && !proto._voiceDisplayPatched) {
+                proto._voiceDisplayPatched = true;
+                var originalDisplay = proto.display;
+                patchedCount++;
+
+                proto.display = function(videos) {
+                    log('display: вызван для ' + name + ', видео: ' + (videos ? videos.length : 0));
+                    var sorted = sortVideos(videos);
+                    return originalDisplay.call(this, sorted);
+                };
+                log('patchVoiceSorting: патчим display для ' + name);
+            }
+
+            // Патчим startSource
+            if (typeof proto.startSource === 'function' && !comp._osm_patched) {
+                comp._osm_patched = true;
+                var originalStart = proto.startSource;
+                patchedCount++;
+
+                proto.startSource = function(json) {
+                    log('startSource: вызван для ' + name + ', источников: ' + (json ? json.length : 0));
+                    var processed = window.processSources(json);
+                    return originalStart.call(this, processed);
+                };
+                log('patchVoiceSorting: патчим startSource для ' + name);
+            }
         }
+
+        log('patchVoiceSorting: пропатчено ' + patchedCount + ' компонентов');
     }
 
     // ============================================================
-    // 10. Перехват новых компонентов
+    // 11. Перехват новых компонентов
     // ============================================================
     function overrideComponentAdd() {
         if (!window.Lampa || !Lampa.Component) {
@@ -673,7 +724,7 @@
             log('Component.add: добавлен компонент ' + name);
             originalAdd.call(this, name, comp);
 
-            var targetComponents = ['lampac', 'lampacskaz', 'online', 'lampac_online', 'bwa'];
+            var targetComponents = ['lampac', 'lampacskaz', 'online', 'lampac_online', 'bwa', 'lampac_smart'];
             var isTarget = false;
             for (var t = 0; t < targetComponents.length; t++) {
                 if (name.toLowerCase().indexOf(targetComponents[t]) === 0) {
@@ -681,10 +732,7 @@
                     break;
                 }
             }
-            if (!isTarget) {
-                log('Component.add: ' + name + ' не в списке целевых');
-                return;
-            }
+            if (!isTarget) return;
 
             log('Component.add: патчим ' + name);
 
@@ -743,20 +791,18 @@
     }
 
     // ============================================================
-    // 11. ИНИЦИАЛИЗАЦИЯ (правильный порядок)
+    // 12. ИНИЦИАЛИЗАЦИЯ
     // ============================================================
     function init() {
         log('========================================');
         log('ИНИЦИАЛИЗАЦИЯ');
         log('========================================');
 
-        // Проверяем наличие Lampa
         if (!window.Lampa) {
             logError('Lampa не найдена, ждём...');
             return false;
         }
 
-        // Проверяем наличие Lampa.Component
         if (!Lampa.Component) {
             logError('Lampa.Component не найден, ждём...');
             return false;
@@ -791,14 +837,13 @@
         log('Если сортировка не работает:');
         log('1. Откройте фильм/сериал через "Онлайн"');
         log('2. Посмотрите логи выше');
-        log('3. Напишите название компонента, который открывается');
         log('========================================');
 
         return true;
     }
 
     // ============================================================
-    // 12. ЗАПУСК С ОЖИДАНИЕМ
+    // 13. ЗАПУСК
     // ============================================================
     var initAttempts = 0;
     var maxAttempts = 30;
@@ -821,7 +866,6 @@
         setTimeout(tryInit, 1000);
     }
 
-    // Подписываемся на событие ready
     if (window.Lampa && Lampa.Listener) {
         Lampa.Listener.follow('app', function(e) {
             if (e.type === 'ready') {
@@ -831,16 +875,6 @@
         });
     }
 
-    // Начинаем попытки сразу
     tryInit();
-
-    // Дополнительная проверка каждые 5 секунд
-    setInterval(function() {
-        if (window.Lampa && Lampa.Component && !window._osm_initialized) {
-            window._osm_initialized = true;
-            log('Дополнительная инициализация через интервал');
-            init();
-        }
-    }, 5000);
 
 })();
