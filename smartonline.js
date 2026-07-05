@@ -1,7 +1,7 @@
 /**
  * Online Source Manager
- * Версия: 9.6.0
- * Однократная сортировка при открытии балансера и смене источника
+ * Версия: 9.7.0
+ * Перехват смены балансера через Lampa API
  */
 
 (function() {
@@ -12,7 +12,6 @@
 
     var DEBUG = true;
     var sortTimer = null;
-    var lastSource = '';
 
     function log() {
         if (!DEBUG) return;
@@ -26,7 +25,7 @@
     }
 
     log('========================================');
-    log('Online Source Manager v9.6.0');
+    log('Online Source Manager v9.7.0');
     log('Приоритет: hdrezka -> Дубляж -> LostFilm -> Кубик -> Остальные');
     log('========================================');
 
@@ -78,7 +77,7 @@
     }
 
     // ============================================================
-    // 2. Сортировка элементов
+    // 2. Сортировка элементов (без поднятия Rezka)
     // ============================================================
     function sortItems(selector, scoreFn, preserveActive, contextName) {
         var items = $(selector);
@@ -86,11 +85,8 @@
 
         if (count < 2) return false;
 
-        log('[' + contextName + '] Найдено ' + count + ' элементов');
-
         var data = [];
         var activeText = '';
-        var hasHdrezka = false;
 
         items.each(function(index) {
             var $el = $(this);
@@ -99,19 +95,12 @@
             var score = scoreFn ? scoreFn(text) : 0;
 
             if (active) activeText = text;
-            if (isHdrezka(text)) hasHdrezka = true;
 
             data.push({ $el: $el, text: text, active: active, score: score, index: index });
         });
 
+        // Сортировка БЕЗ поднятия Rezka
         data.sort(function(a, b) {
-            if (hasHdrezka) {
-                var aIsHdrezka = isHdrezka(a.text);
-                var bIsHdrezka = isHdrezka(b.text);
-                if (aIsHdrezka && !bIsHdrezka) return -1;
-                if (!aIsHdrezka && bIsHdrezka) return 1;
-            }
-
             if (preserveActive !== false) {
                 if (a.active && !b.active) return -1;
                 if (!a.active && b.active) return 1;
@@ -150,23 +139,17 @@
     // 3. Сортировка сезонов (от последнего к первому)
     // ============================================================
     function sortSeasonsInFilter() {
-        log('--- Сортировка сезонов ---');
-
         var items = $('.selectbox-item');
-        if (items.length < 2) {
-            log('Сезоны: меньше 2 элементов, пропускаем');
-            return false;
-        }
+        if (items.length < 2) return false;
 
         var parentContainer = items.parent().parent();
         var title = parentContainer.find('.selectbox__title').text().trim();
 
         if (title.indexOf('Сезон') === -1 && title.indexOf('Season') === -1) {
-            log('Сезоны: это не фильтр сезонов, пропускаем');
             return false;
         }
 
-        log('Сезоны: сортируем ' + items.length + ' сезонов от большего к меньшему');
+        log('Сезоны: сортируем ' + items.length + ' сезонов');
 
         var data = [];
         var activeText = '';
@@ -214,11 +197,9 @@
     }
 
     // ============================================================
-    // 4. Сортировка переводов в фильтре
+    // 4. Сортировка переводов в сериалах
     // ============================================================
     function sortVoicesInFilter() {
-        log('--- Сортировка переводов ---');
-
         var containers = $('.selectbox');
         var found = false;
 
@@ -229,25 +210,19 @@
             if (title.indexOf('Перевод') !== -1 || 
                 title.indexOf('Voice') !== -1 || 
                 title.indexOf('Озвучка') !== -1) {
-                log('Найден фильтр переводов: "' + title + '"');
+                log('Переводы: сортируем');
                 var result = sortItems('.selectbox-item', voiceWeight, true, 'Переводы');
                 if (result) found = true;
             }
         });
 
-        if (!found) {
-            log('Переводы: фильтр не найден');
-        }
-
         return found;
     }
 
     // ============================================================
-    // 5. Сортировка источников
+    // 5. Сортировка источников (по качеству)
     // ============================================================
     function sortSourcesInFilter() {
-        log('--- Сортировка источников ---');
-
         var containers = $('.selectbox');
         var found = false;
 
@@ -258,15 +233,11 @@
             if (title.indexOf('Источник') !== -1 || 
                 title.indexOf('Source') !== -1 || 
                 title.indexOf('Сортировать') !== -1) {
-                log('Найден фильтр источников: "' + title + '"');
+                log('Источники: сортируем по качеству');
                 var result = sortItems('.selectbox-item', qualityScore, true, 'Источники');
                 if (result) found = true;
             }
         });
-
-        if (!found) {
-            log('Источники: фильтр не найден');
-        }
 
         return found;
     }
@@ -275,13 +246,8 @@
     // 6. Сортировка видео в фильмах
     // ============================================================
     function sortMovies() {
-        log('--- Сортировка фильмов ---');
-
         var videos = $('.online-prestige--full');
-        if (videos.length < 2) {
-            log('Фильмы: меньше 2 видео, пропускаем');
-            return false;
-        }
+        if (videos.length < 2) return false;
 
         var hasVariants = false;
         videos.each(function() {
@@ -291,10 +257,7 @@
             }
         });
 
-        if (!hasVariants) {
-            log('Фильмы: разные переводы не найдены, пропускаем');
-            return false;
-        }
+        if (!hasVariants) return false;
 
         log('Фильмы: сортируем ' + videos.length + ' видео');
 
@@ -326,22 +289,19 @@
     }
 
     // ============================================================
-    // 7. ГЛАВНАЯ ФУНКЦИЯ - однократная сортировка
+    // 7. ГЛАВНАЯ ФУНКЦИЯ СОРТИРОВКИ
     // ============================================================
     function sortAll() {
-        log('========================================');
-        log('СОРТИРОВКА');
-        log('========================================');
+        log('>>> СОРТИРОВКА <<<');
 
         try {
+            // Только сезоны и переводы (без поднятия Rezka)
             sortSeasonsInFilter();
             sortVoicesInFilter();
             sortSourcesInFilter();
             sortMovies();
 
-            log('========================================');
             log('СОРТИРОВКА ЗАВЕРШЕНА');
-            log('========================================');
 
         } catch(e) {
             logError('Ошибка:', e);
@@ -349,99 +309,75 @@
     }
 
     // ============================================================
-    // 8. СЛЕЖЕНИЕ ЗА ОТКРЫТИЕМ БАЛАНСЕРА (однократно)
+    // 8. ПЕРЕХВАТ СМЕНЫ БАЛАНСЕРА ЧЕРЕЗ LAMPA API
     // ============================================================
-    function waitForBalancer() {
-        log('Ожидание открытия балансера...');
+    function hookBalancerChange() {
+        log('Перехват смены балансера...');
 
-        var checkInterval = setInterval(function() {
-            var hasSelectbox = $('.selectbox').length > 0;
-            var hasPrestige = $('.online-prestige--full').length > 1;
+        // 1. Перехватываем метод changeBalanser в компоненте
+        var Lampac = Lampa.Component.get('lampac');
+        if (Lampac && Lampac.prototype) {
+            var proto = Lampac.prototype;
+            if (typeof proto.changeBalanser === 'function' && !proto._osm_hooked) {
+                proto._osm_hooked = true;
+                var originalChange = proto.changeBalanser;
 
-            if (hasSelectbox || hasPrestige) {
-                log('Балансер открыт, сортируем...');
-                clearInterval(checkInterval);
-                sortAll();
-
-                // После первой сортировки начинаем следить за сменой источника
-                watchSourceChange();
+                proto.changeBalanser = function(balanser_name) {
+                    log('Смена балансера на: ' + balanser_name);
+                    var result = originalChange.call(this, balanser_name);
+                    // Сортируем после смены
+                    setTimeout(sortAll, 500);
+                    return result;
+                };
+                log('changeBalanser перехвачен');
             }
-        }, 300);
+        }
 
-        // Останавливаем проверку через 30 секунд, чтобы не висела вечно
-        setTimeout(function() {
-            clearInterval(checkInterval);
-            log('Ожидание балансера завершено по таймауту');
-        }, 30000);
+        // 2. Перехватываем метод startSource (загрузка нового источника)
+        if (Lampac && Lampac.prototype) {
+            var proto = Lampac.prototype;
+            if (typeof proto.startSource === 'function' && !proto._osm_start_hooked) {
+                proto._osm_start_hooked = true;
+                var originalStart = proto.startSource;
+
+                proto.startSource = function(json) {
+                    log('Загрузка нового источника');
+                    var result = originalStart.call(this, json);
+                    // Сортируем после загрузки
+                    setTimeout(sortAll, 800);
+                    return result;
+                };
+                log('startSource перехвачен');
+            }
+        }
+
+        // 3. Перехватываем метод initialize (открытие балансера)
+        if (Lampac && Lampac.prototype) {
+            var proto = Lampac.prototype;
+            if (typeof proto.initialize === 'function' && !proto._osm_init_hooked) {
+                proto._osm_init_hooked = true;
+                var originalInit = proto.initialize;
+
+                proto.initialize = function() {
+                    log('Открытие балансера');
+                    var result = originalInit.call(this);
+                    // Сортируем после открытия
+                    setTimeout(sortAll, 1000);
+                    setTimeout(sortAll, 2000);
+                    return result;
+                };
+                log('initialize перехвачен');
+            }
+        }
     }
 
     // ============================================================
-    // 9. СЛЕЖЕНИЕ ЗА СМЕНОЙ ИСТОЧНИКА
-    // ============================================================
-    function watchSourceChange() {
-        log('Слежение за сменой источника...');
-
-        // Следим за кликами по источникам в меню "Сортировать"
-        $(document).on('hover:enter', '.selectbox-item', function() {
-            var parentContainer = $(this).parent().parent();
-            var title = parentContainer.find('.selectbox__title').text().trim();
-
-            if (title.indexOf('Источник') !== -1 || 
-                title.indexOf('Source') !== -1 || 
-                title.indexOf('Сортировать') !== -1) {
-                log('Смена источника, сортируем...');
-                clearTimeout(sortTimer);
-                sortTimer = setTimeout(sortAll, 500);
-            }
-        });
-
-        // Следим за изменением DOM (перезагрузка контента при смене источника)
-        var observer = new MutationObserver(function(mutations) {
-            var shouldSort = false;
-
-            for (var i = 0; i < mutations.length; i++) {
-                var mutation = mutations[i];
-                if (mutation.type === 'childList') {
-                    var nodes = mutation.addedNodes;
-                    for (var j = 0; j < nodes.length; j++) {
-                        var node = nodes[j];
-                        if (node.nodeType === 1) {
-                            var $node = $(node);
-                            if ($node.is('.online-prestige--full') || 
-                                $node.find('.online-prestige--full').length ||
-                                $node.is('.selectbox-item') ||
-                                $node.find('.selectbox-item').length) {
-                                shouldSort = true;
-                                break;
-                            }
-                        }
-                    }
-                }
-                if (shouldSort) break;
-            }
-
-            if (shouldSort) {
-                log('Обновление контента, сортируем...');
-                clearTimeout(sortTimer);
-                sortTimer = setTimeout(sortAll, 500);
-            }
-        });
-
-        observer.observe(document.body, {
-            childList: true,
-            subtree: true
-        });
-
-        log('Слежение за сменой источника запущено');
-    }
-
-    // ============================================================
-    // 10. Инициализация
+    // 9. ЗАПУСК
     // ============================================================
     function init() {
         log('Инициализация...');
 
-        if (!window.Lampa) {
+        if (!window.Lampa || !Lampa.Component) {
             log('Lampa не готова, ждём...');
             setTimeout(init, 500);
             return;
@@ -449,8 +385,12 @@
 
         log('Lampa готова');
 
-        // Ждём открытия балансера
-        waitForBalancer();
+        // Перехватываем методы
+        hookBalancerChange();
+
+        // Первичная сортировка
+        setTimeout(sortAll, 1000);
+        setTimeout(sortAll, 3000);
 
         log('========================================');
         log('ИНИЦИАЛИЗАЦИЯ ЗАВЕРШЕНА');
