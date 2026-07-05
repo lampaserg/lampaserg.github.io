@@ -1,7 +1,7 @@
 /**
  * Online Source Manager - Data Hook
- * Версия: 11.1.0
- * Автоматический перехват данных при открытии балансера или смене источника
+ * Версия: 11.2.0
+ * Надёжный перехват сезонов и переводов через DOM и фильтры
  */
 
 (function() {
@@ -25,69 +25,37 @@
     }
 
     // ============================================================
-    // 1. Глобальное хранилище данных (доступно напрямую)
+    // 1. Глобальное хранилище данных
     // ============================================================
     window._osm_data = {
-        // Данные
         seasons: [],
         voices: [],
         videos: [],
         sources: [],
-        
-        // Текущие значения
         currentSeason: 0,
         currentVoice: '',
         currentSource: '',
         movieTitle: '',
         isSerial: false,
-        
-        // Служебное
-        lastUpdate: 0,
-        isReady: false
+        isReady: false,
+        lastUpdate: 0
     };
 
     // ============================================================
-    // 2. Функции для работы с данными
+    // 2. Обновление данных
     // ============================================================
     function updateOsmData(data) {
         var updated = false;
         
-        if (data.seasons) {
-            window._osm_data.seasons = data.seasons;
-            updated = true;
-        }
-        if (data.voices) {
-            window._osm_data.voices = data.voices;
-            updated = true;
-        }
-        if (data.videos) {
-            window._osm_data.videos = data.videos;
-            updated = true;
-        }
-        if (data.sources) {
-            window._osm_data.sources = data.sources;
-            updated = true;
-        }
-        if (data.currentSeason !== undefined) {
-            window._osm_data.currentSeason = data.currentSeason;
-            updated = true;
-        }
-        if (data.currentVoice) {
-            window._osm_data.currentVoice = data.currentVoice;
-            updated = true;
-        }
-        if (data.currentSource) {
-            window._osm_data.currentSource = data.currentSource;
-            updated = true;
-        }
-        if (data.movieTitle) {
-            window._osm_data.movieTitle = data.movieTitle;
-            updated = true;
-        }
-        if (data.isSerial !== undefined) {
-            window._osm_data.isSerial = data.isSerial;
-            updated = true;
-        }
+        if (data.seasons) { window._osm_data.seasons = data.seasons; updated = true; }
+        if (data.voices) { window._osm_data.voices = data.voices; updated = true; }
+        if (data.videos) { window._osm_data.videos = data.videos; updated = true; }
+        if (data.sources) { window._osm_data.sources = data.sources; updated = true; }
+        if (data.currentSeason !== undefined) { window._osm_data.currentSeason = data.currentSeason; updated = true; }
+        if (data.currentVoice) { window._osm_data.currentVoice = data.currentVoice; updated = true; }
+        if (data.currentSource) { window._osm_data.currentSource = data.currentSource; updated = true; }
+        if (data.movieTitle) { window._osm_data.movieTitle = data.movieTitle; updated = true; }
+        if (data.isSerial !== undefined) { window._osm_data.isSerial = data.isSerial; updated = true; }
         
         if (updated) {
             window._osm_data.lastUpdate = Date.now();
@@ -96,8 +64,8 @@
             log('✅ Данные обновлены:');
             log('  📺 ' + window._osm_data.movieTitle + (window._osm_data.isSerial ? ' (сериал)' : ' (фильм)'));
             log('  📡 Источник: ' + window._osm_data.currentSource);
-            log('  📅 Сезоны: ' + window._osm_data.seasons.length + ' шт.');
-            log('  🎤 Переводы: ' + window._osm_data.voices.length + ' шт.');
+            log('  📅 Сезоны: ' + window._osm_data.seasons.length + ' шт. ' + JSON.stringify(window._osm_data.seasons.map(function(s) { return s.num; })));
+            log('  🎤 Переводы: ' + window._osm_data.voices.length + ' шт. ' + JSON.stringify(window._osm_data.voices.map(function(v) { return v.text + (v.active ? ' [A]' : ''); })));
             log('  🎬 Видео: ' + window._osm_data.videos.length + ' шт.');
             if (window._osm_data.currentSeason) {
                 log('  📌 Текущий сезон: ' + window._osm_data.currentSeason);
@@ -125,6 +93,17 @@
                 return !!(active.movie.name || active.movie.number_of_seasons);
             }
         } catch(e) {}
+        // Проверяем по DOM
+        if ($('.selectbox').length > 0) {
+            var hasSeason = false;
+            $('.selectbox').each(function() {
+                var title = $(this).find('.selectbox__title').text().trim();
+                if (title.indexOf('Сезон') !== -1 || title.indexOf('Season') !== -1) {
+                    hasSeason = true;
+                }
+            });
+            if (hasSeason) return true;
+        }
         return false;
     }
 
@@ -136,7 +115,265 @@
     }
 
     // ============================================================
-    // 3. Перехват parse (основной)
+    // 3. Сбор данных из DOM (основной метод)
+    // ============================================================
+    function captureDataFromDOM() {
+        log('🔍 Сбор данных из DOM...');
+
+        var data = {
+            seasons: [],
+            voices: [],
+            videos: [],
+            currentSeason: 0,
+            currentVoice: '',
+            movieTitle: getCurrentMovieTitle(),
+            isSerial: isSerial(),
+            currentSource: getCurrentSource()
+        };
+
+        // ============================================================
+        // 3.1 Сбор сезонов
+        // ============================================================
+        var seasonFound = false;
+        var seasonSelect = $('.selectbox');
+        seasonSelect.each(function() {
+            var $container = $(this);
+            var title = $container.find('.selectbox__title').text().trim();
+            
+            if (title.indexOf('Сезон') !== -1 || title.indexOf('Season') !== -1) {
+                log('  📅 Найден фильтр сезонов: "' + title + '"');
+                var items = $container.find('.selectbox-item');
+                items.each(function() {
+                    var $item = $(this);
+                    var text = $item.text().trim();
+                    var num = parseInt(text.match(/(\d+)/) || [0, 0], 10);
+                    var active = $item.hasClass('focus') || $item.hasClass('active') || $item.hasClass('selected');
+                    if (num > 0) {
+                        data.seasons.push({
+                            num: num,
+                            text: text,
+                            active: active
+                        });
+                        if (active) data.currentSeason = num;
+                        seasonFound = true;
+                    }
+                });
+            }
+        });
+
+        // Если не нашли через selectbox, ищем через videos__item
+        if (!seasonFound) {
+            var seasonItems = $('.videos__item[method="link"]');
+            seasonItems.each(function() {
+                var $item = $(this);
+                try {
+                    var text = $item.text().trim();
+                    var seasonNum = parseInt($item.attr('s')) || 0;
+                    if (seasonNum > 0) {
+                        data.seasons.push({
+                            num: seasonNum,
+                            text: text,
+                            active: false
+                        });
+                        seasonFound = true;
+                    }
+                } catch(e) {}
+            });
+        }
+
+        if (seasonFound) {
+            // Сортируем сезоны по номеру
+            data.seasons.sort(function(a, b) { return a.num - b.num; });
+            log('  📅 Сезоны: ' + data.seasons.map(function(s) { return s.num + (s.active ? ' [A]' : ''); }).join(', '));
+        }
+
+        // ============================================================
+        // 3.2 Сбор переводов
+        // ============================================================
+        var voiceFound = false;
+        var voiceSelect = $('.selectbox');
+        voiceSelect.each(function() {
+            var $container = $(this);
+            var title = $container.find('.selectbox__title').text().trim();
+            
+            if (title.indexOf('Перевод') !== -1 || 
+                title.indexOf('Voice') !== -1 || 
+                title.indexOf('Озвучка') !== -1) {
+                log('  🎤 Найден фильтр переводов: "' + title + '"');
+                var items = $container.find('.selectbox-item');
+                items.each(function() {
+                    var $item = $(this);
+                    var text = $item.text().trim();
+                    var active = $item.hasClass('focus') || $item.hasClass('active') || $item.hasClass('selected');
+                    data.voices.push({
+                        text: text,
+                        active: active
+                    });
+                    if (active) data.currentVoice = text;
+                    voiceFound = true;
+                });
+            }
+        });
+
+        // Если не нашли через selectbox, ищем через videos__button
+        if (!voiceFound) {
+            var voiceButtons = $('.videos__button');
+            voiceButtons.each(function() {
+                var $item = $(this);
+                try {
+                    var text = $item.text().trim();
+                    var active = $item.hasClass('active');
+                    if (text) {
+                        data.voices.push({
+                            text: text,
+                            active: active
+                        });
+                        if (active) data.currentVoice = text;
+                        voiceFound = true;
+                    }
+                } catch(e) {}
+            });
+        }
+
+        if (voiceFound) {
+            log('  🎤 Переводы: ' + data.voices.map(function(v) { return v.text + (v.active ? ' [A]' : ''); }).join(', '));
+        }
+
+        // ============================================================
+        // 3.3 Сбор видео (для фильмов)
+        // ============================================================
+        var videoItems = $('.online-prestige--full');
+        if (videoItems.length > 0) {
+            videoItems.each(function() {
+                var $item = $(this);
+                var text = $item.find('.online-prestige__title').text().trim();
+                if (text) {
+                    data.videos.push({
+                        text: text,
+                        season: 0,
+                        episode: 0,
+                        voice_name: ''
+                    });
+                }
+            });
+            log('  🎬 Видео: ' + data.videos.length + ' шт.');
+        }
+
+        // ============================================================
+        // 3.4 Определяем текущий сезон (если не найден)
+        // ============================================================
+        if (data.seasons.length > 0 && !data.currentSeason) {
+            // Пробуем найти активный
+            var activeSeason = data.seasons.filter(function(s) { return s.active; });
+            if (activeSeason.length > 0) {
+                data.currentSeason = activeSeason[0].num;
+            } else {
+                data.currentSeason = data.seasons[data.seasons.length - 1]?.num || 0;
+            }
+        }
+
+        // ============================================================
+        // 3.5 Определяем текущий перевод (если не найден)
+        // ============================================================
+        if (data.voices.length > 0 && !data.currentVoice) {
+            var activeVoice = data.voices.filter(function(v) { return v.active; });
+            if (activeVoice.length > 0) {
+                data.currentVoice = activeVoice[0].text;
+            } else if (data.voices.length > 0) {
+                data.currentVoice = data.voices[0].text;
+            }
+        }
+
+        // ============================================================
+        // 3.6 Проверяем, что это сериал (если есть сезоны)
+        // ============================================================
+        if (data.seasons.length > 0) {
+            data.isSerial = true;
+        }
+
+        // Обновляем глобальные данные
+        if (data.seasons.length > 0 || data.voices.length > 0 || data.videos.length > 0) {
+            updateOsmData(data);
+            log('✅ Данные собраны из DOM');
+            return true;
+        } else {
+            log('⏳ Данные в DOM не найдены');
+            return false;
+        }
+    }
+
+    // ============================================================
+    // 4. Перехват filter.set (создание фильтров)
+    // ============================================================
+    function hookFilterSet() {
+        if (!Lampa.Filter || !Lampa.Filter.prototype) {
+            log('Lampa.Filter не найден');
+            return false;
+        }
+
+        var proto = Lampa.Filter.prototype;
+        if (proto._osm_filter_set_hooked) {
+            log('filter.set уже перехвачен');
+            return true;
+        }
+
+        proto._osm_filter_set_hooked = true;
+        var originalSet = proto.set;
+
+        proto.set = function(type, items) {
+            var result = originalSet.call(this, type, items);
+
+            // Если это фильтр, собираем данные
+            if (type === 'filter' && items && items.length > 0) {
+                log('📋 Фильтр создан, собираем данные...');
+                setTimeout(function() {
+                    captureDataFromDOM();
+                }, 100);
+            }
+
+            return result;
+        };
+
+        log('✅ filter.set перехвачен');
+        return true;
+    }
+
+    // ============================================================
+    // 5. Перехват filter.onSelect (выбор в фильтре)
+    // ============================================================
+    function hookFilterOnSelect() {
+        if (!Lampa.Filter || !Lampa.Filter.prototype) {
+            return false;
+        }
+
+        var proto = Lampa.Filter.prototype;
+        if (proto._osm_filter_select_hooked) {
+            return true;
+        }
+
+        proto._osm_filter_select_hooked = true;
+        var originalOnSelect = proto.onSelect;
+
+        proto.onSelect = function(type, a, b) {
+            var result = originalOnSelect.call(this, type, a, b);
+
+            // Если выбрали что-то в фильтре, обновляем данные
+            if (type === 'filter' && a) {
+                log('🔄 Выбор в фильтре: ' + (a.stype || 'unknown'));
+                setTimeout(function() {
+                    captureDataFromDOM();
+                }, 200);
+            }
+
+            return result;
+        };
+
+        log('✅ filter.onSelect перехвачен');
+        return true;
+    }
+
+    // ============================================================
+    // 6. Перехват parse
     // ============================================================
     function hookParse() {
         var Lampac = Lampa.Component.get('lampac');
@@ -161,112 +398,18 @@
 
         proto.parse = function(str) {
             var result = originalParse.call(this, str);
+            
+            log('📥 Получен ответ от сервера, собираем данные...');
+            setTimeout(function() {
+                captureDataFromDOM();
+            }, 200);
+            setTimeout(function() {
+                captureDataFromDOM();
+            }, 500);
+            setTimeout(function() {
+                captureDataFromDOM();
+            }, 1000);
 
-            if (isProcessing) return result;
-            isProcessing = true;
-
-            try {
-                var $html = $('<div>' + str + '</div>');
-                var data = {
-                    seasons: [],
-                    voices: [],
-                    videos: [],
-                    currentSeason: 0,
-                    currentVoice: '',
-                    movieTitle: getCurrentMovieTitle(),
-                    isSerial: isSerial(),
-                    currentSource: getCurrentSource()
-                };
-
-                // === Перехват сезонов ===
-                var seasonItems = $html.find('.videos__item[method="link"]');
-                if (seasonItems.length > 0) {
-                    seasonItems.each(function() {
-                        var $item = $(this);
-                        try {
-                            var itemData = JSON.parse($item.attr('data-json'));
-                            var text = $item.text().trim();
-                            var seasonNum = parseInt($item.attr('s')) || 0;
-                            data.seasons.push({
-                                num: seasonNum,
-                                text: text,
-                                url: itemData.url
-                            });
-                        } catch(e) {}
-                    });
-                    if (data.seasons.length > 0) {
-                        log('  📅 Перехвачены сезоны: ' + data.seasons.map(function(s) { return s.num; }).join(', '));
-                    }
-                }
-
-                // === Перехват переводов ===
-                var voiceButtons = $html.find('.videos__button');
-                if (voiceButtons.length > 0) {
-                    voiceButtons.each(function() {
-                        var $item = $(this);
-                        try {
-                            var itemData = JSON.parse($item.attr('data-json'));
-                            var text = $item.text().trim();
-                            var isActive = $item.hasClass('active');
-                            data.voices.push({
-                                text: text,
-                                url: itemData.url,
-                                active: isActive
-                            });
-                            if (isActive) {
-                                data.currentVoice = text;
-                            }
-                        } catch(e) {}
-                    });
-                    if (data.voices.length > 0) {
-                        log('  🎤 Перехвачены переводы: ' + data.voices.map(function(v) { return v.text + (v.active ? ' [A]' : ''); }).join(', '));
-                    }
-                }
-
-                // === Перехват видео ===
-                var videoItems = $html.find('.videos__item[method="play"]');
-                if (videoItems.length > 0) {
-                    videoItems.each(function() {
-                        var $item = $(this);
-                        try {
-                            var itemData = JSON.parse($item.attr('data-json'));
-                            var text = $item.text().trim();
-                            var season = parseInt($item.attr('s')) || 0;
-                            var episode = parseInt($item.attr('e')) || 0;
-                            data.videos.push({
-                                text: text,
-                                url: itemData.url,
-                                season: season,
-                                episode: episode,
-                                voice_name: itemData.voice_name || ''
-                            });
-                        } catch(e) {}
-                    });
-                    log('  🎬 Перехвачено видео: ' + data.videos.length + ' шт.');
-                }
-
-                // === Перехват текущего сезона ===
-                var choice = this.getChoice ? this.getChoice() : {};
-                if (choice && typeof choice.season !== 'undefined') {
-                    var seasonIdx = choice.season || 0;
-                    if (data.seasons[seasonIdx]) {
-                        data.currentSeason = data.seasons[seasonIdx].num;
-                        log('  📌 Текущий сезон: ' + data.currentSeason);
-                    }
-                }
-
-                // === Перехват источников ===
-                if (window._osm_sources) {
-                    data.sources = window._osm_sources;
-                }
-
-                updateOsmData(data);
-
-            } catch(e) {
-                logError('Ошибка перехвата:', e);
-            }
-
-            isProcessing = false;
             return result;
         };
 
@@ -275,7 +418,7 @@
     }
 
     // ============================================================
-    // 4. Перехват changeBalanser (смена источника)
+    // 7. Перехват смены балансера
     // ============================================================
     function hookChangeBalanser() {
         var Lampac = Lampa.Component.get('lampac');
@@ -285,7 +428,6 @@
         if (typeof proto.changeBalanser !== 'function') return false;
 
         if (proto._osm_change_hooked) {
-            log('changeBalanser уже перехвачен');
             return true;
         }
 
@@ -300,14 +442,18 @@
             window._osm_data.videos = [];
             window._osm_data.currentSource = balanser_name;
             window._osm_data.isReady = false;
-            window._osm_data.lastUpdate = Date.now();
             
             var result = originalChange.call(this, balanser_name);
             
             setTimeout(function() {
-                log('⏳ Ожидание загрузки данных...');
-                forceDataCapture();
+                captureDataFromDOM();
             }, 500);
+            setTimeout(function() {
+                captureDataFromDOM();
+            }, 1000);
+            setTimeout(function() {
+                captureDataFromDOM();
+            }, 2000);
             
             return result;
         };
@@ -317,47 +463,7 @@
     }
 
     // ============================================================
-    // 5. Перехват startSource (загрузка источника)
-    // ============================================================
-    function hookStartSource() {
-        var Lampac = Lampa.Component.get('lampac');
-        if (!Lampac) return false;
-
-        var proto = Lampac.prototype;
-        if (typeof proto.startSource !== 'function') return false;
-
-        if (proto._osm_start_hooked) {
-            return true;
-        }
-
-        proto._osm_start_hooked = true;
-        var originalStart = proto.startSource;
-
-        proto.startSource = function(json) {
-            log('📥 Загрузка источника...');
-            
-            if (json && json.length > 0) {
-                window._osm_sources = json.map(function(j) {
-                    return {
-                        name: j.name,
-                        url: j.url,
-                        show: j.show
-                    };
-                });
-                window._osm_data.sources = window._osm_sources;
-                log('  📡 Сохранены источники: ' + window._osm_sources.length + ' шт.');
-            }
-            
-            var result = originalStart.call(this, json);
-            return result;
-        };
-
-        log('✅ startSource перехвачен');
-        return true;
-    }
-
-    // ============================================================
-    // 6. Перехват initialize (открытие балансера)
+    // 8. Перехват initialize
     // ============================================================
     function hookInitialize() {
         var Lampac = Lampa.Component.get('lampac');
@@ -374,7 +480,7 @@
         var originalInit = proto.initialize;
 
         proto.initialize = function() {
-            log('🚀 Открытие балансера...');
+            log('🚀 Открытие балансера');
             
             window._osm_data.seasons = [];
             window._osm_data.voices = [];
@@ -384,18 +490,17 @@
             window._osm_data.currentSource = getCurrentSource();
             window._osm_data.isReady = false;
             
-            log('  📺 ' + window._osm_data.movieTitle + (window._osm_data.isSerial ? ' (сериал)' : ' (фильм)'));
-            
             var result = originalInit.call(this);
             
             setTimeout(function() {
-                log('⏳ Ожидание загрузки данных...');
-                forceDataCapture();
+                captureDataFromDOM();
             }, 1000);
-            
             setTimeout(function() {
-                forceDataCapture();
+                captureDataFromDOM();
             }, 2000);
+            setTimeout(function() {
+                captureDataFromDOM();
+            }, 3000);
             
             return result;
         };
@@ -405,143 +510,61 @@
     }
 
     // ============================================================
-    // 7. Принудительный перехват данных
+    // 9. Мониторинг DOM
     // ============================================================
-    function forceDataCapture() {
-        if (isProcessing) return;
-        isProcessing = true;
+    function startDOMWatcher() {
+        log('Запуск мониторинга DOM...');
 
-        try {
-            var data = {
-                seasons: [],
-                voices: [],
-                videos: [],
-                currentSeason: 0,
-                currentVoice: '',
-                movieTitle: getCurrentMovieTitle(),
-                isSerial: isSerial(),
-                currentSource: getCurrentSource()
-            };
-
-            // === Ищем сезоны в DOM ===
-            var seasonSelect = $('.selectbox');
-            seasonSelect.each(function() {
-                var $container = $(this);
-                var title = $container.find('.selectbox__title').text().trim();
-                if (title.indexOf('Сезон') !== -1 || title.indexOf('Season') !== -1) {
-                    var items = $container.find('.selectbox-item');
-                    items.each(function() {
-                        var $item = $(this);
-                        var text = $item.text().trim();
-                        var num = parseInt(text.match(/(\d+)/) || [0, 0], 10);
-                        var active = $item.hasClass('focus') || $item.hasClass('active');
-                        if (num > 0) {
-                            data.seasons.push({
-                                num: num,
-                                text: text,
-                                url: '',
-                                active: active
-                            });
+        var observer = new MutationObserver(function(mutations) {
+            var shouldCapture = false;
+            
+            for (var i = 0; i < mutations.length; i++) {
+                var mutation = mutations[i];
+                if (mutation.type === 'childList') {
+                    var nodes = mutation.addedNodes;
+                    for (var j = 0; j < nodes.length; j++) {
+                        var node = nodes[j];
+                        if (node.nodeType === 1) {
+                            var $node = $(node);
+                            if ($node.is('.selectbox') || 
+                                $node.is('.selectbox-item') ||
+                                $node.is('.online-prestige--full') ||
+                                $node.find('.selectbox').length ||
+                                $node.find('.online-prestige--full').length ||
+                                $node.is('.videos__button') ||
+                                $node.find('.videos__button').length) {
+                                shouldCapture = true;
+                                break;
+                            }
                         }
-                    });
+                    }
                 }
-            });
-
-            // === Ищем переводы в DOM ===
-            var voiceSelect = $('.selectbox');
-            voiceSelect.each(function() {
-                var $container = $(this);
-                var title = $container.find('.selectbox__title').text().trim();
-                if (title.indexOf('Перевод') !== -1 || 
-                    title.indexOf('Voice') !== -1 || 
-                    title.indexOf('Озвучка') !== -1) {
-                    var items = $container.find('.selectbox-item');
-                    items.each(function() {
-                        var $item = $(this);
-                        var text = $item.text().trim();
-                        var active = $item.hasClass('focus') || $item.hasClass('active');
-                        data.voices.push({
-                            text: text,
-                            url: '',
-                            active: active
-                        });
-                        if (active) data.currentVoice = text;
-                    });
-                }
-            });
-
-            // === Ищем видео в DOM ===
-            var videoItems = $('.online-prestige--full');
-            videoItems.each(function() {
-                var $item = $(this);
-                var text = $item.find('.online-prestige__title').text().trim();
-                if (text) {
-                    data.videos.push({
-                        text: text,
-                        url: '',
-                        season: 0,
-                        episode: 0,
-                        voice_name: ''
-                    });
-                }
-            });
-
-            // === Определяем текущий сезон ===
-            if (data.seasons.length > 0) {
-                var activeSeason = data.seasons.filter(function(s) { return s.active; });
-                if (activeSeason.length > 0) {
-                    data.currentSeason = activeSeason[0].num;
-                } else {
-                    data.currentSeason = data.seasons[data.seasons.length - 1]?.num || 0;
-                }
+                if (shouldCapture) break;
             }
 
-            if (data.seasons.length > 0 || data.voices.length > 0 || data.videos.length > 0) {
-                updateOsmData(data);
-                log('✅ Принудительный перехват выполнен');
-            } else {
-                log('⏳ Данные ещё не загружены');
+            if (shouldCapture) {
+                log('🔄 Обнаружены изменения в DOM, собираем данные...');
+                clearTimeout(window._captureTimer);
+                window._captureTimer = setTimeout(function() {
+                    captureDataFromDOM();
+                }, 300);
             }
+        });
 
-        } catch(e) {
-            logError('Ошибка принудительного перехвата:', e);
-        }
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
 
-        isProcessing = false;
+        log('✅ Мониторинг DOM запущен');
     }
 
     // ============================================================
-    // 8. Мониторинг смены источника через Storage
-    // ============================================================
-    function watchSourceChange() {
-        log('Запуск мониторинга смены источника...');
-        
-        var lastSource = Lampa.Storage.get('active_balanser', '');
-        setInterval(function() {
-            var currentSource = Lampa.Storage.get('active_balanser', '');
-            if (currentSource !== lastSource) {
-                log('🔄 Обнаружена смена источника: ' + lastSource + ' -> ' + currentSource);
-                lastSource = currentSource;
-                
-                window._osm_data.seasons = [];
-                window._osm_data.voices = [];
-                window._osm_data.videos = [];
-                window._osm_data.currentSource = currentSource;
-                window._osm_data.isReady = false;
-                
-                setTimeout(function() {
-                    forceDataCapture();
-                }, 500);
-            }
-        }, 1000);
-    }
-
-    // ============================================================
-    // 9. ЗАПУСК
+    // 10. ЗАПУСК
     // ============================================================
     function init() {
         log('========================================');
-        log('Инициализация Data Hook...');
+        log('Инициализация Data Hook v11.2.0...');
         log('========================================');
 
         if (!window.Lampa || !Lampa.Component) {
@@ -555,18 +578,22 @@
         var hooked = 0;
         if (hookParse()) hooked++;
         if (hookChangeBalanser()) hooked++;
-        if (hookStartSource()) hooked++;
         if (hookInitialize()) hooked++;
+        if (hookFilterSet()) hooked++;
+        if (hookFilterOnSelect()) hooked++;
 
-        watchSourceChange();
+        startDOMWatcher();
 
-        setInterval(function() {
-            if (!window._osm_data.isReady && 
-                (window._osm_data.seasons.length === 0 && 
-                 window._osm_data.voices.length === 0 && 
-                 window._osm_data.videos.length === 0)) {
-                forceDataCapture();
-            }
+        // Первичный сбор данных
+        setTimeout(function() {
+            log('⏳ Первичный сбор данных...');
+            captureDataFromDOM();
+        }, 1000);
+        setTimeout(function() {
+            captureDataFromDOM();
+        }, 3000);
+        setTimeout(function() {
+            captureDataFromDOM();
         }, 5000);
 
         log('========================================');
@@ -579,10 +606,11 @@
         log('  - videos: ' + window._osm_data.videos.length + ' шт.');
         log('  - currentSeason: ' + window._osm_data.currentSeason);
         log('  - currentVoice: ' + window._osm_data.currentVoice);
+        log('  - isReady: ' + window._osm_data.isReady);
         log('========================================');
     }
 
-    window.forceDataCapture = forceDataCapture;
+    window.captureDataFromDOM = captureDataFromDOM;
 
     if (window.Lampa && Lampa.Listener) {
         Lampa.Listener.follow('app', function(e) {
