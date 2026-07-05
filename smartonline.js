@@ -680,7 +680,7 @@
 
         function buildButton(movie) {
             var isSerial = !!(movie && movie.name);
-            var label = isSerial ? '📺 Лучший источник' : '🎬 Лучшая озвучка';
+            var label = isSerial ? '📺 Онлайн' : '🎬 Smart Online';
 
             var btn = $(
                 '<div class="full-start__button full-start-new__button selector view--online lampac-smart-button" style="display:flex !important; opacity:1 !important; visibility:visible !important;" data-subtitle="' + Lampa.Lang.translate('lampac_smart_descr') + '">' +
@@ -695,7 +695,7 @@
                 var isSerial = !!(movie && movie.name);
 
                 if (isSerial) {
-                    console.log('📺 SmartOnline: Сериал, открываем онлайн');
+                    // Для сериалов - просто открываем онлайн
                     Lampa.Activity.push({
                         url: '',
                         title: Lampa.Lang.translate('title_online'),
@@ -707,7 +707,7 @@
                         page: 1
                     });
                 } else {
-                    console.log('🎬 SmartOnline: Фильм, открываем с сортировкой озвучек');
+                    // Для фильмов - открываем Smart Online с сортировкой
                     Lampa.Activity.push(smartActivity(movie));
                 }
             });
@@ -804,7 +804,7 @@
     }
 
     // ============================================================
-    // COMPONENT - ОСНОВНАЯ ЛОГИКА
+    // COMPONENT - ОСНОВНАЯ ЛОГИКА (БЕЗ ЗАПРОСОВ К ab2024.ru)
     // ============================================================
 
     function installComponent() {
@@ -1005,6 +1005,11 @@
                 try {
                     var items = self.parseJsonDate(str, '.videos__item');
                     var buttons = self.parseJsonDate(str, '.videos__button');
+
+                    // Для фильмов - сортируем озвучки
+                    if (!isSerial && buttons && buttons.length > 0) {
+                        buttons = sortVoicesByPriority(buttons);
+                    }
 
                     return {
                         items: items,
