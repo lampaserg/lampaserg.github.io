@@ -1,7 +1,7 @@
 /**
  * Online Source Manager
- * Версия: 10.2.0
- * Однократная сортировка при открытии балансера или смене источника
+ * Версия: 10.3.0
+ * Сортировка при открытии фильтра и смене источника
  */
 
 (function() {
@@ -12,10 +12,6 @@
 
     var DEBUG = true;
     var sortTimer = null;
-    var isSorting = false;
-    var currentTitle = '';
-    var initialSortDone = false;
-    var lastBalanser = '';
 
     function log() {
         if (!DEBUG) return;
@@ -29,9 +25,7 @@
     }
 
     log('========================================');
-    log('Online Source Manager v10.2.0');
-    log('Приоритет: hdrezka -> Дубляж -> LostFilm -> Кубик -> Остальные');
-    log('Однократная сортировка при открытии или смене источника');
+    log('Online Source Manager v10.3.0');
     log('========================================');
 
     // ============================================================
@@ -76,33 +70,6 @@
         return match ? parseInt(match[1], 10) : 0;
     }
 
-    function getCurrentMovieTitle() {
-        try {
-            var active = Lampa.Activity.active();
-            if (active && active.movie) {
-                return active.movie.title || active.movie.name || 'Неизвестно';
-            }
-        } catch(e) {}
-        return 'Неизвестно';
-    }
-
-    function isSerial() {
-        try {
-            var active = Lampa.Activity.active();
-            if (active && active.movie) {
-                return !!(active.movie.name || active.movie.number_of_seasons);
-            }
-        } catch(e) {}
-        return false;
-    }
-
-    function getCurrentBalanser() {
-        try {
-            return Lampa.Storage.get('active_balanser', '') || Lampa.Storage.get('online_balanser', '');
-        } catch(e) {}
-        return '';
-    }
-
     // ============================================================
     // 2. Сортировка элементов
     // ============================================================
@@ -111,6 +78,8 @@
         var count = items.length;
 
         if (count < 2) return false;
+
+        log('[' + contextName + '] Найдено ' + count + ' элементов');
 
         var data = [];
         var activeText = '';
@@ -126,8 +95,7 @@
             data.push({ $el: $el, text: text, active: active, score: score, index: index });
         });
 
-        var beforeTexts = data.map(function(d) { return d.text + (d.active ? ' (Активный)' : ''); });
-        log('[' + contextName + '] До сортировки: ' + JSON.stringify(beforeTexts));
+        log('[' + contextName + '] До: ' + JSON.stringify(data.map(function(d) { return d.text + (d.active ? ' [A]' : ''); })));
 
         data.sort(function(a, b) {
             if (preserveActive !== false) {
@@ -139,8 +107,7 @@
             return a.text.localeCompare(b.text);
         });
 
-        var afterTexts = data.map(function(d) { return d.text + (d.active ? ' (Активный)' : ''); });
-        log('[' + contextName + '] После сортировки: ' + JSON.stringify(afterTexts));
+        log('[' + contextName + '] После: ' + JSON.stringify(data.map(function(d) { return d.text + (d.active ? ' [A]' : ''); })));
 
         var parent = items.first().parent();
         if (parent && parent.length) {
@@ -155,13 +122,12 @@
                 for (var i = 0; i < newItems.length; i++) {
                     if (getElementText($(newItems[i])) === activeText) {
                         $(newItems[i]).addClass('focus');
-                        log('[' + contextName + '] Восстановлен активный элемент: "' + activeText + '"');
                         break;
                     }
                 }
             }
 
-            log('[' + contextName + '] Отсортировано ' + data.length + ' элементов');
+            log('[' + contextName + '] Отсортировано');
             return true;
         }
 
@@ -171,7 +137,7 @@
     // ============================================================
     // 3. Сортировка сезонов
     // ============================================================
-    function sortSeasonsInFilter() {
+    function sortSeasons() {
         var items = $('.selectbox-item');
         if (items.length < 2) return false;
 
@@ -182,8 +148,7 @@
             return false;
         }
 
-        var movieTitle = getCurrentMovieTitle();
-        log('--- Сортировка сезонов для: ' + movieTitle + ' ---');
+        log('--- Сортировка сезонов ---');
 
         var data = [];
         var activeText = '';
@@ -199,8 +164,7 @@
             data.push({ $el: $el, text: text, active: active, num: num });
         });
 
-        var beforeSeasons = data.map(function(d) { return d.num + ' (' + d.text + ')' + (d.active ? ' Активный' : ''); });
-        log('Сезоны до сортировки: ' + JSON.stringify(beforeSeasons));
+        log('До: ' + JSON.stringify(data.map(function(d) { return d.num + (d.active ? ' [A]' : ''); })));
 
         data.sort(function(a, b) {
             if (a.active && !b.active) return -1;
@@ -208,8 +172,7 @@
             return b.num - a.num;
         });
 
-        var afterSeasons = data.map(function(d) { return d.num + ' (' + d.text + ')' + (d.active ? ' Активный' : ''); });
-        log('Сезоны после сортировки: ' + JSON.stringify(afterSeasons));
+        log('После: ' + JSON.stringify(data.map(function(d) { return d.num + (d.active ? ' [A]' : ''); })));
 
         var parent = items.first().parent();
         if (parent && parent.length) {
@@ -224,13 +187,12 @@
                 for (var i = 0; i < newItems.length; i++) {
                     if (getElementText($(newItems[i])) === activeText) {
                         $(newItems[i]).addClass('focus');
-                        log('Сезоны: восстановлен активный сезон: "' + activeText + '"');
                         break;
                     }
                 }
             }
 
-            log('Сезоны отсортированы: ' + data.map(function(d) { return d.num; }).join(' -> '));
+            log('Сезоны отсортированы');
             return true;
         }
 
@@ -240,9 +202,8 @@
     // ============================================================
     // 4. Сортировка переводов
     // ============================================================
-    function sortVoicesInFilter() {
+    function sortVoices() {
         var containers = $('.selectbox');
-        var found = false;
 
         containers.each(function() {
             var $container = $(this);
@@ -251,27 +212,17 @@
             if (title.indexOf('Перевод') !== -1 || 
                 title.indexOf('Voice') !== -1 || 
                 title.indexOf('Озвучка') !== -1) {
-                var movieTitle = getCurrentMovieTitle();
-                log('--- Сортировка переводов для: ' + movieTitle + ' ---');
-                log('Найден фильтр переводов: "' + title + '"');
-                var result = sortItems('.selectbox-item', voiceWeight, true, 'Переводы');
-                if (result) found = true;
+                log('--- Сортировка переводов ---');
+                sortItems('.selectbox-item', voiceWeight, true, 'Переводы');
             }
         });
-
-        if (!found) {
-            log('Переводы: фильтр не найден');
-        }
-
-        return found;
     }
 
     // ============================================================
     // 5. Сортировка источников
     // ============================================================
-    function sortSourcesInFilter() {
+    function sortSources() {
         var containers = $('.selectbox');
-        var found = false;
 
         containers.each(function() {
             var $container = $(this);
@@ -280,19 +231,10 @@
             if (title.indexOf('Источник') !== -1 || 
                 title.indexOf('Source') !== -1 || 
                 title.indexOf('Сортировать') !== -1) {
-                var movieTitle = getCurrentMovieTitle();
-                log('--- Сортировка источников для: ' + movieTitle + ' ---');
-                log('Найден фильтр источников: "' + title + '"');
-                var result = sortItems('.selectbox-item', qualityScore, true, 'Источники');
-                if (result) found = true;
+                log('--- Сортировка источников ---');
+                sortItems('.selectbox-item', qualityScore, true, 'Источники');
             }
         });
-
-        if (!found) {
-            log('Источники: фильтр не найден');
-        }
-
-        return found;
     }
 
     // ============================================================
@@ -302,57 +244,34 @@
         var videos = $('.online-prestige--full');
         if (videos.length < 2) return false;
 
-        var movieTitle = getCurrentMovieTitle();
-        log('--- Сортировка фильма: ' + movieTitle + ' ---');
-
         var hasVariants = false;
-        var videoTexts = [];
         videos.each(function() {
             var text = $(this).find('.online-prestige__title').text().trim();
-            videoTexts.push(text);
             if (voiceWeight(text) !== 0) {
                 hasVariants = true;
             }
         });
 
-        log('Найдено видео: ' + JSON.stringify(videoTexts));
-        log('Есть разные переводы: ' + hasVariants);
+        if (!hasVariants) return false;
 
-        if (!hasVariants) {
-            log('Фильмы: разные переводы не найдены, пропускаем');
-            return false;
-        }
+        log('--- Сортировка фильмов ---');
 
         var data = [];
         videos.each(function() {
             var $el = $(this);
             var title = $el.find('.online-prestige__title').text().trim();
-            var voice = voiceWeight(title);
-            var quality = qualityScore(title);
-            var score = voice * 100 + quality;
-            data.push({ 
-                $el: $el, 
-                text: title, 
-                voice: voice, 
-                quality: quality, 
-                score: score 
-            });
+            var score = voiceWeight(title) * 100 + qualityScore(title);
+            data.push({ $el: $el, text: title, score: score });
         });
 
-        var beforeData = data.map(function(d) { 
-            return d.text + ' (голос=' + d.voice + ', качество=' + d.quality + ')'; 
-        });
-        log('До сортировки: ' + JSON.stringify(beforeData));
+        log('До: ' + JSON.stringify(data.map(function(d) { return d.text; })));
 
         data.sort(function(a, b) {
             if (a.score !== b.score) return b.score - a.score;
             return a.text.localeCompare(b.text);
         });
 
-        var afterData = data.map(function(d) { 
-            return d.text + ' (оценка=' + d.score + ')'; 
-        });
-        log('После сортировки: ' + JSON.stringify(afterData));
+        log('После: ' + JSON.stringify(data.map(function(d) { return d.text; })));
 
         var parent = videos.first().parent();
         if (parent && parent.length) {
@@ -361,7 +280,7 @@
                 container.append(data[i].$el);
             }
             parent.html(container.html());
-            log('Фильм "' + movieTitle + '" отсортирован');
+            log('Фильмы отсортированы');
             return true;
         }
 
@@ -369,173 +288,83 @@
     }
 
     // ============================================================
-    // 7. ГЛАВНАЯ СОРТИРОВКА (однократная)
+    // 7. ГЛАВНАЯ СОРТИРОВКА
     // ============================================================
     function sortAll() {
-        if (isSorting) return;
-        isSorting = true;
-
-        var movieTitle = getCurrentMovieTitle();
-        var isSerialContent = isSerial();
-        var currentBalanser = getCurrentBalanser();
-
-        // Проверяем, не было ли уже сортировки для этого балансера
-        if (lastBalanser === currentBalanser && initialSortDone) {
-            log('Сортировка уже была для "' + movieTitle + '" и балансера "' + currentBalanser + '", пропускаем');
-            isSorting = false;
-            return;
-        }
-
-        log('========================================');
-        log('СОРТИРОВКА ДЛЯ: ' + movieTitle);
-        log('Балансер: ' + currentBalanser);
-        log('Тип контента: ' + (isSerialContent ? 'СЕРИАЛ' : 'ФИЛЬМ'));
-        log('========================================');
+        log('>>> СОРТИРОВКА <<<');
 
         try {
-            if (isSerialContent) {
-                log('Сериал: сортируем сезоны и переводы');
-                sortSeasonsInFilter();
-                sortVoicesInFilter();
-            } else {
-                log('Фильм: сортируем видео');
-                sortMovies();
-            }
+            sortSeasons();
+            sortVoices();
+            sortSources();
+            sortMovies();
 
-            sortSourcesInFilter();
-
-            // Запоминаем, что сортировка выполнена
-            initialSortDone = true;
-            lastBalanser = currentBalanser;
-
-            log('========================================');
-            log('СОРТИРОВКА ЗАВЕРШЕНА ДЛЯ: ' + movieTitle);
-            log('========================================');
+            log('СОРТИРОВКА ЗАВЕРШЕНА');
 
         } catch(e) {
-            logError('Ошибка сортировки для ' + movieTitle + ':', e);
+            logError('Ошибка:', e);
         }
-
-        isSorting = false;
     }
 
     // ============================================================
-    // 8. ПЕРЕХВАТ КОМПОНЕНТА
+    // 8. ПЕРЕХВАТ ОТКРЫТИЯ ФИЛЬТРА
     // ============================================================
-    function hookComponent() {
-        log('Перехват компонента lampac...');
+    function hookFilterOpen() {
+        log('Перехват открытия фильтра...');
 
-        var originalAdd = Lampa.Component.add;
-        if (originalAdd._osm_hooked) return;
-        originalAdd._osm_hooked = true;
+        // Перехватываем клик по кнопке фильтра
+        $(document).on('hover:enter', '.filter--sort, .filter--filter', function() {
+            log('Открыт фильтр, сортируем...');
+            clearTimeout(sortTimer);
+            sortTimer = setTimeout(sortAll, 300);
+        });
 
-        Lampa.Component.add = function(name, component) {
-            log('Добавлен компонент: ' + name);
-            var result = originalAdd.call(this, name, component);
-
-            if (name === 'lampac') {
-                log('Компонент lampac добавлен, патчим...');
-                setTimeout(function() {
-                    patchLampacComponent();
-                }, 100);
+        // Перехватываем появление selectbox
+        var observer = new MutationObserver(function() {
+            if ($('.selectbox').length > 0) {
+                log('Появился фильтр, сортируем...');
+                clearTimeout(sortTimer);
+                sortTimer = setTimeout(sortAll, 200);
             }
+        });
 
-            return result;
-        };
-
-        if (Lampa.Component.get('lampac')) {
-            log('Компонент lampac уже существует, патчим...');
-            patchLampacComponent();
-        }
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
     }
 
     // ============================================================
-    // 9. ПАТЧ КОМПОНЕНТА
+    // 9. ПЕРЕХВАТ СМЕНЫ ИСТОЧНИКА
     // ============================================================
-    function patchLampacComponent() {
-        var Lampac = Lampa.Component.get('lampac');
-        if (!Lampac || !Lampac.prototype) {
-            log('Компонент lampac не найден');
-            return;
-        }
+    function hookSourceChange() {
+        log('Перехват смены источника...');
 
-        var proto = Lampac.prototype;
-        var patched = 0;
-
-        // Сбрасываем флаг при смене фильма/сериала
-        if (typeof proto.initialize === 'function' && !proto._osm_init_patched) {
-            proto._osm_init_patched = true;
-            var originalInit = proto.initialize;
-
-            proto.initialize = function() {
-                var movieTitle = getCurrentMovieTitle();
-                log('ОТКРЫТИЕ БАЛАНСЕРА для "' + movieTitle + '"');
-                // Сбрасываем флаги при открытии нового контента
-                initialSortDone = false;
-                lastBalanser = '';
-                var result = originalInit.call(this);
-                setTimeout(sortAll, 1000);
-                setTimeout(sortAll, 2000);
-                return result;
-            };
-            log('initialize пропатчен');
-            patched++;
-        }
-
-        if (typeof proto.changeBalanser === 'function' && !proto._osm_change_patched) {
-            proto._osm_change_patched = true;
-            var originalChange = proto.changeBalanser;
-
-            proto.changeBalanser = function(balanser_name) {
-                var movieTitle = getCurrentMovieTitle();
-                log('СМЕНА БАЛАНСЕРА: ' + balanser_name + ' для "' + movieTitle + '"');
-                // Сбрасываем флаг при смене балансера
-                initialSortDone = false;
-                lastBalanser = '';
-                var result = originalChange.call(this, balanser_name);
+        // Следим за изменением балансера в Storage
+        var lastBalanser = Lampa.Storage.get('active_balanser', '');
+        setInterval(function() {
+            var currentBalanser = Lampa.Storage.get('active_balanser', '');
+            if (currentBalanser !== lastBalanser) {
+                log('Смена источника: ' + lastBalanser + ' -> ' + currentBalanser);
+                lastBalanser = currentBalanser;
                 setTimeout(sortAll, 500);
-                return result;
-            };
-            log('changeBalanser пропатчен');
-            patched++;
-        }
+                setTimeout(sortAll, 1000);
+            }
+        }, 1000);
 
-        if (typeof proto.startSource === 'function' && !proto._osm_source_patched) {
-            proto._osm_source_patched = true;
-            var originalStart = proto.startSource;
+        // Перехватываем клик по источникам в меню
+        $(document).on('hover:enter', '.selectbox-item', function() {
+            var parentContainer = $(this).parent().parent();
+            var title = parentContainer.find('.selectbox__title').text().trim();
 
-            proto.startSource = function(json) {
-                var movieTitle = getCurrentMovieTitle();
-                log('ЗАГРУЗКА ИСТОЧНИКА для "' + movieTitle + '"');
-                var result = originalStart.call(this, json);
-                setTimeout(sortAll, 800);
-                return result;
-            };
-            log('startSource пропатчен');
-            patched++;
-        }
-
-        if (typeof proto.parse === 'function' && !proto._osm_parse_patched) {
-            proto._osm_parse_patched = true;
-            var originalParse = proto.parse;
-
-            proto.parse = function(str) {
-                var movieTitle = getCurrentMovieTitle();
-                var isSerialContent = isSerial();
-                log('ПОЛУЧЕН ОТВЕТ ОТ СЕРВЕРА для "' + movieTitle + '" (' + (isSerialContent ? 'сериал' : 'фильм') + ')');
-                var result = originalParse.call(this, str);
-                setTimeout(sortAll, 300);
-                return result;
-            };
-            log('parse пропатчен');
-            patched++;
-        }
-
-        if (patched > 0) {
-            log('Компонент lampac пропатчен: ' + patched + ' методов');
-        } else {
-            log('Новые методы не найдены, возможно уже пропатчены');
-        }
+            if (title.indexOf('Источник') !== -1 || 
+                title.indexOf('Source') !== -1 || 
+                title.indexOf('Сортировать') !== -1) {
+                log('Выбран источник, сортируем...');
+                clearTimeout(sortTimer);
+                sortTimer = setTimeout(sortAll, 500);
+            }
+        });
     }
 
     // ============================================================
@@ -544,7 +373,7 @@
     function init() {
         log('Инициализация...');
 
-        if (!window.Lampa || !Lampa.Component) {
+        if (!window.Lampa) {
             log('Lampa не готова, ждём...');
             setTimeout(init, 500);
             return;
@@ -552,11 +381,16 @@
 
         log('Lampa готова');
 
-        hookComponent();
+        // Первичная сортировка
+        setTimeout(sortAll, 1000);
+        setTimeout(sortAll, 3000);
+        setTimeout(sortAll, 5000);
 
-        if (Lampa.Component.get('lampac')) {
-            patchLampacComponent();
-        }
+        // Перехватываем открытие фильтра
+        hookFilterOpen();
+
+        // Перехватываем смену источника
+        hookSourceChange();
 
         log('========================================');
         log('ИНИЦИАЛИЗАЦИЯ ЗАВЕРШЕНА');
