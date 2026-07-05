@@ -1,6 +1,6 @@
 /**
  * Online Source Manager - Data Hook
- * Версия: 11.0.0
+ * Версия: 11.1.0
  * Автоматический перехват данных при открытии балансера или смене источника
  */
 
@@ -25,45 +25,87 @@
     }
 
     // ============================================================
-    // 1. Глобальное хранилище данных
+    // 1. Глобальное хранилище данных (доступно напрямую)
     // ============================================================
     window._osm_data = {
+        // Данные
         seasons: [],
         voices: [],
         videos: [],
         sources: [],
+        
+        // Текущие значения
         currentSeason: 0,
         currentVoice: '',
         currentSource: '',
         movieTitle: '',
         isSerial: false,
-        lastUpdate: 0
+        
+        // Служебное
+        lastUpdate: 0,
+        isReady: false
     };
 
     // ============================================================
     // 2. Функции для работы с данными
     // ============================================================
     function updateOsmData(data) {
-        if (data.seasons) window._osm_data.seasons = data.seasons;
-        if (data.voices) window._osm_data.voices = data.voices;
-        if (data.videos) window._osm_data.videos = data.videos;
-        if (data.sources) window._osm_data.sources = data.sources;
-        if (data.currentSeason) window._osm_data.currentSeason = data.currentSeason;
-        if (data.currentVoice) window._osm_data.currentVoice = data.currentVoice;
-        if (data.currentSource) window._osm_data.currentSource = data.currentSource;
-        if (data.movieTitle) window._osm_data.movieTitle = data.movieTitle;
-        if (data.isSerial !== undefined) window._osm_data.isSerial = data.isSerial;
-        window._osm_data.lastUpdate = Date.now();
+        var updated = false;
         
-        log('Данные обновлены:', {
-            seasons: window._osm_data.seasons.length,
-            voices: window._osm_data.voices.length,
-            videos: window._osm_data.videos.length,
-            sources: window._osm_data.sources.length,
-            currentSeason: window._osm_data.currentSeason,
-            currentVoice: window._osm_data.currentVoice,
-            isSerial: window._osm_data.isSerial
-        });
+        if (data.seasons) {
+            window._osm_data.seasons = data.seasons;
+            updated = true;
+        }
+        if (data.voices) {
+            window._osm_data.voices = data.voices;
+            updated = true;
+        }
+        if (data.videos) {
+            window._osm_data.videos = data.videos;
+            updated = true;
+        }
+        if (data.sources) {
+            window._osm_data.sources = data.sources;
+            updated = true;
+        }
+        if (data.currentSeason !== undefined) {
+            window._osm_data.currentSeason = data.currentSeason;
+            updated = true;
+        }
+        if (data.currentVoice) {
+            window._osm_data.currentVoice = data.currentVoice;
+            updated = true;
+        }
+        if (data.currentSource) {
+            window._osm_data.currentSource = data.currentSource;
+            updated = true;
+        }
+        if (data.movieTitle) {
+            window._osm_data.movieTitle = data.movieTitle;
+            updated = true;
+        }
+        if (data.isSerial !== undefined) {
+            window._osm_data.isSerial = data.isSerial;
+            updated = true;
+        }
+        
+        if (updated) {
+            window._osm_data.lastUpdate = Date.now();
+            window._osm_data.isReady = true;
+            
+            log('✅ Данные обновлены:');
+            log('  📺 ' + window._osm_data.movieTitle + (window._osm_data.isSerial ? ' (сериал)' : ' (фильм)'));
+            log('  📡 Источник: ' + window._osm_data.currentSource);
+            log('  📅 Сезоны: ' + window._osm_data.seasons.length + ' шт.');
+            log('  🎤 Переводы: ' + window._osm_data.voices.length + ' шт.');
+            log('  🎬 Видео: ' + window._osm_data.videos.length + ' шт.');
+            if (window._osm_data.currentSeason) {
+                log('  📌 Текущий сезон: ' + window._osm_data.currentSeason);
+            }
+            if (window._osm_data.currentVoice) {
+                log('  📌 Текущий перевод: ' + window._osm_data.currentVoice);
+            }
+        }
     }
 
     function getCurrentMovieTitle() {
@@ -120,7 +162,6 @@
         proto.parse = function(str) {
             var result = originalParse.call(this, str);
 
-            // Если уже обрабатываем, пропускаем
             if (isProcessing) return result;
             isProcessing = true;
 
@@ -154,7 +195,7 @@
                         } catch(e) {}
                     });
                     if (data.seasons.length > 0) {
-                        log('✅ Перехвачены сезоны: ' + data.seasons.map(function(s) { return s.num; }).join(', '));
+                        log('  📅 Перехвачены сезоны: ' + data.seasons.map(function(s) { return s.num; }).join(', '));
                     }
                 }
 
@@ -178,7 +219,7 @@
                         } catch(e) {}
                     });
                     if (data.voices.length > 0) {
-                        log('✅ Перехвачены переводы: ' + data.voices.map(function(v) { return v.text + (v.active ? ' [A]' : ''); }).join(', '));
+                        log('  🎤 Перехвачены переводы: ' + data.voices.map(function(v) { return v.text + (v.active ? ' [A]' : ''); }).join(', '));
                     }
                 }
 
@@ -201,7 +242,7 @@
                             });
                         } catch(e) {}
                     });
-                    log('✅ Перехвачено видео: ' + data.videos.length + ' шт.');
+                    log('  🎬 Перехвачено видео: ' + data.videos.length + ' шт.');
                 }
 
                 // === Перехват текущего сезона ===
@@ -210,16 +251,15 @@
                     var seasonIdx = choice.season || 0;
                     if (data.seasons[seasonIdx]) {
                         data.currentSeason = data.seasons[seasonIdx].num;
-                        log('✅ Текущий сезон: ' + data.currentSeason);
+                        log('  📌 Текущий сезон: ' + data.currentSeason);
                     }
                 }
 
-                // === Перехват источников (если есть) ===
+                // === Перехват источников ===
                 if (window._osm_sources) {
                     data.sources = window._osm_sources;
                 }
 
-                // Обновляем глобальные данные
                 updateOsmData(data);
 
             } catch(e) {
@@ -255,19 +295,17 @@
         proto.changeBalanser = function(balanser_name) {
             log('🔄 Смена источника: ' + balanser_name);
             
-            // Сбрасываем данные
             window._osm_data.seasons = [];
             window._osm_data.voices = [];
             window._osm_data.videos = [];
             window._osm_data.currentSource = balanser_name;
+            window._osm_data.isReady = false;
             window._osm_data.lastUpdate = Date.now();
             
             var result = originalChange.call(this, balanser_name);
             
-            // Ждём загрузки новых данных и перехватываем
             setTimeout(function() {
-                log('⏳ Ожидание загрузки данных после смены источника...');
-                // Запускаем принудительный перехват
+                log('⏳ Ожидание загрузки данных...');
                 forceDataCapture();
             }, 500);
             
@@ -298,7 +336,6 @@
         proto.startSource = function(json) {
             log('📥 Загрузка источника...');
             
-            // Сохраняем источники
             if (json && json.length > 0) {
                 window._osm_sources = json.map(function(j) {
                     return {
@@ -308,7 +345,7 @@
                     };
                 });
                 window._osm_data.sources = window._osm_sources;
-                log('✅ Сохранены источники: ' + window._osm_sources.length + ' шт.');
+                log('  📡 Сохранены источники: ' + window._osm_sources.length + ' шт.');
             }
             
             var result = originalStart.call(this, json);
@@ -339,17 +376,18 @@
         proto.initialize = function() {
             log('🚀 Открытие балансера...');
             
-            // Сбрасываем данные при открытии
             window._osm_data.seasons = [];
             window._osm_data.voices = [];
             window._osm_data.videos = [];
             window._osm_data.movieTitle = getCurrentMovieTitle();
             window._osm_data.isSerial = isSerial();
             window._osm_data.currentSource = getCurrentSource();
+            window._osm_data.isReady = false;
+            
+            log('  📺 ' + window._osm_data.movieTitle + (window._osm_data.isSerial ? ' (сериал)' : ' (фильм)'));
             
             var result = originalInit.call(this);
             
-            // Ждём загрузки и перехватываем
             setTimeout(function() {
                 log('⏳ Ожидание загрузки данных...');
                 forceDataCapture();
@@ -367,7 +405,7 @@
     }
 
     // ============================================================
-    // 7. Принудительный перехват данных (для случаев, когда не сработало)
+    // 7. Принудительный перехват данных
     // ============================================================
     function forceDataCapture() {
         if (isProcessing) return;
@@ -386,30 +424,28 @@
             };
 
             // === Ищем сезоны в DOM ===
-            var seasonItems = $('.videos__item[method="link"]');
-            if (seasonItems.length === 0) {
-                // Пробуем найти через selectbox
-                var seasonSelect = $('.selectbox');
-                seasonSelect.each(function() {
-                    var $container = $(this);
-                    var title = $container.find('.selectbox__title').text().trim();
-                    if (title.indexOf('Сезон') !== -1 || title.indexOf('Season') !== -1) {
-                        var items = $container.find('.selectbox-item');
-                        items.each(function() {
-                            var $item = $(this);
-                            var text = $item.text().trim();
-                            var num = parseInt(text.match(/(\d+)/) || [0, 0], 10);
-                            if (num > 0) {
-                                data.seasons.push({
-                                    num: num,
-                                    text: text,
-                                    url: ''
-                                });
-                            }
-                        });
-                    }
-                });
-            }
+            var seasonSelect = $('.selectbox');
+            seasonSelect.each(function() {
+                var $container = $(this);
+                var title = $container.find('.selectbox__title').text().trim();
+                if (title.indexOf('Сезон') !== -1 || title.indexOf('Season') !== -1) {
+                    var items = $container.find('.selectbox-item');
+                    items.each(function() {
+                        var $item = $(this);
+                        var text = $item.text().trim();
+                        var num = parseInt(text.match(/(\d+)/) || [0, 0], 10);
+                        var active = $item.hasClass('focus') || $item.hasClass('active');
+                        if (num > 0) {
+                            data.seasons.push({
+                                num: num,
+                                text: text,
+                                url: '',
+                                active: active
+                            });
+                        }
+                    });
+                }
+            });
 
             // === Ищем переводы в DOM ===
             var voiceSelect = $('.selectbox');
@@ -460,7 +496,6 @@
                 }
             }
 
-            // Обновляем данные
             if (data.seasons.length > 0 || data.voices.length > 0 || data.videos.length > 0) {
                 updateOsmData(data);
                 log('✅ Принудительный перехват выполнен');
@@ -476,24 +511,7 @@
     }
 
     // ============================================================
-    // 8. Доступ к данным из консоли
-    // ============================================================
-    window.getOsmData = function() {
-        console.log('=== OSM Data ===');
-        console.log('Название:', window._osm_data.movieTitle);
-        console.log('Сериал:', window._osm_data.isSerial);
-        console.log('Источник:', window._osm_data.currentSource);
-        console.log('Сезоны:', window._osm_data.seasons);
-        console.log('Переводы:', window._osm_data.voices);
-        console.log('Видео:', window._osm_data.videos);
-        console.log('Текущий сезон:', window._osm_data.currentSeason);
-        console.log('Текущий перевод:', window._osm_data.currentVoice);
-        console.log('Обновлено:', new Date(window._osm_data.lastUpdate).toLocaleTimeString());
-        return window._osm_data;
-    };
-
-    // ============================================================
-    // 9. Мониторинг смены источника через Storage
+    // 8. Мониторинг смены источника через Storage
     // ============================================================
     function watchSourceChange() {
         log('Запуск мониторинга смены источника...');
@@ -502,16 +520,15 @@
         setInterval(function() {
             var currentSource = Lampa.Storage.get('active_balanser', '');
             if (currentSource !== lastSource) {
-                log('🔄 Обнаружена смена источника (Storage): ' + lastSource + ' -> ' + currentSource);
+                log('🔄 Обнаружена смена источника: ' + lastSource + ' -> ' + currentSource);
                 lastSource = currentSource;
                 
-                // Сбрасываем данные
                 window._osm_data.seasons = [];
                 window._osm_data.voices = [];
                 window._osm_data.videos = [];
                 window._osm_data.currentSource = currentSource;
+                window._osm_data.isReady = false;
                 
-                // Перехватываем через 500ms
                 setTimeout(function() {
                     forceDataCapture();
                 }, 500);
@@ -520,7 +537,7 @@
     }
 
     // ============================================================
-    // 10. ЗАПУСК
+    // 9. ЗАПУСК
     // ============================================================
     function init() {
         log('========================================');
@@ -535,22 +552,19 @@
 
         log('Lampa готова');
 
-        // Перехватываем методы компонента
         var hooked = 0;
         if (hookParse()) hooked++;
         if (hookChangeBalanser()) hooked++;
         if (hookStartSource()) hooked++;
         if (hookInitialize()) hooked++;
 
-        // Запускаем мониторинг смены источника
         watchSourceChange();
 
-        // Периодическая проверка (на случай, если данные не перехватились)
         setInterval(function() {
-            if (window._osm_data.seasons.length === 0 && 
-                window._osm_data.voices.length === 0 && 
-                window._osm_data.videos.length === 0) {
-                // Пробуем перехватить, если данные пустые
+            if (!window._osm_data.isReady && 
+                (window._osm_data.seasons.length === 0 && 
+                 window._osm_data.voices.length === 0 && 
+                 window._osm_data.videos.length === 0)) {
                 forceDataCapture();
             }
         }, 5000);
@@ -559,7 +573,12 @@
         log('✅ ИНИЦИАЛИЗАЦИЯ ЗАВЕРШЕНА');
         log('Перехвачено методов: ' + hooked);
         log('========================================');
-        log('📊 Данные доступны через: getOsmData()');
+        log('📊 Данные доступны через: window._osm_data');
+        log('  - seasons: ' + window._osm_data.seasons.length + ' шт.');
+        log('  - voices: ' + window._osm_data.voices.length + ' шт.');
+        log('  - videos: ' + window._osm_data.videos.length + ' шт.');
+        log('  - currentSeason: ' + window._osm_data.currentSeason);
+        log('  - currentVoice: ' + window._osm_data.currentVoice);
         log('========================================');
     }
 
