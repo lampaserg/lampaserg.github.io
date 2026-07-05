@@ -1,11 +1,11 @@
 (function() {
     'use strict';
 
-    if (window.smart_online_sorter_loaded) return;
-    window.smart_online_sorter_loaded = true;
+    if (window.online_quality_sorter_loaded) return;
+    window.online_quality_sorter_loaded = true;
 
     // ============================================================
-    // 1. Функции определения качества и дубляжа
+    // 1. Определение качества и дубляжа
     // ============================================================
     function qualityWeight(label) {
         if (label === undefined || label === null) return 0;
@@ -46,15 +46,14 @@
     function sortAndFilterSources(sources) {
         if (!sources || !sources.length) return sources;
 
-        // Чтение настроек
-        var enabled = Lampa.Storage.get('qs_enabled', true);
+        var enabled = Lampa.Storage.get('oqs_enabled', true);
         if (!enabled) return sources;
 
-        var minQuality = parseInt(Lampa.Storage.get('qs_min_quality', '0'), 10);
-        var preferDub = Lampa.Storage.get('qs_prefer_dub', false);
-        var showLabel = Lampa.Storage.get('qs_show_label', true);
+        var minQuality = parseInt(Lampa.Storage.get('oqs_min_quality', '0'), 10);
+        var preferDub = Lampa.Storage.get('oqs_prefer_dub', false);
+        var showLabel = Lampa.Storage.get('oqs_show_label', true);
 
-        // 1. Фильтр по минимальному качеству
+        // Фильтр по качеству
         var filtered = sources.filter(function(s) {
             if (minQuality > 0) {
                 var q = getQualityFromSource(s);
@@ -63,7 +62,7 @@
             return true;
         });
 
-        // 2. Сортировка: активные → качество → дубляж → алфавит
+        // Сортировка
         filtered.sort(function(a, b) {
             var aShow = a.show !== undefined ? a.show : true;
             var bShow = b.show !== undefined ? b.show : true;
@@ -85,7 +84,7 @@
             return aName.localeCompare(bName);
         });
 
-        // 3. Добавление меток качества
+        // Добавление меток
         if (showLabel) {
             filtered.forEach(function(s) {
                 if (s.name) s.name = addQualityLabel(s);
@@ -101,19 +100,19 @@
     function registerSettings() {
         if (!Lampa.SettingsApi) return;
         Lampa.SettingsApi.addComponent({
-            component: 'smart_online_sorter',
-            name: 'Умная сортировка',
+            component: 'online_quality_sorter',
+            name: 'Сортировка Онлайн',
             icon: '<svg viewBox="0 0 24 24" fill="none"><path d="M3 4h18v2H3V4zm0 7h12v2H3v-2zm0 7h18v2H3v-2z" fill="white"/></svg>'
         });
         Lampa.SettingsApi.addParam({
-            component: 'smart_online_sorter',
-            param: { name: 'qs_enabled', type: 'trigger', default: true },
+            component: 'online_quality_sorter',
+            param: { name: 'oqs_enabled', type: 'trigger', default: true },
             field: { name: 'Включить сортировку' }
         });
         Lampa.SettingsApi.addParam({
-            component: 'smart_online_sorter',
+            component: 'online_quality_sorter',
             param: {
-                name: 'qs_min_quality',
+                name: 'oqs_min_quality',
                 type: 'select',
                 values: { '0': 'Все', '480': '≥480p', '720': '≥720p', '1080': '≥1080p' },
                 default: '0'
@@ -121,71 +120,61 @@
             field: { name: 'Минимальное качество' }
         });
         Lampa.SettingsApi.addParam({
-            component: 'smart_online_sorter',
-            param: { name: 'qs_prefer_dub', type: 'trigger', default: false },
+            component: 'online_quality_sorter',
+            param: { name: 'oqs_prefer_dub', type: 'trigger', default: false },
             field: { name: 'Предпочитать дубляж' }
         });
         Lampa.SettingsApi.addParam({
-            component: 'smart_online_sorter',
-            param: { name: 'qs_show_label', type: 'trigger', default: true },
+            component: 'online_quality_sorter',
+            param: { name: 'oqs_show_label', type: 'trigger', default: true },
             field: { name: 'Показывать качество в названии' }
         });
     }
 
     // ============================================================
-    // 3. Патч компонентов (универсальный)
+    // 3. Универсальный патч компонентов
     // ============================================================
-    var patchedComponents = {};
+    var patched = {};
 
-    function patchComponent(ComponentConstructor, componentName) {
+    function patchComponent(ComponentConstructor, name) {
         if (!ComponentConstructor || !ComponentConstructor.prototype) return;
-        if (patchedComponents[componentName]) return;
+        if (patched[name]) return;
         if (typeof ComponentConstructor.prototype.startSource !== 'function') return;
 
-        var originalStartSource = ComponentConstructor.prototype.startSource;
-
+        var original = ComponentConstructor.prototype.startSource;
         ComponentConstructor.prototype.startSource = function(json) {
-            // Применяем сортировку и фильтрацию
             var sorted = sortAndFilterSources(json);
-            return originalStartSource.call(this, sorted);
+            return original.call(this, sorted);
         };
-
-        patchedComponents[componentName] = true;
-        console.log('[Sorter] Patched component:', componentName);
+        patched[name] = true;
+        console.log('[OQS] Patched component:', name);
     }
 
-    // Список имён компонентов, которые нужно патчить (можно дополнять)
-    var TARGET_COMPONENTS = ['lampac', 'lampacskaz', 'online', 'lampac_online'];
-
-    // Патчим уже зарегистрированные компоненты
-    function patchExistingComponents() {
+    function patchAllExisting() {
         if (!Lampa.Component || !Lampa.Component._components) return;
-        var components = Lampa.Component._components;
-        for (var name in components) {
-            if (TARGET_COMPONENTS.indexOf(name) !== -1) {
-                patchComponent(components[name], name);
+        var comps = Lampa.Component._components;
+        for (var name in comps) {
+            // Патчим любые компоненты, у которых есть startSource и они похожи на онлайн
+            var comp = comps[name];
+            if (comp && comp.prototype && typeof comp.prototype.startSource === 'function') {
+                patchComponent(comp, name);
             }
         }
     }
 
-    // Переопределяем Lampa.Component.add для перехвата новых компонентов
-    function overrideComponentAdd() {
+    // Перехват новых компонентов
+    function overrideAdd() {
         if (typeof Lampa.Component.add !== 'function') return;
         var originalAdd = Lampa.Component.add;
-
-        Lampa.Component.add = function(name, component) {
-            // Вызываем оригинальный метод
-            originalAdd.call(this, name, component);
-            // Если компонент в списке — патчим его
-            if (TARGET_COMPONENTS.indexOf(name) !== -1) {
-                // Получаем добавленный компонент (он уже зарегистрирован)
-                var comp = Lampa.Component.get(name);
-                if (comp) {
-                    patchComponent(comp, name);
-                }
+        Lampa.Component.add = function(name, comp) {
+            originalAdd.call(this, name, comp);
+            // Проверяем, есть ли у добавленного компонента метод startSource
+            var instance = Lampa.Component.get(name);
+            if (instance && instance.prototype && typeof instance.prototype.startSource === 'function') {
+                patchComponent(instance, name);
             }
         };
-        console.log('[Sorter] Lampa.Component.add переопределён');
+        console.log('[OQS] Lampa.Component.add переопределён');
     }
 
     // ============================================================
@@ -194,18 +183,16 @@
     registerSettings();
 
     if (window.Lampa && Lampa.Component) {
-        overrideComponentAdd();
-        patchExistingComponents();
-        // Дополнительная проверка через таймер (компоненты могут добавиться позже)
-        setInterval(function() {
-            patchExistingComponents();
-        }, 3000);
+        overrideAdd();
+        patchAllExisting();
+        // Периодическая проверка на случай позднего добавления
+        setInterval(patchAllExisting, 5000);
     } else {
         (function wait() {
             if (window.Lampa && Lampa.Component) {
-                overrideComponentAdd();
-                patchExistingComponents();
-                setInterval(patchExistingComponents, 3000);
+                overrideAdd();
+                patchAllExisting();
+                setInterval(patchAllExisting, 5000);
             } else {
                 setTimeout(wait, 500);
             }
