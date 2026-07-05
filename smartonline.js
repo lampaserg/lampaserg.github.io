@@ -1,7 +1,7 @@
 /**
  * Online Source Manager - DOM Version
- * Версия: 5.2.0
- * Раздельная сортировка: фильмы (видео) и сериалы (фильтр переводов)
+ * Версия: 6.0.0
+ * Фильмы: сортировка 1 раз | Сериалы: сортировка переводов + сезонов
  */
 
 (function() {
@@ -12,6 +12,8 @@
 
     var DEBUG = true;
     var sortTimeout = null;
+    var moviesSorted = false;
+    var isSorting = false;
 
     function log() {
         if (!DEBUG) return;
@@ -19,7 +21,7 @@
     }
 
     log('========================================');
-    log('Online Source Manager v5.2.0');
+    log('Online Source Manager v6.0.0');
     log('Приоритет: hdrezka → Дубляж → LostFilm → Кубик → Остальные');
     log('========================================');
 
@@ -57,7 +59,16 @@
     // 2. Проверка: фильм или сериал
     // ============================================================
     function isSerial() {
-        // Проверяем наличие сезонов в интерфейсе
+        var active = Lampa.Activity.active();
+        if (active && active.movie && active.movie.name) {
+            return true;
+        }
+
+        var episodeNumbers = $('.online-prestige__episode-number');
+        if (episodeNumbers.length > 0) {
+            return true;
+        }
+
         var seasonItems = $('.selectbox-item');
         if (seasonItems.length > 0) {
             var parentContainer = seasonItems.parent().parent();
@@ -66,18 +77,6 @@
             if (titleText.indexOf('Сезон') !== -1 || titleText.indexOf('Season') !== -1) {
                 return true;
             }
-        }
-
-        // Проверяем наличие информации о сезоне в видео
-        var episodeNumbers = $('.online-prestige__episode-number');
-        if (episodeNumbers.length > 0) {
-            return true;
-        }
-
-        // Проверяем по URL или другим признакам
-        var active = Lampa.Activity.active();
-        if (active && active.movie && active.movie.name) {
-            return true;
         }
 
         return false;
@@ -89,8 +88,6 @@
     function sortElements(selector, getScoreFn, preserveActive) {
         var elements = $(selector);
         if (elements.length < 2) return false;
-
-        log('Найдено ' + elements.length + ' элементов для сортировки по селектору: ' + selector);
 
         var items = [];
         var activeIndex = -1;
@@ -114,7 +111,6 @@
             });
         });
 
-        // Сортируем
         items.sort(function(a, b) {
             if (preserveActive !== false) {
                 if (a.active && !b.active) return -1;
@@ -132,7 +128,6 @@
             }
             parent.html(container.html());
 
-            // Восстанавливаем фокус
             if (activeIndex >= 0) {
                 var newItems = parent.find(selector);
                 for (var i = 0; i < newItems.length && i < items.length; i++) {
@@ -143,7 +138,6 @@
                 }
             }
 
-            log('Переупорядочено ' + items.length + ' элементов');
             return true;
         }
 
@@ -151,44 +145,111 @@
     }
 
     // ============================================================
-    // 4. Основная функция сортировки
+    // 4. Сортировка сезонов (от последнего к первому)
     // ============================================================
-    function sortDom() {
-        log('--- Сортировка DOM ---');
+    function sortSeasons() {
+        var seasonItems = $('.selectbox-item');
+        if (seasonItems.length < 2) return false;
 
+        var parentContainer = seasonItems.parent().parent();
+        var titleElement = parentContainer.find('.selectbox__title');
+        var titleText = titleElement.text().trim();
+
+        if (titleText.indexOf('Сезон') === -1 && titleText.indexOf('Season') === -1) {
+            return false;
+        }
+
+        log('Сортировка сезонов: от последнего к первому');
+
+        var items = [];
+        var activeIndex = -1;
+
+        seasonItems.each(function(index) {
+            var $el = $(this);
+            var text = $el.text().trim();
+            var isActive = $el.hasClass('focus') || $el.hasClass('active') || $el.hasClass('selected');
+
+            // Извлекаем номер сезона
+            var seasonMatch = text.match(/(\d+)/);
+            var seasonNum = seasonMatch ? parseInt(seasonMatch[1], 10) : 0;
+
+            if (isActive) activeIndex = index;
+
+            items.push({
+                $el: $el,
+                text: text,
+                season: seasonNum,
+                active: isActive,
+                index: index
+            });
+        });
+
+        // Сортируем от большего к меньшему
+        items.sort(function(a, b) {
+            if (a.active && !b.active) return -1;
+            if (!a.active && b.active) return 1;
+            return b.season - a.season;
+        });
+
+        var parent = seasonItems.first().parent();
+        if (parent && parent.length) {
+            var container = $('<div>');
+            for (var i = 0; i < items.length; i++) {
+                container.append(items[i].$el);
+            }
+            parent.html(container.html());
+
+            if (activeIndex >= 0) {
+                var newItems = parent.find('.selectbox-item');
+                for (var i = 0; i < newItems.length && i < items.length; i++) {
+                    if ($(newItems[i]).text().trim() === items[i].text.trim()) {
+                        $(newItems[i]).addClass('focus');
+                        break;
+                    }
+                }
+            }
+
+            log('Сезоны отсортированы: ' + items.map(function(i) { return i.season; }).join(' → '));
+            return true;
+        }
+
+        return false;
+    }
+
+    // ============================================================
+    // 5. Основная функция сортировки
+    // ============================================================
+    function sortDom(force) {
         var isSerialContent = isSerial();
-        log('Тип контента: ' + (isSerialContent ? 'СЕРИАЛ' : 'ФИЛЬМ'));
 
-        var sorted = false;
-
-        // ============================================================
-        // 4.1 ДЛЯ СЕРИАЛОВ: сортируем только фильтр "Переводы"
-        // ============================================================
         if (isSerialContent) {
-            log('Сериал: сортируем фильтр переводов...');
+            // ============================================================
+            // СЕРИАЛЫ: сортируем переводы и сезоны
+            // ============================================================
+            log('Сериал: сортируем переводы и сезоны...');
 
-            // Ищем элементы в фильтре
+            // 5.1 Сортировка сезонов (от последнего к первому)
+            sortSeasons();
+
+            // 5.2 Сортировка фильтра "Переводы"
             var filterItems = $('.selectbox-item');
             if (filterItems.length > 1) {
                 var parentContainer = filterItems.parent().parent();
                 var titleElement = parentContainer.find('.selectbox__title');
                 var titleText = titleElement.text().trim();
 
-                log('Заголовок фильтра: "' + titleText + '"');
-
-                // Если это переводы или озвучки
+                // Ищем фильтр "Переводы" или "Voice"
                 if (titleText.indexOf('Перевод') !== -1 || 
                     titleText.indexOf('Voice') !== -1 ||
                     titleText.indexOf('Озвучка') !== -1) {
                     log('Найден фильтр переводов, сортируем...');
-                    var result = sortElements('.selectbox-item', function(text) {
+                    sortElements('.selectbox-item', function(text) {
                         return voiceWeight(text);
                     }, true);
-                    if (result) sorted = true;
                 }
             }
 
-            // Также сортируем кнопки озвучек, если они есть
+            // 5.3 Сортировка кнопок озвучек
             var voiceButtons = $('.videos__button');
             if (voiceButtons.length > 1) {
                 var hasVoiceText = false;
@@ -204,53 +265,44 @@
 
                 if (hasVoiceText) {
                     log('Найдены кнопки озвучек, сортируем...');
-                    var result = sortElements('.videos__button', function(text) {
+                    sortElements('.videos__button', function(text) {
                         return voiceWeight(text);
                     }, true);
-                    if (result) sorted = true;
                 }
             }
-        }
+        } else {
+            // ============================================================
+            // ФИЛЬМЫ: сортируем видео 1 раз
+            // ============================================================
+            if (moviesSorted && !force) {
+                return;
+            }
 
-        // ============================================================
-        // 4.2 ДЛЯ ФИЛЬМОВ: сортируем только видео
-        // ============================================================
-        else {
-            log('Фильм: сортируем видео...');
+            log('Фильм: сортируем видео (1 раз)...');
 
             var videoItems = $('.online-prestige--full');
             if (videoItems.length > 1) {
                 var hasVariants = false;
-                var titles = [];
                 videoItems.each(function() {
                     var text = $(this).find('.online-prestige__title').text().trim();
-                    if (text) titles.push(text);
+                    if (text && voiceWeight(text) !== 0) {
+                        hasVariants = true;
+                    }
                 });
 
-                if (titles.length > 1) {
-                    var uniqueTitles = {};
-                    for (var i = 0; i < titles.length; i++) {
-                        var weight = voiceWeight(titles[i]);
-                        if (weight !== 0) {
-                            hasVariants = true;
-                            break;
-                        }
-                    }
-                }
-
-                if (hasVariants || titles.length > 1) {
+                if (hasVariants) {
                     log('Найдены видео с переводами, сортируем...');
-                    var result = sortElements('.online-prestige--full', function(text, data, $el) {
+                    sortElements('.online-prestige--full', function(text, data, $el) {
                         var title = $el.find('.online-prestige__title').text().trim();
                         return voiceWeight(title) * 100 + extractQuality(title);
                     }, false);
-                    if (result) sorted = true;
+                    moviesSorted = true;
                 }
             }
         }
 
         // ============================================================
-        // 4.3 ОБЩЕЕ: сортировка источников в меню "Сортировать"
+        // ОБЩЕЕ: сортировка источников
         // ============================================================
         var sourceItems = $('.selectbox-item');
         if (sourceItems.length > 1) {
@@ -262,34 +314,22 @@
                 titleText.indexOf('Source') !== -1 ||
                 titleText.indexOf('Сортировать') !== -1) {
                 log('Найдены источники, сортируем...');
-                var result = sortElements('.selectbox-item', function(text) {
+                sortElements('.selectbox-item', function(text) {
                     return extractQuality(text);
                 }, true);
-                if (result) sorted = true;
             }
         }
-
-        if (sorted) {
-            log('--- Сортировка DOM завершена (были изменения) ---');
-        } else {
-            log('--- Сортировка DOM завершена (изменений не было) ---');
-        }
-
-        return sorted;
     }
 
     // ============================================================
-    // 5. Наблюдение за DOM
+    // 6. Наблюдение за DOM
     // ============================================================
     var observer = null;
-    var isSorting = false;
 
     function startObserver() {
         if (observer) {
             observer.disconnect();
         }
-
-        log('Запуск MutationObserver...');
 
         observer = new MutationObserver(function(mutations) {
             if (isSorting) return;
@@ -319,13 +359,12 @@
             }
 
             if (shouldSort) {
-                log('Обнаружены изменения в DOM, планируем сортировку...');
                 clearTimeout(sortTimeout);
                 sortTimeout = setTimeout(function() {
                     isSorting = true;
                     sortDom();
                     isSorting = false;
-                }, 300);
+                }, 500);
             }
         });
 
@@ -333,16 +372,12 @@
             childList: true,
             subtree: true
         });
-
-        log('MutationObserver запущен');
     }
 
     // ============================================================
-    // 6. Периодическая проверка
+    // 7. Периодическая проверка
     // ============================================================
     function startPeriodicCheck() {
-        log('Запуск периодической проверки...');
-
         var checkCount = 0;
         setInterval(function() {
             checkCount++;
@@ -352,49 +387,41 @@
                               $('.videos__button').length > 1;
 
                 if (hasItems && !isSorting) {
-                    log('Периодическая проверка #' + checkCount);
-                    isSorting = true;
                     sortDom();
-                    isSorting = false;
                 }
             }
         }, 1000);
-
-        log('Периодическая проверка запущена (каждые 5 сек)');
     }
 
     // ============================================================
-    // 7. Ручная сортировка
+    // 8. Ручная сортировка
     // ============================================================
-    window.sortOnlineSources = function() {
-        log('Ручная сортировка');
+    window.sortOnlineSources = function(force) {
+        log('Ручная сортировка' + (force ? ' (принудительная)' : ''));
         isSorting = true;
-        sortDom();
+        sortDom(force);
         isSorting = false;
     };
 
     // ============================================================
-    // 8. Запуск
+    // 9. Запуск
     // ============================================================
     function init() {
         log('Инициализация...');
 
         if (!window.Lampa) {
-            log('Lampa не найдена, ждём...');
             setTimeout(init, 500);
             return;
         }
 
         setTimeout(function() { sortDom(); }, 1000);
         setTimeout(function() { sortDom(); }, 3000);
-        setTimeout(function() { sortDom(); }, 5000);
 
         startObserver();
         startPeriodicCheck();
 
         log('========================================');
         log('ГОТОВО!');
-        log('Для ручной сортировки вызовите: sortOnlineSources()');
         log('========================================');
     }
 
