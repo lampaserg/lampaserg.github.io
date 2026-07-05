@@ -163,18 +163,70 @@
     }
 
     // ============================================================
+    // ПОЛУЧЕНИЕ ТЕКУЩЕГО СЕЗОНА И СЕРИИ
+    // ============================================================
+
+    function getCurrentSeasonEpisode(movie) {
+        var season = 1;
+        var episode = 1;
+
+        // Пытаемся получить из Lampa
+        try {
+            var full = Lampa.Storage.get('full', {});
+            if (full && full.season) {
+                season = parseInt(full.season) || 1;
+            }
+            if (full && full.episode) {
+                episode = parseInt(full.episode) || 1;
+            }
+        } catch (e) {}
+
+        // Если есть в movie
+        if (movie && movie.season) {
+            season = parseInt(movie.season) || 1;
+        }
+        if (movie && movie.episode) {
+            episode = parseInt(movie.episode) || 1;
+        }
+
+        // Проверяем активную серию в плеере
+        try {
+            var player = Lampa.Player;
+            if (player && player.series && player.series.current) {
+                if (player.series.current.season) {
+                    season = parseInt(player.series.current.season) || 1;
+                }
+                if (player.series.current.episode) {
+                    episode = parseInt(player.series.current.episode) || 1;
+                }
+            }
+        } catch (e) {}
+
+        return { season: season, episode: episode };
+    }
+
+    // ============================================================
     // ПОИСК ЛУЧШЕГО БАЛАНСЕРА
     // ============================================================
 
     function findBestBalanser(movie, callback) {
         getAllBalansers(function(balansers) {
             var isSerial = !!(movie && movie.name);
+            
+            // Получаем текущий сезон и серию для сериалов
+            var seasonInfo = { season: 1, episode: 1 };
+            if (isSerial) {
+                seasonInfo = getCurrentSeasonEpisode(movie);
+            }
 
             var logLines = [];
             logLines.push('═══════════════════════════════════════════════════════════');
             logLines.push('🔍 ПОИСК ЛУЧШЕГО БАЛАНСЕРА');
             logLines.push('  📺 ' + (movie.title || movie.name));
             logLines.push('  🎬 Тип: ' + (isSerial ? 'СЕРИАЛ' : 'ФИЛЬМ'));
+            if (isSerial) {
+                logLines.push('  📅 Сезон: ' + seasonInfo.season + ', Серия: ' + seasonInfo.episode);
+            }
             logLines.push('  🆔 ID: ' + movie.id);
             if (movie.imdb_id) logLines.push('  🆔 IMDB: ' + movie.imdb_id);
             if (movie.kinopoisk_id) logLines.push('  🆔 Кинопоиск: ' + movie.kinopoisk_id);
@@ -202,10 +254,17 @@
                 query.push('original_language=' + (movie.original_language || ''));
                 query.push('year=' + ((movie.release_date || movie.first_air_date || '0000') + '').slice(0, 4));
                 query.push('source=' + (movie.source || 'tmdb'));
+                
+                // ДОБАВЛЯЕМ СЕЗОН И СЕРИЮ ДЛЯ СЕРИАЛОВ
+                if (isSerial) {
+                    query.push('s=' + seasonInfo.season);
+                    query.push('e=' + seasonInfo.episode);
+                }
 
                 var url = AB_HOST + '/lite/' + sourceName + '?' + query.join('&');
 
-                console.log('📡 [' + sourceName + '] Запрос' + (isSerial ? ' (сериал)' : ' (фильм)'));
+                console.log('📡 [' + sourceName + '] Запрос' + (isSerial ? ' (сериал s' + seasonInfo.season + 'e' + seasonInfo.episode + ')' : ' (фильм)'));
+                console.log('📡 URL: ' + url);
 
                 var network = new Lampa.Reguest();
                 network.timeout(10000);
@@ -225,11 +284,22 @@
                         videos.forEach(function(item) {
                             var quality = getItemQuality(item);
                             var voice = item.voice_name || item.text || '';
-                            if (quality > bestQuality) {
+                            
+                            // Для сериалов проверяем соответствие сезона и серии
+                            var isMatch = true;
+                            if (isSerial) {
+                                var itemSeason = item.season || item.s || 1;
+                                var itemEpisode = item.episode || item.e || 1;
+                                if (itemSeason != seasonInfo.season || itemEpisode != seasonInfo.episode) {
+                                    isMatch = false;
+                                }
+                            }
+                            
+                            if (isMatch && quality > bestQuality) {
                                 bestQuality = quality;
                                 bestItem = item;
                             }
-                            if (isDubVoice(voice)) {
+                            if (isDubVoice(voice) && isMatch) {
                                 hasDub = true;
                                 if (!bestVoice) bestVoice = voice;
                             }
@@ -331,8 +401,15 @@
             Lampa.Storage.set('online_last_balanser', lastSelect);
         }
 
-        var id = Lampa.Utils.hash(movie.number_of_seasons ? movie.original_name : movie.original_title);
+        var isSerial = !!(movie && movie.name);
+        var id = Lampa.Utils.hash(isSerial ? movie.original_name : movie.original_title);
         var all = Lampa.Storage.get('clarification_search', {});
+
+        // Получаем текущий сезон и серию
+        var seasonInfo = { season: 1, episode: 1 };
+        if (isSerial) {
+            seasonInfo = getCurrentSeasonEpisode(movie);
+        }
 
         Lampa.Activity.push({
             url: '',
@@ -344,11 +421,14 @@
             movie: movie,
             page: 1,
             balanser: sourceName,
-            clarification: all[id] ? true : false
+            clarification: all[id] ? true : false,
+            // Передаём сезон и серию
+            season: seasonInfo.season,
+            episode: seasonInfo.episode
         });
 
         if (Lampa.Noty && Lampa.Noty.show) {
-            Lampa.Noty.show('🔊 ' + sourceName + ' (' + (movie.name ? 'сериал' : 'фильм') + ')');
+            Lampa.Noty.show('🔊 ' + sourceName + ' (' + (isSerial ? 'сериал s' + seasonInfo.season + 'e' + seasonInfo.episode : 'фильм') + ')');
         }
     }
 
