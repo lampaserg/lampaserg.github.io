@@ -97,7 +97,8 @@
         if (activeBalanser) allBalansers.push(activeBalanser);
         if (onlineBalanser && onlineBalanser !== activeBalanser) allBalansers.push(onlineBalanser);
 
-        var mainBalansers = ['phantom', 'fxapi', 'filmix', 'alloha', 'kinopub', 'rezka', 'kodik'];
+        // БЕЗ filmix - используем fxapi
+        var mainBalansers = ['phantom', 'fxapi', 'alloha', 'kinopub', 'rezka', 'kodik'];
         mainBalansers.forEach(function(name) {
             if (!allBalansers.some(function(s) { return s.toLowerCase() === name; })) {
                 allBalansers.push(name);
@@ -123,9 +124,13 @@
         getAllBalansers(function(balansers) {
             var logLines = [];
             logLines.push('═══════════════════════════════════════════════════════════');
-            logLines.push('🔍 ПОИСК ЛУЧШЕГО БАЛАНСЕРА ДЛЯ: ' + (movie.title || movie.name));
+            logLines.push('🔍 ПОИСК ЛУЧШЕГО БАЛАНСЕРА');
+            logLines.push('  📺 ' + (movie.title || movie.name));
+            logLines.push('  🎬 Тип: ' + (movie.name ? 'СЕРИАЛ' : 'ФИЛЬМ'));
+            logLines.push('  🆔 ID: ' + movie.id);
+            if (movie.imdb_id) logLines.push('  🆔 IMDB: ' + movie.imdb_id);
+            if (movie.kinopoisk_id) logLines.push('  🆔 Кинопоиск: ' + movie.kinopoisk_id);
             logLines.push('📋 Балансеров: ' + balansers.length + ' (' + balansers.join(', ') + ')');
-            logLines.push('📺 Тип: ' + (movie.name ? 'СЕРИАЛ' : 'ФИЛЬМ'));
             logLines.push('═══════════════════════════════════════════════════════════');
 
             var results = [];
@@ -145,14 +150,15 @@
                 if (movie.tmdb_id) query.push('tmdb_id=' + (movie.tmdb_id || ''));
                 query.push('title=' + encodeURIComponent(movie.title || movie.name));
                 query.push('original_title=' + encodeURIComponent(movie.original_title || movie.original_name));
-                query.push('serial=' + (movie.name ? 1 : 0)); // Для сериалов = 1
+                query.push('serial=' + (movie.name ? 1 : 0));
                 query.push('original_language=' + (movie.original_language || ''));
                 query.push('year=' + ((movie.release_date || movie.first_air_date || '0000') + '').slice(0, 4));
                 query.push('source=' + (movie.source || 'tmdb'));
 
                 var url = AB_HOST + '/lite/' + sourceName + '?' + query.join('&');
 
-                console.log('📡 Запрос к ' + sourceName + ': ' + url);
+                // Логируем запрос
+                console.log('📡 [' + sourceName + '] Запрос');
 
                 var network = new Lampa.Reguest();
                 network.timeout(10000);
@@ -206,6 +212,7 @@
                                 }
                             });
 
+                            // Для фильмов сортируем озвучки
                             if (!movie.name && buttons.length > 0) {
                                 buttons = sortVoicesByPriority(buttons);
                             }
@@ -242,7 +249,7 @@
 
                             var source = result.source;
                             if (/phantom/.test(source)) score += 10;
-                            else if (/fxapi|filmix/.test(source)) score += 8;
+                            else if (/fxapi/.test(source)) score += 8;
                             else if (/alloha/.test(source)) score += 6;
                             else if (/kinopub/.test(source)) score += 4;
 
@@ -267,9 +274,9 @@
 
                         callback(best, logLines);
                     }
-                }, function() {
+                }, function(err) {
                     completed++;
-                    logLines.push('  ❌ ' + sourceName + ': ошибка запроса');
+                    logLines.push('  ❌ ' + sourceName + ': ошибка (' + (err.status || 'таймаут') + ')');
                     if (completed === total) {
                         if (results.length === 0) {
                             logLines.push('❌ Ни один балансер не ответил');
