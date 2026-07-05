@@ -1,7 +1,7 @@
 /**
  * Online Source Manager
- * Версия: 9.4.0
- * Автоматическая сортировка фильтров при открытии балансера
+ * Версия: 9.5.0
+ * Автоматическая сортировка при открытии балансера
  */
 
 (function() {
@@ -24,9 +24,8 @@
     }
 
     log('========================================');
-    log('Online Source Manager v9.4.0');
+    log('Online Source Manager v9.5.0');
     log('Приоритет: hdrezka -> Дубляж -> LostFilm -> Кубик -> Остальные');
-    log('Автосортировка фильтров при открытии балансера');
     log('========================================');
 
     // ============================================================
@@ -103,8 +102,6 @@
             data.push({ $el: $el, text: text, active: active, score: score, index: index });
         });
 
-        log('[' + contextName + '] Активная: "' + activeText + '"');
-
         data.sort(function(a, b) {
             if (hasHdrezka) {
                 var aIsHdrezka = isHdrezka(a.text);
@@ -140,7 +137,7 @@
                 }
             }
 
-            log('[' + contextName + '] Успешно отсортировано ' + data.length + ' элементов');
+            log('[' + contextName + '] Отсортировано ' + data.length + ' элементов');
             return true;
         }
 
@@ -183,6 +180,7 @@
             data.push({ $el: $el, text: text, active: active, num: num });
         });
 
+        // Сортируем по убыванию номера сезона
         data.sort(function(a, b) {
             if (a.active && !b.active) return -1;
             if (!a.active && b.active) return 1;
@@ -319,7 +317,7 @@
                 container.append(data[i].$el);
             }
             parent.html(container.html());
-            log('Фильмы: успешно отсортированы');
+            log('Фильмы: отсортированы');
             return true;
         }
 
@@ -327,14 +325,15 @@
     }
 
     // ============================================================
-    // 7. ГЛАВНАЯ ФУНКЦИЯ
+    // 7. ГЛАВНАЯ ФУНКЦИЯ - сортировка при открытии балансера
     // ============================================================
     function sortAll() {
         log('========================================');
-        log('>>> СОРТИРОВКА <<<');
+        log('СОРТИРОВКА ПРИ ОТКРЫТИИ БАЛАНСЕРА');
         log('========================================');
 
         try {
+            // Сортируем всё, что есть на странице
             sortSeasonsInFilter();
             sortVoicesInFilter();
             sortSourcesInFilter();
@@ -350,21 +349,23 @@
     }
 
     // ============================================================
-    // 8. АКТИВНОЕ СЛЕЖЕНИЕ
+    // 8. АКТИВНОЕ СЛЕЖЕНИЕ ЗА ПОЯВЛЕНИЕМ БАЛАНСЕРА
     // ============================================================
     function startWatching() {
-        log('Запуск активного слежения...');
+        log('Запуск слежения за балансером...');
 
+        // Проверяем появление .selectbox (фильтры) и .online-prestige--full (видео)
         var checkInterval = setInterval(function() {
             var hasSelectbox = $('.selectbox').length > 0;
             var hasPrestige = $('.online-prestige--full').length > 1;
 
             if (hasSelectbox || hasPrestige) {
-                log('Обнаружены фильтры или видео, сортируем...');
+                log('Обнаружен балансер или фильтры, сортируем...');
                 sortAll();
             }
-        }, 1000);
+        }, 500);
 
+        // MutationObserver для мгновенной реакции
         var observer = new MutationObserver(function(mutations) {
             var shouldSort = false;
 
@@ -376,6 +377,7 @@
                         var node = nodes[j];
                         if (node.nodeType === 1) {
                             var $node = $(node);
+                            // Проверяем появление фильтров или видео
                             if ($node.is('.selectbox') || 
                                 $node.is('.selectbox-item') ||
                                 $node.is('.online-prestige--full') ||
@@ -391,9 +393,9 @@
             }
 
             if (shouldSort) {
-                log('DOM изменился, сортируем...');
+                log('Обнаружены изменения в DOM, сортируем...');
                 clearTimeout(window._sortTimer);
-                window._sortTimer = setTimeout(sortAll, 200);
+                window._sortTimer = setTimeout(sortAll, 300);
             }
         });
 
@@ -402,11 +404,42 @@
             subtree: true
         });
 
-        log('Активное слежение запущено');
+        log('Слежение запущено');
     }
 
     // ============================================================
-    // 9. Инициализация
+    // 9. Слежение за сменой источника (переключение балансера)
+    // ============================================================
+    function watchSourceChange() {
+        // Следим за кликами по источникам в меню "Сортировать"
+        $(document).on('hover:enter', '.selectbox-item', function() {
+            var parentContainer = $(this).parent().parent();
+            var title = parentContainer.find('.selectbox__title').text().trim();
+
+            if (title.indexOf('Источник') !== -1 || 
+                title.indexOf('Source') !== -1 || 
+                title.indexOf('Сортировать') !== -1) {
+                log('Смена источника, сортируем...');
+                setTimeout(sortAll, 500);
+            }
+        });
+
+        // Следим за изменением URL (смена балансера)
+        var lastUrl = '';
+        setInterval(function() {
+            var currentUrl = window.location.href;
+            if (currentUrl !== lastUrl) {
+                lastUrl = currentUrl;
+                // Небольшая задержка для загрузки контента
+                setTimeout(sortAll, 800);
+            }
+        }, 1000);
+
+        log('Слежение за сменой источника запущено');
+    }
+
+    // ============================================================
+    // 10. Инициализация
     // ============================================================
     function init() {
         log('Инициализация...');
@@ -419,12 +452,16 @@
 
         log('Lampa готова');
 
+        // Первичная сортировка с задержками
         setTimeout(sortAll, 500);
         setTimeout(sortAll, 1500);
         setTimeout(sortAll, 3000);
         setTimeout(sortAll, 5000);
+        setTimeout(sortAll, 8000);
 
+        // Запускаем слежение
         startWatching();
+        watchSourceChange();
 
         log('========================================');
         log('ИНИЦИАЛИЗАЦИЯ ЗАВЕРШЕНА');
