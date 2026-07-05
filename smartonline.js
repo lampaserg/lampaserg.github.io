@@ -1,7 +1,7 @@
 /**
  * Online Source Manager
- * Версия: 10.1.0
- * Расширенное логирование
+ * Версия: 10.2.0
+ * Однократная сортировка при открытии балансера или смене источника
  */
 
 (function() {
@@ -14,6 +14,8 @@
     var sortTimer = null;
     var isSorting = false;
     var currentTitle = '';
+    var initialSortDone = false;
+    var lastBalanser = '';
 
     function log() {
         if (!DEBUG) return;
@@ -27,8 +29,9 @@
     }
 
     log('========================================');
-    log('Online Source Manager v10.1.0');
+    log('Online Source Manager v10.2.0');
     log('Приоритет: hdrezka -> Дубляж -> LostFilm -> Кубик -> Остальные');
+    log('Однократная сортировка при открытии или смене источника');
     log('========================================');
 
     // ============================================================
@@ -93,6 +96,13 @@
         return false;
     }
 
+    function getCurrentBalanser() {
+        try {
+            return Lampa.Storage.get('active_balanser', '') || Lampa.Storage.get('online_balanser', '');
+        } catch(e) {}
+        return '';
+    }
+
     // ============================================================
     // 2. Сортировка элементов
     // ============================================================
@@ -116,7 +126,6 @@
             data.push({ $el: $el, text: text, active: active, score: score, index: index });
         });
 
-        // Логируем до сортировки
         var beforeTexts = data.map(function(d) { return d.text + (d.active ? ' (Активный)' : ''); });
         log('[' + contextName + '] До сортировки: ' + JSON.stringify(beforeTexts));
 
@@ -130,7 +139,6 @@
             return a.text.localeCompare(b.text);
         });
 
-        // Логируем после сортировки
         var afterTexts = data.map(function(d) { return d.text + (d.active ? ' (Активный)' : ''); });
         log('[' + contextName + '] После сортировки: ' + JSON.stringify(afterTexts));
 
@@ -361,7 +369,7 @@
     }
 
     // ============================================================
-    // 7. ГЛАВНАЯ СОРТИРОВКА
+    // 7. ГЛАВНАЯ СОРТИРОВКА (однократная)
     // ============================================================
     function sortAll() {
         if (isSorting) return;
@@ -369,9 +377,18 @@
 
         var movieTitle = getCurrentMovieTitle();
         var isSerialContent = isSerial();
+        var currentBalanser = getCurrentBalanser();
+
+        // Проверяем, не было ли уже сортировки для этого балансера
+        if (lastBalanser === currentBalanser && initialSortDone) {
+            log('Сортировка уже была для "' + movieTitle + '" и балансера "' + currentBalanser + '", пропускаем');
+            isSorting = false;
+            return;
+        }
 
         log('========================================');
         log('СОРТИРОВКА ДЛЯ: ' + movieTitle);
+        log('Балансер: ' + currentBalanser);
         log('Тип контента: ' + (isSerialContent ? 'СЕРИАЛ' : 'ФИЛЬМ'));
         log('========================================');
 
@@ -385,8 +402,11 @@
                 sortMovies();
             }
 
-            // Источники сортируем всегда
             sortSourcesInFilter();
+
+            // Запоминаем, что сортировка выполнена
+            initialSortDone = true;
+            lastBalanser = currentBalanser;
 
             log('========================================');
             log('СОРТИРОВКА ЗАВЕРШЕНА ДЛЯ: ' + movieTitle);
@@ -442,6 +462,26 @@
         var proto = Lampac.prototype;
         var patched = 0;
 
+        // Сбрасываем флаг при смене фильма/сериала
+        if (typeof proto.initialize === 'function' && !proto._osm_init_patched) {
+            proto._osm_init_patched = true;
+            var originalInit = proto.initialize;
+
+            proto.initialize = function() {
+                var movieTitle = getCurrentMovieTitle();
+                log('ОТКРЫТИЕ БАЛАНСЕРА для "' + movieTitle + '"');
+                // Сбрасываем флаги при открытии нового контента
+                initialSortDone = false;
+                lastBalanser = '';
+                var result = originalInit.call(this);
+                setTimeout(sortAll, 1000);
+                setTimeout(sortAll, 2000);
+                return result;
+            };
+            log('initialize пропатчен');
+            patched++;
+        }
+
         if (typeof proto.changeBalanser === 'function' && !proto._osm_change_patched) {
             proto._osm_change_patched = true;
             var originalChange = proto.changeBalanser;
@@ -449,6 +489,9 @@
             proto.changeBalanser = function(balanser_name) {
                 var movieTitle = getCurrentMovieTitle();
                 log('СМЕНА БАЛАНСЕРА: ' + balanser_name + ' для "' + movieTitle + '"');
+                // Сбрасываем флаг при смене балансера
+                initialSortDone = false;
+                lastBalanser = '';
                 var result = originalChange.call(this, balanser_name);
                 setTimeout(sortAll, 500);
                 return result;
@@ -469,22 +512,6 @@
                 return result;
             };
             log('startSource пропатчен');
-            patched++;
-        }
-
-        if (typeof proto.initialize === 'function' && !proto._osm_init_patched) {
-            proto._osm_init_patched = true;
-            var originalInit = proto.initialize;
-
-            proto.initialize = function() {
-                var movieTitle = getCurrentMovieTitle();
-                log('ОТКРЫТИЕ БАЛАНСЕРА для "' + movieTitle + '"');
-                var result = originalInit.call(this);
-                setTimeout(sortAll, 1000);
-                setTimeout(sortAll, 2000);
-                return result;
-            };
-            log('initialize пропатчен');
             patched++;
         }
 
@@ -530,20 +557,6 @@
         if (Lampa.Component.get('lampac')) {
             patchLampacComponent();
         }
-
-        setTimeout(sortAll, 1000);
-        setTimeout(sortAll, 3000);
-        setTimeout(sortAll, 5000);
-
-        var observer = new MutationObserver(function() {
-            clearTimeout(sortTimer);
-            sortTimer = setTimeout(sortAll, 500);
-        });
-
-        observer.observe(document.body, {
-            childList: true,
-            subtree: true
-        });
 
         log('========================================');
         log('ИНИЦИАЛИЗАЦИЯ ЗАВЕРШЕНА');
