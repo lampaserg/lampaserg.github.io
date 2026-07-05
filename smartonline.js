@@ -36,7 +36,7 @@
     var SMART_MANIFEST_VERSION = '2.0.0';
 
     // ============================================================
-    // ПРИОРИТЕТЫ
+    // ПРИОРИТЕТЫ (через встроенный балансер)
     // ============================================================
 
     var SOURCE_PRIORITY = [
@@ -115,22 +115,44 @@
     }
 
     // ============================================================
-    // СБОР ДАННЫХ СО ВСЕХ ИСТОЧНИКОВ
+    // ПОЛУЧЕНИЕ СПИСКА БАЛАНСЕРОВ ИЗ LAMPA
     // ============================================================
 
     function getBalansersList(callback) {
-        var network = new Lampa.Reguest();
-        network.timeout(10000);
-        network.silent('https://ab2024.ru/lite/withsearch', function(json) {
-            if (json && Array.isArray(json)) {
-                callback(json);
-            } else {
-                callback(['phantom', 'filmix', 'alloha', 'kinopub']);
+        // Получаем из хранилища Lampa
+        var sources = [];
+        var activeBalanser = Lampa.Storage.get('active_balanser', '');
+        var onlineBalanser = Lampa.Storage.get('online_balanser', '');
+
+        if (activeBalanser) sources.push(activeBalanser);
+        if (onlineBalanser && onlineBalanser !== activeBalanser) sources.push(onlineBalanser);
+
+        // Добавляем приоритетные
+        SOURCE_PRIORITY.forEach(function(prio) {
+            var exists = sources.some(function(s) {
+                return s.toLowerCase().indexOf(prio.name) !== -1;
+            });
+            if (!exists) {
+                sources.push(prio.name);
             }
-        }, function() {
-            callback(['phantom', 'filmix', 'alloha', 'kinopub']);
-        }, false, { dataType: 'json' });
+        });
+
+        // Убираем дубликаты
+        var unique = [];
+        sources.forEach(function(s) {
+            var lower = s.toLowerCase();
+            if (!unique.some(function(u) { return u.toLowerCase() === lower; })) {
+                unique.push(s);
+            }
+        });
+
+        console.log('📋 Источники для проверки:', unique);
+        callback(unique);
     }
+
+    // ============================================================
+    // СБОР ДАННЫХ ЧЕРЕЗ ВСТРОЕННЫЙ БАЛАНСЕР
+    // ============================================================
 
     function collectAllSources(movie, balansers, callback) {
         var allItems = [];
@@ -143,6 +165,7 @@
         }
 
         balansers.forEach(function(sourceName) {
+            // Используем встроенный метод Lampa для запроса к балансеру
             var query = [];
             query.push('id=' + encodeURIComponent(movie.id));
             if (movie.imdb_id) query.push('imdb_id=' + (movie.imdb_id || ''));
@@ -190,38 +213,16 @@
     }
 
     // ============================================================
-    // ОСНОВНАЯ ЛОГИКА ДЛЯ ФИЛЬМОВ (сортировка озвучек)
+    // ВЫБОР ЛУЧШЕГО ИСТОЧНИКА ДЛЯ СЕРИАЛА
     // ============================================================
 
-    function getVoiceScore(voiceName) {
-        var text = (voiceName || '').toLowerCase();
-        if (text.indexOf('hdrezka') !== -1) return 1000; // Максимальный приоритет
-        if (text.indexOf('dub') !== -1) return 100;
-        if (text.indexOf('lostfilm') !== -1) return 80;
-        if (text.indexOf('cube') !== -1) return 70;
-        if (text.indexOf('sub') !== -1 || text.indexOf('subtitles') !== -1) return -50;
-        return 0;
-    }
-
-    function sortVoicesByPriority(buttons) {
-        if (!buttons || !buttons.length) return buttons;
-
-        return buttons.slice().sort(function(a, b) {
-            var aText = a.text || '';
-            var bText = b.text || '';
-            var aScore = getVoiceScore(aText);
-            var bScore = getVoiceScore(bText);
-            return bScore - aScore;
-        });
-    }
-
-    function findBestSourceForSeries(movie, callback) {
+    function findBestSourceForSeries(movie) {
         console.log('📺 SmartOnline: Поиск лучшего источника для сериала:', movie.title || movie.name);
 
         getBalansersList(function(balansers) {
             collectAllSources(movie, balansers, function(allItems) {
                 if (!allItems || allItems.length === 0) {
-                    callback(null);
+                    console.log('❌ Нет данных для анализа');
                     return;
                 }
 
@@ -278,14 +279,18 @@
                     }
                 }
 
-                console.log('🏆 Лучший источник для сериала:', bestSource, '(качество ' + bestQuality + 'p' + (hasHdrezka ? ', HDRezka есть' : ', HDRezka нет') + ')');
-                callback(bestSource);
+                if (bestSource) {
+                    console.log('🏆 Лучший источник для сериала:', bestSource, '(качество ' + bestQuality + 'p' + (hasHdrezka ? ', HDRezka есть' : ', HDRezka нет') + ')');
+                    switchToSource(bestSource, movie);
+                } else {
+                    console.log('❌ Лучший источник не найден');
+                }
             });
         });
     }
 
     // ============================================================
-    // ПЕРЕКЛЮЧЕНИЕ НА ИСТОЧНИК (для сериалов)
+    // ПЕРЕКЛЮЧЕНИЕ НА ИСТОЧНИК
     // ============================================================
 
     function switchToSource(sourceName, movie) {
@@ -321,6 +326,32 @@
                 clarification: active.clarification || false
             });
         }
+    }
+
+    // ============================================================
+    // СОРТИРОВКА ОЗВУЧЕК ДЛЯ ФИЛЬМОВ
+    // ============================================================
+
+    function getVoiceScore(voiceName) {
+        var text = (voiceName || '').toLowerCase();
+        if (text.indexOf('hdrezka') !== -1) return 1000;
+        if (text.indexOf('dub') !== -1) return 100;
+        if (text.indexOf('lostfilm') !== -1) return 80;
+        if (text.indexOf('cube') !== -1) return 70;
+        if (text.indexOf('sub') !== -1 || text.indexOf('subtitles') !== -1) return -50;
+        return 0;
+    }
+
+    function sortVoicesByPriority(buttons) {
+        if (!buttons || !buttons.length) return buttons;
+
+        return buttons.slice().sort(function(a, b) {
+            var aText = a.text || '';
+            var bText = b.text || '';
+            var aScore = getVoiceScore(aText);
+            var bScore = getVoiceScore(bText);
+            return bScore - aScore;
+        });
     }
 
     // ============================================================
@@ -720,7 +751,7 @@
     }
 
     // ============================================================
-    // UI: FULL BUTTON (С РАЗДЕЛЕНИЕМ НА ФИЛЬМЫ И СЕРИАЛЫ)
+    // UI: FULL BUTTON
     // ============================================================
 
     function addFullButton() {
@@ -744,17 +775,9 @@
                 var isSerial = !!(movie && movie.name);
 
                 if (isSerial) {
-                    // === СЕРИАЛ: переключаем на лучший источник ===
                     console.log('📺 SmartOnline: Сериал, переключаем на лучший источник');
-                    findBestSourceForSeries(movie, function(bestSource) {
-                        if (bestSource) {
-                            switchToSource(bestSource, movie);
-                        } else {
-                            Lampa.Noty.show('❌ Не удалось найти подходящий источник');
-                        }
-                    });
+                    findBestSourceForSeries(movie);
                 } else {
-                    // === ФИЛЬМ: открываем Smart Online с сортировкой ===
                     console.log('🎬 SmartOnline: Фильм, открываем с сортировкой озвучек');
                     Lampa.Activity.push(smartActivity(movie));
                 }
@@ -849,233 +872,6 @@
                 }
             }
         }, 3000);
-    }
-
-    // ============================================================
-    // МОДИФИЦИРОВАННЫЙ COMPONENT (ДЛЯ ФИЛЬМОВ - СОРТИРОВКА ОЗВУЧЕК)
-    // ============================================================
-
-    function installComponent() {
-        if (runtime.componentReady) return true;
-        if (!Lampa.Component || !Lampa.Component.get) return false;
-
-        var BaseLampac = Lampa.Component.get(baseComponentName());
-        if (!BaseLampac) return false;
-
-        runtime.componentReady = true;
-
-        function SmartLampac(object) {
-            BaseLampac.call(this, object);
-
-            var self = this;
-            var baseParse = this.parse;
-            var isSerial = !!(object.movie && object.movie.name);
-            var movie = object.movie || {};
-
-            var state = {
-                manualMode: false,
-                autoStarted: false,
-                autoTimer: null,
-                queue: [],
-                queueIndex: -1,
-                currentCandidate: null,
-                lastVoiceUrl: '',
-                sourceName: '',
-                voiceQueue: [],
-                voiceIndex: -1,
-                voiceSignature: '',
-                statsContext: {
-                    mediaType: object.movie && object.movie.number_of_seasons ? 'tv' : 'movie',
-                    sourceKey: ''
-                }
-            };
-
-            function stopAuto() {
-                clearTimeout(state.autoTimer);
-                state.autoTimer = null;
-            }
-
-            function enableManual() {
-                state.manualMode = true;
-                stopAuto();
-                if (runtime.playback && runtime.playback.state === state) clearPlayback(runtime.playback);
-                notifyRuntime(Lampa.Lang.translate('lampac_smart_manual'));
-            }
-
-            function syncVoiceQueue(parsed) {
-                if (!parsed || !parsed.buttons || !parsed.buttons.length) return;
-
-                state.statsContext = state.statsContext || {
-                    mediaType: object.movie && object.movie.number_of_seasons ? 'tv' : 'movie',
-                    sourceKey: keyify(state.sourceName || '')
-                };
-
-                // === СОРТИРОВКА ОЗВУЧЕК: HDRezka в приоритете ===
-                var queue = rankVoices(parsed.buttons, state.sourceName, state.statsContext);
-                var signature = queue.map(function (voice) { return voice.url; }).join('|');
-
-                if (signature !== state.voiceSignature) {
-                    state.voiceQueue = queue;
-                    state.voiceSignature = signature;
-                    var currentIndex = -1;
-                    if (state.lastVoiceUrl) {
-                        for (var i = 0; i < queue.length; i++) {
-                            if (queue[i].url === state.lastVoiceUrl) {
-                                currentIndex = i;
-                                break;
-                            }
-                        }
-                    }
-                    state.voiceIndex = currentIndex >= 0 ? currentIndex : 0;
-                } else if (state.voiceIndex < 0) {
-                    state.voiceIndex = 0;
-                }
-            }
-
-            function tryVoiceByIndex(index) {
-                var candidate = state.voiceQueue[index];
-                if (!candidate || !candidate.url) return false;
-
-                state.voiceIndex = index;
-
-                if (candidate.active) {
-                    state.autoStarted = false;
-                    state.queue = [];
-                    state.queueIndex = -1;
-                    state.currentCandidate = null;
-                    state.lastVoiceUrl = candidate.url;
-                    self.replaceChoice({
-                        voice: candidate.index,
-                        voice_name: candidate.title,
-                        voice_url: candidate.url
-                    });
-                    return false;
-                }
-
-                if (state.lastVoiceUrl === candidate.url) return false;
-
-                state.lastVoiceUrl = candidate.url;
-                state.autoStarted = false;
-                state.queue = [];
-                state.queueIndex = -1;
-                state.currentCandidate = null;
-                self.replaceChoice({
-                    voice: candidate.index,
-                    voice_name: candidate.title,
-                    voice_url: candidate.url
-                });
-                self.request(candidate.url);
-                return true;
-            }
-
-            state.tryNextVoice = function () {
-                if (!state.voiceQueue.length) return false;
-
-                var nextIndex = state.voiceIndex + 1;
-                if (nextIndex >= state.voiceQueue.length) return false;
-
-                return tryVoiceByIndex(nextIndex);
-            };
-
-            function inspect(str) {
-                var json = Lampa.Arrays.decodeJson(str, {});
-                if (Lampa.Arrays.isObject(str) && str.rch) return { rch: true };
-                if (json.rch) return { rch: true };
-
-                try {
-                    var items = self.parseJsonDate(str, '.videos__item');
-                    var buttons = self.parseJsonDate(str, '.videos__button');
-
-                    // === ДЛЯ ФИЛЬМОВ: сортируем озвучки ===
-                    if (!isSerial && buttons && buttons.length > 0) {
-                        buttons = sortVoicesByPriority(buttons);
-                    }
-
-                    return {
-                        items: items,
-                        buttons: buttons,
-                        videos: items.filter(function (item) {
-                            return item.method === 'play' || item.method === 'call';
-                        })
-                    };
-                } catch (e) {
-                    return null;
-                }
-            }
-
-            function maybeSwitchVoice(parsed) {
-                if (!parsed || !parsed.buttons || !parsed.buttons.length || state.manualMode) return false;
-
-                state.sourceName = getActiveSource();
-                state.statsContext = state.statsContext || {
-                    mediaType: object.movie && object.movie.number_of_seasons ? 'tv' : 'movie',
-                    sourceKey: ''
-                };
-                state.statsContext.sourceKey = keyify(state.sourceName || '');
-                syncVoiceQueue(parsed);
-
-                var best = bestVoice(parsed.buttons, state.sourceName, state.statsContext);
-                if (!best || !best.url) return false;
-
-                if (state.voiceIndex < 0) state.voiceIndex = 0;
-
-                return tryVoiceByIndex(state.voiceIndex);
-            }
-
-            // === ДЛЯ СЕРИАЛОВ: переключаем источник ===
-            function maybeAutoplay(parsed) {
-                if (!parsed || !parsed.videos || !parsed.videos.length) return;
-                if (state.manualMode || state.autoStarted) return;
-                if (object.movie && object.movie.name) return;
-
-                stopAuto();
-                state.sourceName = getActiveSource();
-
-                state.autoTimer = setTimeout(function () {
-                    if (state.manualMode || state.autoStarted) return;
-
-                    state.autoStarted = false;
-                    state.currentCandidate = null;
-                    state.statsContext = state.statsContext || {
-                        mediaType: object.movie && object.movie.number_of_seasons ? 'tv' : 'movie',
-                        sourceKey: ''
-                    };
-                    state.statsContext.sourceKey = keyify(state.sourceName || '');
-                    state.queue = buildQueue(parsed.videos, state.sourceName, self.getChoice().voice_name || '', state.statsContext);
-                    state.queueIndex = -1;
-
-                    if (!state.queue.length) return;
-
-                    playNextCandidate(self, state, 'autostart');
-                }, 150);
-            }
-
-            this._lampacSmart = {
-                enableManual: enableManual
-            };
-
-            this.parse = function (str) {
-                var parsed = inspect(str);
-
-                if (parsed && maybeSwitchVoice(parsed)) return;
-
-                var result = baseParse.call(this, str);
-                if (parsed && parsed.videos && parsed.videos.length) {
-                    // Для фильмов - автовоспроизведение
-                    if (!isSerial) {
-                        maybeAutoplay(parsed);
-                    }
-                    // Для сериалов - просто показываем список
-                }
-                return result;
-            };
-        }
-
-        SmartLampac.prototype = Object.create(BaseLampac.prototype);
-        SmartLampac.prototype.constructor = SmartLampac;
-
-        Lampa.Component.add(smartComponentName(), SmartLampac);
-        return true;
     }
 
     // ============================================================
@@ -1261,6 +1057,373 @@
                 runtime.manifestTimer = null;
             }
         }, 2000);
+    }
+
+    // ============================================================
+    // COMPONENT (ОСНОВНАЯ ЛОГИКА)
+    // ============================================================
+
+    function installComponent() {
+        if (runtime.componentReady) return true;
+        if (!Lampa.Component || !Lampa.Component.get) return false;
+
+        var BaseLampac = Lampa.Component.get(baseComponentName());
+        if (!BaseLampac) return false;
+
+        runtime.componentReady = true;
+
+        function SmartLampac(object) {
+            BaseLampac.call(this, object);
+
+            var self = this;
+            var baseParse = this.parse;
+            var isSerial = !!(object.movie && object.movie.name);
+
+            var state = {
+                manualMode: false,
+                autoStarted: false,
+                autoTimer: null,
+                queue: [],
+                queueIndex: -1,
+                currentCandidate: null,
+                lastVoiceUrl: '',
+                sourceName: '',
+                voiceQueue: [],
+                voiceIndex: -1,
+                voiceSignature: '',
+                statsContext: {
+                    mediaType: object.movie && object.movie.number_of_seasons ? 'tv' : 'movie',
+                    sourceKey: ''
+                }
+            };
+
+            function stopAuto() {
+                clearTimeout(state.autoTimer);
+                state.autoTimer = null;
+            }
+
+            function enableManual() {
+                state.manualMode = true;
+                stopAuto();
+                if (runtime.playback && runtime.playback.state === state) clearPlayback(runtime.playback);
+                notifyRuntime(Lampa.Lang.translate('lampac_smart_manual'));
+            }
+
+            // ============================================================
+            // РАНЖИРОВАНИЕ ОЗВУЧЕК (HDRezka в приоритете)
+            // ============================================================
+
+            function rankVoices(buttons, sourceName, context) {
+                var sourceKey = keyify(sourceName);
+
+                return buttons.map(function (button, index) {
+                    var title = button.text || '';
+                    var score = getVoiceScore(title) + statsWeight('voices', keyify(title), context) + statsWeight('sources', sourceKey, context);
+
+                    if (button.active) score += 1;
+
+                    return {
+                        index: index,
+                        title: title,
+                        url: button.url,
+                        active: !!button.active,
+                        score: score
+                    };
+                }).sort(function (a, b) {
+                    return b.score - a.score;
+                });
+            }
+
+            function bestVoice(buttons, sourceName, context) {
+                return rankVoices(buttons, sourceName, context)[0] || null;
+            }
+
+            // ============================================================
+            // ПОСТРОЕНИЕ ОЧЕРЕДИ (ТОЛЬКО 4K И 1080p)
+            // ============================================================
+
+            function buildQueue(videos, sourceName, fallbackVoice, context) {
+                var map = {};
+
+                videos.forEach(function (item) {
+                    var voiceName = item.voice_name || item.text || fallbackVoice || '';
+                    var voiceKey = keyify(voiceName);
+                    var sourceKey = keyify(sourceName);
+                    var quality = getItemQuality(item);
+
+                    // === ФИЛЬТРАЦИЯ: только 2160p и 1080p ===
+                    if (quality !== 2160 && quality !== 1080) return;
+
+                    if (!item || (!item.url && !item.stream)) return;
+
+                    var score = 0;
+
+                    // === СБОР ОЦЕНОК ===
+                    score += qualityWeight(quality);
+                    score += getVoiceScore(voiceName);
+                    score += sourceWeight(sourceName);
+                    score += statsWeight('voices', voiceKey, context);
+                    score += statsWeight('sources', sourceKey, context);
+                    score += item.method === 'play' ? 10 : 4;
+
+                    // Формат
+                    var urlHint = normalize(item.url || item.stream || '');
+                    if (/m3u8/.test(urlHint)) score += 4;
+                    if (/mp4/.test(urlHint)) score += 2;
+                    if (/iframe|embed/.test(urlHint)) score -= 4;
+
+                    var candidate = {
+                        id: Lampa.Utils.hash([sourceKey, voiceKey, item.url || item.stream || item.text || Math.random()].join('::')),
+                        item: item,
+                        sourceKey: sourceKey,
+                        sourceName: sourceName || '',
+                        voiceKey: voiceKey,
+                        voiceName: voiceName,
+                        statsContext: context,
+                        quality: quality,
+                        score: score
+                    };
+
+                    if (!map[candidate.id] || map[candidate.id].score < candidate.score) {
+                        map[candidate.id] = candidate;
+                    }
+                });
+
+                // Сортировка по убыванию оценки
+                return Object.keys(map).map(function (id) { return map[id]; }).sort(function (a, b) {
+                    return b.score - a.score;
+                });
+            }
+
+            // ============================================================
+            // ВЕСА КАЧЕСТВА
+            // ============================================================
+
+            function qualityWeight(quality) {
+                if (quality >= 2160) return 90;
+                if (quality >= 1080) return 50;
+                if (quality >= 720) return 20;
+                if (quality >= 480) return 5;
+                return 0;
+            }
+
+            // ============================================================
+            // ГОЛОСА (HDRezka - 1000)
+            // ============================================================
+
+            function getVoiceScore(voiceName) {
+                var text = (voiceName || '').toLowerCase();
+                if (text.indexOf('hdrezka') !== -1) return 1000;
+                if (text.indexOf('dub') !== -1) return 100;
+                if (text.indexOf('lostfilm') !== -1) return 80;
+                if (text.indexOf('cube') !== -1) return 70;
+                if (text.indexOf('sub') !== -1 || text.indexOf('subtitles') !== -1) return -50;
+                return 0;
+            }
+
+            // ============================================================
+            // СИНХРОНИЗАЦИЯ ОЧЕРЕДИ ГОЛОСОВ
+            // ============================================================
+
+            function syncVoiceQueue(parsed) {
+                if (!parsed || !parsed.buttons || !parsed.buttons.length) return;
+
+                state.statsContext = state.statsContext || {
+                    mediaType: object.movie && object.movie.number_of_seasons ? 'tv' : 'movie',
+                    sourceKey: keyify(state.sourceName || '')
+                };
+
+                var queue = rankVoices(parsed.buttons, state.sourceName, state.statsContext);
+                var signature = queue.map(function (voice) { return voice.url; }).join('|');
+
+                if (signature !== state.voiceSignature) {
+                    state.voiceQueue = queue;
+                    state.voiceSignature = signature;
+                    var currentIndex = -1;
+                    if (state.lastVoiceUrl) {
+                        for (var i = 0; i < queue.length; i++) {
+                            if (queue[i].url === state.lastVoiceUrl) {
+                                currentIndex = i;
+                                break;
+                            }
+                        }
+                    }
+                    state.voiceIndex = currentIndex >= 0 ? currentIndex : 0;
+                } else if (state.voiceIndex < 0) {
+                    state.voiceIndex = 0;
+                }
+            }
+
+            // ============================================================
+            // ПЕРЕКЛЮЧЕНИЕ НА ГОЛОС
+            // ============================================================
+
+            function tryVoiceByIndex(index) {
+                var candidate = state.voiceQueue[index];
+                if (!candidate || !candidate.url) return false;
+
+                state.voiceIndex = index;
+
+                if (candidate.active) {
+                    state.autoStarted = false;
+                    state.queue = [];
+                    state.queueIndex = -1;
+                    state.currentCandidate = null;
+                    state.lastVoiceUrl = candidate.url;
+                    self.replaceChoice({
+                        voice: candidate.index,
+                        voice_name: candidate.title,
+                        voice_url: candidate.url
+                    });
+                    return false;
+                }
+
+                if (state.lastVoiceUrl === candidate.url) return false;
+
+                state.lastVoiceUrl = candidate.url;
+                state.autoStarted = false;
+                state.queue = [];
+                state.queueIndex = -1;
+                state.currentCandidate = null;
+                self.replaceChoice({
+                    voice: candidate.index,
+                    voice_name: candidate.title,
+                    voice_url: candidate.url
+                });
+                self.request(candidate.url);
+                return true;
+            }
+
+            state.tryNextVoice = function () {
+                if (!state.voiceQueue.length) return false;
+
+                var nextIndex = state.voiceIndex + 1;
+                if (nextIndex >= state.voiceQueue.length) return false;
+
+                return tryVoiceByIndex(nextIndex);
+            };
+
+            // ============================================================
+            // ИНСПЕКЦИЯ ОТВЕТА
+            // ============================================================
+
+            function inspect(str) {
+                var json = Lampa.Arrays.decodeJson(str, {});
+                if (Lampa.Arrays.isObject(str) && str.rch) return { rch: true };
+                if (json.rch) return { rch: true };
+
+                try {
+                    var items = self.parseJsonDate(str, '.videos__item');
+                    var buttons = self.parseJsonDate(str, '.videos__button');
+
+                    return {
+                        items: items,
+                        buttons: buttons,
+                        videos: items.filter(function (item) {
+                            return item.method === 'play' || item.method === 'call';
+                        })
+                    };
+                } catch (e) {
+                    return null;
+                }
+            }
+
+            // ============================================================
+            // ПЕРЕКЛЮЧЕНИЕ НА ГОЛОС
+            // ============================================================
+
+            function maybeSwitchVoice(parsed) {
+                if (!parsed || !parsed.buttons || !parsed.buttons.length || state.manualMode) return false;
+
+                state.sourceName = getActiveSource();
+                state.statsContext = state.statsContext || {
+                    mediaType: object.movie && object.movie.number_of_seasons ? 'tv' : 'movie',
+                    sourceKey: ''
+                };
+                state.statsContext.sourceKey = keyify(state.sourceName || '');
+                syncVoiceQueue(parsed);
+
+                var best = bestVoice(parsed.buttons, state.sourceName, state.statsContext);
+                if (!best || !best.url) return false;
+
+                if (state.voiceIndex < 0) state.voiceIndex = 0;
+
+                return tryVoiceByIndex(state.voiceIndex);
+            }
+
+            // ============================================================
+            // АВТОВОСПРОИЗВЕДЕНИЕ (ДЛЯ ФИЛЬМОВ)
+            // ============================================================
+
+            function maybeAutoplay(parsed) {
+                if (!parsed || !parsed.videos || !parsed.videos.length) return;
+                if (state.manualMode || state.autoStarted) return;
+                if (object.movie && object.movie.name) return;
+
+                stopAuto();
+                state.sourceName = getActiveSource();
+
+                state.autoTimer = setTimeout(function () {
+                    if (state.manualMode || state.autoStarted) return;
+
+                    state.autoStarted = false;
+                    state.currentCandidate = null;
+                    state.statsContext = state.statsContext || {
+                        mediaType: object.movie && object.movie.number_of_seasons ? 'tv' : 'movie',
+                        sourceKey: ''
+                    };
+                    state.statsContext.sourceKey = keyify(state.sourceName || '');
+                    state.queue = buildQueue(parsed.videos, state.sourceName, self.getChoice().voice_name || '', state.statsContext);
+                    state.queueIndex = -1;
+
+                    if (!state.queue.length) return;
+
+                    // ЛОГ ВЫБРАННОГО ПОТОКА
+                    if (state.queue.length > 0) {
+                        console.log('');
+                        console.log('%c═══════════════════════════════════════════════════════════', 'color: #4fc3f7;');
+                        console.log('%c🎯 ВЫБРАННЫЙ ПОТОК', 'color: #76ff03; font-weight: bold; font-size: 14px;');
+                        console.log('  📐 Качество: ' + state.queue[0].quality + 'p');
+                        console.log('  🎤 Озвучка: ' + state.queue[0].voiceName + ' (вес ' + getVoiceScore(state.queue[0].voiceName) + ')');
+                        console.log('  📦 Источник: ' + state.queue[0].sourceName);
+                        console.log('  ⚖️ Общий вес: ' + state.queue[0].score);
+                        console.log('%c═══════════════════════════════════════════════════════════', 'color: #4fc3f7;');
+                        console.log('');
+                    }
+
+                    playNextCandidate(self, state, 'autostart');
+                }, 150);
+            }
+
+            this._lampacSmart = {
+                enableManual: enableManual
+            };
+
+            // ============================================================
+            // ПАРСИНГ
+            // ============================================================
+
+            this.parse = function (str) {
+                var parsed = inspect(str);
+
+                if (parsed && maybeSwitchVoice(parsed)) return;
+
+                var result = baseParse.call(this, str);
+
+                // Для фильмов - автовоспроизведение с лучшей озвучкой
+                if (parsed && parsed.videos && parsed.videos.length && !isSerial) {
+                    maybeAutoplay(parsed);
+                }
+
+                return result;
+            };
+        }
+
+        SmartLampac.prototype = Object.create(BaseLampac.prototype);
+        SmartLampac.prototype.constructor = SmartLampac;
+
+        Lampa.Component.add(smartComponentName(), SmartLampac);
+        return true;
     }
 
     // ============================================================
