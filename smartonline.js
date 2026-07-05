@@ -97,7 +97,6 @@
         if (activeBalanser) allBalansers.push(activeBalanser);
         if (onlineBalanser && onlineBalanser !== activeBalanser) allBalansers.push(onlineBalanser);
 
-        // БЕЗ filmix - используем fxapi
         var mainBalansers = ['phantom', 'fxapi', 'alloha', 'kinopub', 'rezka', 'kodik'];
         mainBalansers.forEach(function(name) {
             if (!allBalansers.some(function(s) { return s.toLowerCase() === name; })) {
@@ -117,16 +116,65 @@
     }
 
     // ============================================================
+    // ПАРСИНГ ВИДЕО ИЗ ОТВЕТА
+    // ============================================================
+
+    function parseVideosFromResponse(str, sourceName, isSerial) {
+        var videos = [];
+        var buttons = [];
+
+        try {
+            var $html = $('<div>' + str + '</div>');
+
+            // Парсим видео элементы
+            $html.find('.videos__item').each(function() {
+                var $item = $(this);
+                try {
+                    var data = JSON.parse($item.attr('data-json'));
+                    var text = $item.text().trim();
+                    var season = $item.attr('s');
+                    var episode = $item.attr('e');
+
+                    if (data.method === 'play' || data.method === 'call') {
+                        data.text = text;
+                        data.sourceName = sourceName;
+                        if (season) data.season = parseInt(season);
+                        if (episode) data.episode = parseInt(episode);
+                        videos.push(data);
+                    }
+                } catch (e) {}
+            });
+
+            // Парсим кнопки озвучек
+            $html.find('.videos__button').each(function() {
+                var $item = $(this);
+                try {
+                    var data = JSON.parse($item.attr('data-json'));
+                    var text = $item.text().trim();
+                    data.text = text;
+                    data.sourceName = sourceName;
+                    buttons.push(data);
+                } catch (e) {}
+            });
+
+        } catch (e) {}
+
+        return { videos: videos, buttons: buttons };
+    }
+
+    // ============================================================
     // ПОИСК ЛУЧШЕГО БАЛАНСЕРА
     // ============================================================
 
     function findBestBalanser(movie, callback) {
         getAllBalansers(function(balansers) {
+            var isSerial = !!(movie && movie.name);
+
             var logLines = [];
             logLines.push('═══════════════════════════════════════════════════════════');
             logLines.push('🔍 ПОИСК ЛУЧШЕГО БАЛАНСЕРА');
             logLines.push('  📺 ' + (movie.title || movie.name));
-            logLines.push('  🎬 Тип: ' + (movie.name ? 'СЕРИАЛ' : 'ФИЛЬМ'));
+            logLines.push('  🎬 Тип: ' + (isSerial ? 'СЕРИАЛ' : 'ФИЛЬМ'));
             logLines.push('  🆔 ID: ' + movie.id);
             if (movie.imdb_id) logLines.push('  🆔 IMDB: ' + movie.imdb_id);
             if (movie.kinopoisk_id) logLines.push('  🆔 Кинопоиск: ' + movie.kinopoisk_id);
@@ -150,89 +198,67 @@
                 if (movie.tmdb_id) query.push('tmdb_id=' + (movie.tmdb_id || ''));
                 query.push('title=' + encodeURIComponent(movie.title || movie.name));
                 query.push('original_title=' + encodeURIComponent(movie.original_title || movie.original_name));
-                query.push('serial=' + (movie.name ? 1 : 0));
+                query.push('serial=' + (isSerial ? 1 : 0));
                 query.push('original_language=' + (movie.original_language || ''));
                 query.push('year=' + ((movie.release_date || movie.first_air_date || '0000') + '').slice(0, 4));
                 query.push('source=' + (movie.source || 'tmdb'));
 
                 var url = AB_HOST + '/lite/' + sourceName + '?' + query.join('&');
 
-                // Логируем запрос
-                console.log('📡 [' + sourceName + '] Запрос');
+                console.log('📡 [' + sourceName + '] Запрос' + (isSerial ? ' (сериал)' : ' (фильм)'));
 
                 var network = new Lampa.Reguest();
                 network.timeout(10000);
                 network["native"](url, function(str) {
                     completed++;
-                    try {
-                        var $html = $('<div>' + str + '</div>');
-                        var videos = [];
-                        var buttons = [];
 
-                        $html.find('.videos__item').each(function() {
-                            var $item = $(this);
-                            try {
-                                var data = JSON.parse($item.attr('data-json'));
-                                var text = $item.text().trim();
-                                if (data.method === 'play' || data.method === 'call') {
-                                    data.text = text;
-                                    data.sourceName = sourceName;
-                                    videos.push(data);
-                                }
-                            } catch (e) {}
-                        });
+                    var parsed = parseVideosFromResponse(str, sourceName, isSerial);
+                    var videos = parsed.videos;
+                    var buttons = parsed.buttons;
 
-                        $html.find('.videos__button').each(function() {
-                            var $item = $(this);
-                            try {
-                                var data = JSON.parse($item.attr('data-json'));
-                                var text = $item.text().trim();
-                                data.text = text;
-                                data.sourceName = sourceName;
-                                buttons.push(data);
-                            } catch (e) {}
-                        });
+                    if (videos.length > 0) {
+                        var bestQuality = 0;
+                        var hasDub = false;
+                        var bestVoice = '';
+                        var bestItem = null;
 
-                        if (videos.length > 0) {
-                            var bestQuality = 0;
-                            var hasDub = false;
-                            var bestVoice = '';
-                            var bestItem = null;
-
-                            videos.forEach(function(item) {
-                                var quality = getItemQuality(item);
-                                var voice = item.voice_name || item.text || '';
-                                if (quality > bestQuality) {
-                                    bestQuality = quality;
-                                    bestItem = item;
-                                }
-                                if (isDubVoice(voice)) {
-                                    hasDub = true;
-                                    if (!bestVoice) bestVoice = voice;
-                                }
-                            });
-
-                            // Для фильмов сортируем озвучки
-                            if (!movie.name && buttons.length > 0) {
-                                buttons = sortVoicesByPriority(buttons);
+                        videos.forEach(function(item) {
+                            var quality = getItemQuality(item);
+                            var voice = item.voice_name || item.text || '';
+                            if (quality > bestQuality) {
+                                bestQuality = quality;
+                                bestItem = item;
                             }
+                            if (isDubVoice(voice)) {
+                                hasDub = true;
+                                if (!bestVoice) bestVoice = voice;
+                            }
+                        });
 
-                            results.push({
-                                source: sourceName,
-                                videos: videos.length,
-                                quality: bestQuality,
-                                hasDub: hasDub,
-                                voice: bestVoice,
-                                bestItem: bestItem,
-                                buttons: buttons
-                            });
-
-                            logLines.push('  ✅ ' + sourceName + ': ' + videos.length + ' видео, ' + bestQuality + 'p' + (hasDub ? ', ДУБЛЯЖ' : ''));
-                        } else {
-                            logLines.push('  ⚠️ ' + sourceName + ': видео не найдены');
+                        // Для фильмов сортируем озвучки
+                        if (!isSerial && buttons.length > 0) {
+                            buttons = sortVoicesByPriority(buttons);
                         }
-                    } catch (e) {
-                        logLines.push('  ❌ ' + sourceName + ': ошибка парсинга');
+
+                        results.push({
+                            source: sourceName,
+                            videos: videos.length,
+                            quality: bestQuality,
+                            hasDub: hasDub,
+                            voice: bestVoice,
+                            bestItem: bestItem,
+                            buttons: buttons,
+                            response: str
+                        });
+
+                        logLines.push('  ✅ ' + sourceName + ': ' + videos.length + ' видео, ' + bestQuality + 'p' + (hasDub ? ', ДУБЛЯЖ' : ''));
+                    } else {
+                        logLines.push('  ⚠️ ' + sourceName + ': видео не найдены');
+                        // Для отладки показываем первые 200 символов ответа
+                        if (str && str.length > 0) {
+                            var preview = str.substring(0, 200).replace(/\n/g, ' ');
+                            console.log('    Ответ: ' + preview + '...');
+                        }
                     }
 
                     if (completed === total) {
