@@ -1,7 +1,7 @@
 /**
  * Online Source Manager
- * Версия: 9.7.0
- * Перехват смены балансера через Lampa API
+ * Version: 9.7.0
+ * Intercept balancer change via Lampa API
  */
 
 (function() {
@@ -21,17 +21,14 @@
 
     function logError() {
         var args = Array.prototype.slice.call(arguments);
-        console.error.apply(console, ['[OSM ОШИБКА]'].concat(args));
+        console.error.apply(console, ['[OSM ERROR]'].concat(args));
     }
 
     log('========================================');
     log('Online Source Manager v9.7.0');
-    log('Приоритет: hdrezka -> Дубляж -> LostFilm -> Кубик -> Остальные');
+    log('Priority: hdrezka -> Dub -> LostFilm -> Cube -> Others');
     log('========================================');
 
-    // ============================================================
-    // 1. Приоритет озвучек
-    // ============================================================
     function voiceWeight(name) {
         if (!name) return 0;
         var text = name.toLowerCase();
@@ -76,9 +73,6 @@
         return match ? parseInt(match[1], 10) : 0;
     }
 
-    // ============================================================
-    // 2. Сортировка элементов (без поднятия Rezka)
-    // ============================================================
     function sortItems(selector, scoreFn, preserveActive, contextName) {
         var items = $(selector);
         var count = items.length;
@@ -99,7 +93,6 @@
             data.push({ $el: $el, text: text, active: active, score: score, index: index });
         });
 
-        // Сортировка БЕЗ поднятия Rezka
         data.sort(function(a, b) {
             if (preserveActive !== false) {
                 if (a.active && !b.active) return -1;
@@ -128,16 +121,13 @@
                 }
             }
 
-            log('[' + contextName + '] Отсортировано ' + data.length + ' элементов');
+            log('[' + contextName + '] Sorted ' + data.length + ' items');
             return true;
         }
 
         return false;
     }
 
-    // ============================================================
-    // 3. Сортировка сезонов (от последнего к первому)
-    // ============================================================
     function sortSeasonsInFilter() {
         var items = $('.selectbox-item');
         if (items.length < 2) return false;
@@ -149,7 +139,7 @@
             return false;
         }
 
-        log('Сезоны: сортируем ' + items.length + ' сезонов');
+        log('Seasons: sorting ' + items.length + ' seasons');
 
         var data = [];
         var activeText = '';
@@ -189,16 +179,13 @@
                 }
             }
 
-            log('Сезоны: отсортированы: ' + data.map(function(d) { return d.num; }).join(' -> '));
+            log('Seasons: sorted: ' + data.map(function(d) { return d.num; }).join(' -> '));
             return true;
         }
 
         return false;
     }
 
-    // ============================================================
-    // 4. Сортировка переводов в сериалах
-    // ============================================================
     function sortVoicesInFilter() {
         var containers = $('.selectbox');
         var found = false;
@@ -210,8 +197,8 @@
             if (title.indexOf('Перевод') !== -1 || 
                 title.indexOf('Voice') !== -1 || 
                 title.indexOf('Озвучка') !== -1) {
-                log('Переводы: сортируем');
-                var result = sortItems('.selectbox-item', voiceWeight, true, 'Переводы');
+                log('Voices: sorting');
+                var result = sortItems('.selectbox-item', voiceWeight, true, 'Voices');
                 if (result) found = true;
             }
         });
@@ -219,9 +206,6 @@
         return found;
     }
 
-    // ============================================================
-    // 5. Сортировка источников (по качеству)
-    // ============================================================
     function sortSourcesInFilter() {
         var containers = $('.selectbox');
         var found = false;
@@ -233,8 +217,8 @@
             if (title.indexOf('Источник') !== -1 || 
                 title.indexOf('Source') !== -1 || 
                 title.indexOf('Сортировать') !== -1) {
-                log('Источники: сортируем по качеству');
-                var result = sortItems('.selectbox-item', qualityScore, true, 'Источники');
+                log('Sources: sorting by quality');
+                var result = sortItems('.selectbox-item', qualityScore, true, 'Sources');
                 if (result) found = true;
             }
         });
@@ -242,9 +226,6 @@
         return found;
     }
 
-    // ============================================================
-    // 6. Сортировка видео в фильмах
-    // ============================================================
     function sortMovies() {
         var videos = $('.online-prestige--full');
         if (videos.length < 2) return false;
@@ -259,7 +240,7 @@
 
         if (!hasVariants) return false;
 
-        log('Фильмы: сортируем ' + videos.length + ' видео');
+        log('Movies: sorting ' + videos.length + ' videos');
 
         var data = [];
         videos.each(function() {
@@ -281,121 +262,98 @@
                 container.append(data[i].$el);
             }
             parent.html(container.html());
-            log('Фильмы: отсортированы');
+            log('Movies: sorted');
             return true;
         }
 
         return false;
     }
 
-    // ============================================================
-    // 7. ГЛАВНАЯ ФУНКЦИЯ СОРТИРОВКИ
-    // ============================================================
     function sortAll() {
-        log('>>> СОРТИРОВКА <<<');
+        log('>>> SORT <<<');
 
         try {
-            // Только сезоны и переводы (без поднятия Rezka)
             sortSeasonsInFilter();
             sortVoicesInFilter();
             sortSourcesInFilter();
             sortMovies();
 
-            log('СОРТИРОВКА ЗАВЕРШЕНА');
+            log('SORT COMPLETE');
 
         } catch(e) {
-            logError('Ошибка:', e);
+            logError('Error:', e);
         }
     }
 
-    // ============================================================
-    // 8. ПЕРЕХВАТ СМЕНЫ БАЛАНСЕРА ЧЕРЕЗ LAMPA API
-    // ============================================================
     function hookBalancerChange() {
-        log('Перехват смены балансера...');
+        log('Hooking balancer change...');
 
-        // 1. Перехватываем метод changeBalanser в компоненте
         var Lampac = Lampa.Component.get('lampac');
         if (Lampac && Lampac.prototype) {
             var proto = Lampac.prototype;
+
             if (typeof proto.changeBalanser === 'function' && !proto._osm_hooked) {
                 proto._osm_hooked = true;
                 var originalChange = proto.changeBalanser;
 
                 proto.changeBalanser = function(balanser_name) {
-                    log('Смена балансера на: ' + balanser_name);
+                    log('Balancer changed to: ' + balanser_name);
                     var result = originalChange.call(this, balanser_name);
-                    // Сортируем после смены
                     setTimeout(sortAll, 500);
                     return result;
                 };
-                log('changeBalanser перехвачен');
+                log('changeBalanser hooked');
             }
-        }
 
-        // 2. Перехватываем метод startSource (загрузка нового источника)
-        if (Lampac && Lampac.prototype) {
-            var proto = Lampac.prototype;
             if (typeof proto.startSource === 'function' && !proto._osm_start_hooked) {
                 proto._osm_start_hooked = true;
                 var originalStart = proto.startSource;
 
                 proto.startSource = function(json) {
-                    log('Загрузка нового источника');
+                    log('Loading new source');
                     var result = originalStart.call(this, json);
-                    // Сортируем после загрузки
                     setTimeout(sortAll, 800);
                     return result;
                 };
-                log('startSource перехвачен');
+                log('startSource hooked');
             }
-        }
 
-        // 3. Перехватываем метод initialize (открытие балансера)
-        if (Lampac && Lampac.prototype) {
-            var proto = Lampac.prototype;
             if (typeof proto.initialize === 'function' && !proto._osm_init_hooked) {
                 proto._osm_init_hooked = true;
                 var originalInit = proto.initialize;
 
                 proto.initialize = function() {
-                    log('Открытие балансера');
+                    log('Opening balancer');
                     var result = originalInit.call(this);
-                    // Сортируем после открытия
                     setTimeout(sortAll, 1000);
                     setTimeout(sortAll, 2000);
                     return result;
                 };
-                log('initialize перехвачен');
+                log('initialize hooked');
             }
         }
     }
 
-    // ============================================================
-    // 9. ЗАПУСК
-    // ============================================================
     function init() {
-        log('Инициализация...');
+        log('Initializing...');
 
         if (!window.Lampa || !Lampa.Component) {
-            log('Lampa не готова, ждём...');
+            log('Lampa not ready, waiting...');
             setTimeout(init, 500);
             return;
         }
 
-        log('Lampa готова');
+        log('Lampa ready');
 
-        // Перехватываем методы
         hookBalancerChange();
 
-        // Первичная сортировка
         setTimeout(sortAll, 1000);
         setTimeout(sortAll, 3000);
 
         log('========================================');
-        log('ИНИЦИАЛИЗАЦИЯ ЗАВЕРШЕНА');
+        log('INIT COMPLETE');
         log('========================================');
-        log('Ручная сортировка: sortAll()');
+        log('Manual sort: sortAll()');
         log('========================================');
     }
 
@@ -404,7 +362,7 @@
     if (window.Lampa && Lampa.Listener) {
         Lampa.Listener.follow('app', function(e) {
             if (e.type === 'ready') {
-                log('app:ready получено');
+                log('app:ready received');
                 init();
             }
         });
