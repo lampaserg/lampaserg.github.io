@@ -60,156 +60,176 @@
     }
 
     // ============================================================
-    // ПОЛУЧЕНИЕ ВСЕХ ДОСТУПНЫХ БАЛАНСЕРОВ
+    // ПОЛУЧЕНИЕ СПИСКА БАЛАНСЕРОВ ИЗ LAMPA
     // ============================================================
 
-    function getAvailableBalansers(callback) {
-        var network = new Lampa.Reguest();
-        network.timeout(10000);
-        network.silent('https://ab2024.ru/lite/withsearch', function(json) {
-            if (json && Array.isArray(json)) {
-                callback(json);
-            } else {
-                callback(['phantom', 'fxapi', 'alloha', 'kinopub']);
+    function getBalansersFromLampa() {
+        var sources = [];
+        var activeBalanser = Lampa.Storage.get('active_balanser', '');
+        var onlineBalanser = Lampa.Storage.get('online_balanser', '');
+
+        if (activeBalanser) sources.push(activeBalanser);
+        if (onlineBalanser && onlineBalanser !== activeBalanser) sources.push(onlineBalanser);
+
+        // Если источников нет - добавляем приоритетные
+        if (sources.length === 0) {
+            sources = ['phantom', 'fxapi', 'alloha', 'kinopub'];
+        }
+
+        // Убираем дубликаты
+        var unique = [];
+        sources.forEach(function(s) {
+            var lower = s.toLowerCase();
+            if (!unique.some(function(u) { return u.toLowerCase() === lower; })) {
+                unique.push(s);
             }
-        }, function() {
-            callback(['phantom', 'fxapi', 'alloha', 'kinopub']);
-        }, false, { dataType: 'json' });
+        });
+
+        return unique;
     }
 
     // ============================================================
-    // ОСНОВНАЯ ФУНКЦИЯ: ПОИСК ЛУЧШЕГО ПОТОКА
+    // ОСНОВНАЯ ФУНКЦИЯ: ПОИСК ЛУЧШЕГО ПОТОКА (ЧЕРЕЗ LAMPA)
     // ============================================================
 
     function findBestStream(movie, callback) {
-        getAvailableBalansers(function(balansers) {
-            var allVideos = [];
-            var total = balansers.length;
-            var completed = 0;
-            var logLines = [];
+        var balansers = getBalansersFromLampa();
+        var logLines = [];
+        var allVideos = [];
+        var total = balansers.length;
+        var completed = 0;
 
-            logLines.push('═══════════════════════════════════════════════════════════');
-            logLines.push('🔍 АНАЛИЗ ПОТОКОВ ДЛЯ: ' + (movie.title || movie.name));
-            logLines.push('📋 Балансеров: ' + balansers.length + ' (' + balansers.join(', ') + ')');
-            logLines.push('═══════════════════════════════════════════════════════════');
+        logLines.push('═══════════════════════════════════════════════════════════');
+        logLines.push('🔍 АНАЛИЗ ПОТОКОВ ДЛЯ: ' + (movie.title || movie.name));
+        logLines.push('📋 Балансеров: ' + balansers.length + ' (' + balansers.join(', ') + ')');
+        logLines.push('═══════════════════════════════════════════════════════════');
 
-            if (total === 0) {
-                callback(null, logLines);
-                return;
-            }
+        if (total === 0) {
+            callback(null, logLines);
+            return;
+        }
 
-            balansers.forEach(function(sourceName) {
-                var query = [];
-                query.push('id=' + encodeURIComponent(movie.id));
-                if (movie.imdb_id) query.push('imdb_id=' + (movie.imdb_id || ''));
-                if (movie.kinopoisk_id) query.push('kinopoisk_id=' + (movie.kinopoisk_id || ''));
-                if (movie.tmdb_id) query.push('tmdb_id=' + (movie.tmdb_id || ''));
-                query.push('title=' + encodeURIComponent(movie.title || movie.name));
-                query.push('original_title=' + encodeURIComponent(movie.original_title || movie.original_name));
-                query.push('serial=' + (movie.name ? 1 : 0));
-                query.push('original_language=' + (movie.original_language || ''));
-                query.push('year=' + ((movie.release_date || movie.first_air_date || '0000') + '').slice(0, 4));
-                query.push('source=' + (movie.source || 'tmdb'));
+        balansers.forEach(function(sourceName) {
+            // Используем встроенный запрос Lampac
+            var query = [];
+            query.push('id=' + encodeURIComponent(movie.id));
+            if (movie.imdb_id) query.push('imdb_id=' + (movie.imdb_id || ''));
+            if (movie.kinopoisk_id) query.push('kinopoisk_id=' + (movie.kinopoisk_id || ''));
+            if (movie.tmdb_id) query.push('tmdb_id=' + (movie.tmdb_id || ''));
+            query.push('title=' + encodeURIComponent(movie.title || movie.name));
+            query.push('original_title=' + encodeURIComponent(movie.original_title || movie.original_name));
+            query.push('serial=' + (movie.name ? 1 : 0));
+            query.push('original_language=' + (movie.original_language || ''));
+            query.push('year=' + ((movie.release_date || movie.first_air_date || '0000') + '').slice(0, 4));
+            query.push('source=' + (movie.source || 'tmdb'));
 
-                var url = 'https://ab2024.ru/lite/' + sourceName + '?' + query.join('&');
+            var url = 'https://ab2024.ru/lite/' + sourceName + '?' + query.join('&');
 
-                var network = new Lampa.Reguest();
-                network.timeout(8000);
-                network["native"](url, function(str) {
-                    completed++;
-                    try {
-                        var $html = $('<div>' + str + '</div>');
-                        $html.find('.videos__item').each(function() {
-                            var $item = $(this);
-                            try {
-                                var data = JSON.parse($item.attr('data-json'));
-                                var text = $item.text().trim();
-                                if (data.method === 'play' || data.method === 'call') {
-                                    data.text = text;
-                                    data.sourceName = sourceName;
-                                    allVideos.push(data);
-                                }
-                            } catch (e) {}
-                        });
-                    } catch (e) {}
-
-                    if (completed === total) {
-                        // === АНАЛИЗ ВСЕХ ВИДЕО ===
-                        var bestItem = null;
-                        var bestScore = -1;
-
-                        allVideos.forEach(function(item) {
-                            var quality = getItemQuality(item);
-                            var voice = item.voice_name || item.text || '';
-                            var isDub = isTargetVoice(voice);
-                            var score = 0;
-
-                            if (quality >= 2160) score += 90;
-                            else if (quality >= 1080) score += 50;
-                            else if (quality >= 720) score += 20;
-                            else if (quality >= 480) score += 5;
-
-                            if (isDub) score += 1000;
-
-                            var source = item.sourceName || '';
-                            if (/phantom/.test(source)) score += 10;
-                            else if (/fxapi|filmix/.test(source)) score += 8;
-                            else if (/alloha/.test(source)) score += 6;
-                            else if (/kinopub/.test(source)) score += 4;
-
-                            var urlHint = normalize(item.url || item.stream || '');
-                            if (/m3u8/.test(urlHint)) score += 4;
-                            if (/mp4/.test(urlHint)) score += 2;
-                            if (/iframe|embed/.test(urlHint)) score -= 4;
-
-                            var voiceLabel = voice.substring(0, 25) + (voice.length > 25 ? '...' : '');
-                            var qualityLabel = quality > 0 ? quality + 'p' : '---';
-                            var sourceLabel = source.padEnd(12);
-
-                            logLines.push(
-                                '  📊 ' + sourceLabel +
-                                ' | ' + voiceLabel.padEnd(18) +
-                                ' | ' + qualityLabel.padEnd(6) +
-                                ' | вес: ' + String(score).padStart(4) +
-                                (isDub ? ' ✅ ДУБЛЯЖ' : '')
-                            );
-
-                            if (score > bestScore) {
-                                bestScore = score;
-                                bestItem = item;
+            var network = new Lampa.Reguest();
+            network.timeout(10000);
+            network["native"](url, function(str) {
+                completed++;
+                try {
+                    var $html = $('<div>' + str + '</div>');
+                    $html.find('.videos__item').each(function() {
+                        var $item = $(this);
+                        try {
+                            var data = JSON.parse($item.attr('data-json'));
+                            var text = $item.text().trim();
+                            if (data.method === 'play' || data.method === 'call') {
+                                data.text = text;
+                                data.sourceName = sourceName;
+                                allVideos.push(data);
                             }
-                        });
+                        } catch (e) {}
+                    });
+                } catch (e) {}
 
-                        // === ВЫВОД ЛУЧШЕГО ===
-                        if (bestItem) {
-                            var bestQuality = getItemQuality(bestItem);
-                            var bestVoice = bestItem.voice_name || bestItem.text || '';
-                            logLines.push('═══════════════════════════════════════════════════════════');
-                            logLines.push('🏆 ЛУЧШИЙ ПОТОК:');
-                            logLines.push('  📦 Источник: ' + bestItem.sourceName);
-                            logLines.push('  🎤 Озвучка: ' + bestVoice);
-                            logLines.push('  📐 Качество: ' + (bestQuality > 0 ? bestQuality + 'p' : 'неизвестно'));
-                            logLines.push('  ⚖️ Вес: ' + bestScore);
-                            logLines.push('═══════════════════════════════════════════════════════════');
-                        } else {
-                            logLines.push('❌ Подходящий поток не найден');
-                            logLines.push('═══════════════════════════════════════════════════════════');
-                        }
-
-                        callback(bestItem, logLines);
-                    }
-                }, function() {
-                    completed++;
-                    if (completed === total) {
-                        if (allVideos.length === 0) {
-                            logLines.push('❌ Видео не найдены ни в одном балансере');
-                            logLines.push('═══════════════════════════════════════════════════════════');
-                        }
-                        callback(null, logLines);
-                    }
-                }, false, { dataType: 'text' });
-            });
+                if (completed === total) {
+                    processResults(allVideos, logLines, callback);
+                }
+            }, function() {
+                completed++;
+                if (completed === total) {
+                    processResults(allVideos, logLines, callback);
+                }
+            }, false, { dataType: 'text' });
         });
+    }
+
+    function processResults(allVideos, logLines, callback) {
+        if (allVideos.length === 0) {
+            logLines.push('❌ Видео не найдены');
+            logLines.push('═══════════════════════════════════════════════════════════');
+            callback(null, logLines);
+            return;
+        }
+
+        var bestItem = null;
+        var bestScore = -1;
+
+        allVideos.forEach(function(item) {
+            var quality = getItemQuality(item);
+            var voice = item.voice_name || item.text || '';
+            var isDub = isTargetVoice(voice);
+            var score = 0;
+
+            // Качество
+            if (quality >= 2160) score += 90;
+            else if (quality >= 1080) score += 50;
+            else if (quality >= 720) score += 20;
+            else if (quality >= 480) score += 5;
+
+            // Дубляж - главный приоритет
+            if (isDub) score += 1000;
+
+            // Источник
+            var source = item.sourceName || '';
+            if (/phantom/.test(source)) score += 10;
+            else if (/fxapi|filmix/.test(source)) score += 8;
+            else if (/alloha/.test(source)) score += 6;
+            else if (/kinopub/.test(source)) score += 4;
+
+            // Формат
+            var urlHint = normalize(item.url || item.stream || '');
+            if (/m3u8/.test(urlHint)) score += 4;
+            if (/mp4/.test(urlHint)) score += 2;
+            if (/iframe|embed/.test(urlHint)) score -= 4;
+
+            var voiceLabel = voice.substring(0, 25) + (voice.length > 25 ? '...' : '');
+            var qualityLabel = quality > 0 ? quality + 'p' : '---';
+            var sourceLabel = source.padEnd(12);
+
+            logLines.push(
+                '  📊 ' + sourceLabel +
+                ' | ' + voiceLabel.padEnd(18) +
+                ' | ' + qualityLabel.padEnd(6) +
+                ' | вес: ' + String(score).padStart(4) +
+                (isDub ? ' ✅ ДУБЛЯЖ' : '')
+            );
+
+            if (score > bestScore) {
+                bestScore = score;
+                bestItem = item;
+            }
+        });
+
+        if (bestItem) {
+            var bestQuality = getItemQuality(bestItem);
+            var bestVoice = bestItem.voice_name || bestItem.text || '';
+            logLines.push('═══════════════════════════════════════════════════════════');
+            logLines.push('🏆 ЛУЧШИЙ ПОТОК:');
+            logLines.push('  📦 Источник: ' + bestItem.sourceName);
+            logLines.push('  🎤 Озвучка: ' + bestVoice);
+            logLines.push('  📐 Качество: ' + (bestQuality > 0 ? bestQuality + 'p' : 'неизвестно'));
+            logLines.push('  ⚖️ Вес: ' + bestScore);
+            logLines.push('═══════════════════════════════════════════════════════════');
+        } else {
+            logLines.push('❌ Подходящий поток не найден');
+            logLines.push('═══════════════════════════════════════════════════════════');
+        }
+
+        callback(bestItem, logLines);
     }
 
     // ============================================================
@@ -259,8 +279,7 @@
                 if (!render || !movie) return;
                 if (render.find('.lampac-smart-button').length > 0) return;
 
-                var isSerial = !!(movie && movie.name);
-                var label = isSerial ? '📺 Лучший балансер' : '🎬 Дубляж + 4K';
+                var label = '🎬 Лучший поток';
 
                 var btn = $(
                     '<div class="full-start__button full-start-new__button selector view--online lampac-smart-button" style="display:flex !important; opacity:1 !important; visibility:visible !important;">' +
@@ -273,7 +292,6 @@
 
                 btn.on('hover:enter', function() {
                     findBestStream(movie, function(bestItem, logLines) {
-                        // ВЫВОД ЛОГА ОДНИМ БЛОКОМ
                         if (logLines) {
                             console.log(logLines.join('\n'));
                         }
@@ -284,12 +302,6 @@
                         }
 
                         var source = bestItem.sourceName || 'unknown';
-                        var quality = getItemQuality(bestItem);
-                        var voice = bestItem.voice_name || bestItem.text || '';
-
-                        console.log('▶️ ПЕРЕКЛЮЧЕНИЕ НА: ' + source + ' (' + quality + 'p, ' + voice + ')');
-
-                        // Переключаемся и ОТКРЫВАЕМ онлайн с новым балансером
                         switchToSourceAndOpen(source, movie);
                     });
                 });
