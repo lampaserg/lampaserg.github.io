@@ -1,1272 +1,344 @@
-(function () {
+(function() {
     'use strict';
 
-    if (window.smartonline_plugin_v2) return;
-    window.smartonline_plugin_v2 = true;
+    if (window.quality_sorter_plugin) return;
+    window.quality_sorter_plugin = true;
 
-    var PLAYBACK_TIMEOUT_MS = 12000;
-    var CONFIRM_OK_MS = 15000;
-    var WAIT_INTERVAL_MS = 300;
-    var WAIT_MAX_TRIES = 120;
-    var STATS_KEY = 'lampac_smart_stats_v2';
-    var CLARIFICATION_KEY = 'clarification_search';
-    var FAIL_NOTIFY_KEY = 'lampac_smart_fail_notified_v2';
-    var MANIFEST_SYNC_LIMIT = 6;
-    var CFG_NOTIFY_RUNTIME = 'lampac_smart_notify_runtime';
-    var CFG_TIMEOUT_FAIL = 'lampac_smart_timeout_fail';
-    var CFG_TIMEOUT_CONFIRM = 'lampac_smart_timeout_confirm';
-    var CFG_STATS_SCOPE = 'lampac_smart_stats_scope';
+    // ============================================================
+    // КОНФИГУРАЦИЯ
+    // ============================================================
 
-    var runtime = {
-        playback: null,
-        playerHooksReady: false,
-        fullHookReady: false,
-        headButtonReady: false,
-        manifestReady: false,
-        componentReady: false,
-        started: false,
-        loadingBase: false,
-        waitStarted: false,
-        manifestTimer: null,
-        manifestSyncCount: 0,
-        settingsReady: false,
-        baseComponentCache: ''
+    var CONFIG = {
+        host: 'https://ab2024.ru',  // или ваш хост
+        sortEnabled: true,          // включить сортировку
+        showQualityInLabel: true,   // показывать качество в названии
+        preferDub: true             // предпочитать дубляж
     };
 
-    var SMART_MANIFEST_VERSION = '2.0.0';
+    // ============================================================
+    // ОПРЕДЕЛЕНИЕ КАЧЕСТВА (скопировано из вашего кода)
+    // ============================================================
 
-    function detectBaseComponentFromManifest() {
-        if (!window.Lampa || !Lampa.Manifest) return '';
-
-        var plugins = Lampa.Manifest.plugins;
-        var list = Array.isArray(plugins) ? plugins : [plugins];
-        for (var i = 0; i < list.length; i++) {
-            var p = list[i];
-            if (!p || !p.component || p.component === 'iptv') continue;
-
-            var text = (p.name || '') + ' ' + (p.description || '');
-            if (/online|\u043E\u043D\u043B\u0430\u0439\u043D|nextgen|lampa|serial|film|movie|\u0444\u0438\u043B\u044C\u043C|\u0441\u0435\u0440\u0456\u0430\u043B/i.test(text))
-                return p.component;
+    function qualityWeight(label) {
+        if (label === undefined || label === null) return 0;
+        var s = ('' + label).toLowerCase();
+        
+        // 2160p (4K)
+        if (s.indexOf('4k') !== -1 || s.indexOf('uhd') !== -1 || /2160/.test(s)) return 2160;
+        // 1080p (Full HD)
+        if (s.indexOf('fullhd') !== -1 || s.indexOf('full hd') !== -1 || s.indexOf('fhd') !== -1 || /1080/.test(s)) return 1080;
+        // 720p (HD)
+        if (s.indexOf('hd') !== -1 && s.indexOf('full') === -1 || /720/.test(s)) return 720;
+        // 480p (SD)
+        if (s.indexOf('sd') !== -1 || /480/.test(s)) return 480;
+        
+        // Извлекаем число с p
+        var m = s.match(/(\d{3,4})\s*[pр]?/);
+        if (m) {
+            var n = parseInt(m[1], 10);
+            if (!isNaN(n) && n >= 480) return n;
         }
-
-        return '';
+        
+        return 0;
     }
 
-    function baseComponentName() {
-        if (window.lampac_base_component_name) return window.lampac_base_component_name;
+    function getQualityFromSource(source) {
+        var name = source.name || source.title || '';
+        var quality = qualityWeight(name);
+        
+        // Если в названии есть качество в скобках
+        var match = name.match(/\((\d{3,4})\s*[pр]\)/);
+        if (match) {
+            var q = parseInt(match[1], 10);
+            if (q > quality) quality = q;
+        }
+        
+        // Проверяем дополнительные поля
+        if (source.quality) {
+            var q = qualityWeight(source.quality);
+            if (q > quality) quality = q;
+        }
+        
+        return quality;
+    }
 
-        if (runtime.baseComponentCache && window.Lampa && Lampa.Component && Lampa.Component.get && Lampa.Component.get(runtime.baseComponentCache))
-            return runtime.baseComponentCache;
+    // ============================================================
+    // СОРТИРОВКА ИСТОЧНИКОВ (как в вашем коде)
+    // ============================================================
 
-        var detected = detectBaseComponentFromManifest();
-        if (!detected && window.Lampa && Lampa.Component && Lampa.Component.get) {
-            var candidates = ['lampac', 'LampaUaNg', 'online'];
-            for (var i = 0; i < candidates.length; i++) {
-                if (Lampa.Component.get(candidates[i])) {
-                    detected = candidates[i];
-                    break;
+    function sortSourcesByQuality(sources) {
+        if (!sources || !sources.length) return sources;
+        
+        // Создаем копию
+        var sorted = sources.slice();
+        
+        // Сортируем
+        sorted.sort(function(a, b) {
+            // 1. Активные (show: true) выше
+            var aShow = a.show !== undefined ? a.show : true;
+            var bShow = b.show !== undefined ? b.show : true;
+            if (aShow && !bShow) return -1;
+            if (!aShow && bShow) return 1;
+            
+            // 2. По качеству (от большего к меньшему)
+            var aQuality = getQualityFromSource(a);
+            var bQuality = getQualityFromSource(b);
+            if (aQuality !== bQuality) return bQuality - aQuality;
+            
+            // 3. По имени (алфавит)
+            var aName = (a.name || a.title || '').toLowerCase();
+            var bName = (b.name || b.title || '').toLowerCase();
+            return aName.localeCompare(bName);
+        });
+        
+        return sorted;
+    }
+
+    // ============================================================
+    // ДОБАВЛЕНИЕ МЕТКИ КАЧЕСТВА К НАЗВАНИЮ
+    // ============================================================
+
+    function addQualityLabel(source) {
+        var quality = getQualityFromSource(source);
+        if (!quality) return source.name || source.title || '';
+        
+        var name = source.name || source.title || '';
+        
+        // Удаляем старую метку качества в скобках
+        name = name.replace(/\s*\((\d{3,4})\s*[pр]\)\s*/g, '');
+        name = name.replace(/\s*\d{3,4}\s*[pр]\s*/g, '');
+        
+        // Добавляем новую метку
+        return name + ' (' + quality + 'p)';
+    }
+
+    // ============================================================
+    // ПЕРЕХВАТ КОМПОНЕНТА LAMPAC
+    // ============================================================
+
+    function patchLampacComponent() {
+        var componentName = 'lampac';
+        
+        // Проверяем, есть ли компонент
+        if (!Lampa.Component || !Lampa.Component.get) {
+            console.log('[Quality Sorter] Lampa.Component не найден, ждем...');
+            return false;
+        }
+        
+        var BaseComponent = Lampa.Component.get(componentName);
+        if (!BaseComponent) {
+            console.log('[Quality Sorter] Компонент ' + componentName + ' не найден');
+            return false;
+        }
+        
+        console.log('[Quality Sorter] Патчим компонент ' + componentName);
+        
+        // Создаем новый компонент с сортировкой
+        function SortedComponent(object) {
+            BaseComponent.call(this, object);
+            
+            var self = this;
+            var originalStartSource = this.startSource;
+            
+            // Переопределяем startSource для сортировки
+            this.startSource = function(json) {
+                console.log('[Quality Sorter] Сортируем источники...');
+                
+                // Сортируем источники
+                var sorted = sortSourcesByQuality(json);
+                
+                // Добавляем метки качества
+                if (CONFIG.showQualityInLabel) {
+                    sorted.forEach(function(source) {
+                        if (source.name) {
+                            source.name = addQualityLabel(source);
+                        }
+                    });
                 }
-            }
-        }
-
-        if (detected) runtime.baseComponentCache = detected;
-        return runtime.baseComponentCache || 'lampac';
-    }
-
-    function smartComponentName() {
-        return window.lampac_smart_component_name || (baseComponentName() + '_smart');
-    }
-
-    function notify(text) {
-        if (window.Lampa && Lampa.Noty && Lampa.Noty.show) Lampa.Noty.show(text);
-    }
-
-    function settingValue(name, def) {
-        if (!window.Lampa || !Lampa.Storage) return def;
-        var val = Lampa.Storage.get(name, def);
-        return val === undefined || val === null || val === '' ? def : val;
-    }
-
-    function settingBool(name, def) {
-        var val = settingValue(name, def);
-        if (typeof val === 'boolean') return val;
-        return String(val) === 'true';
-    }
-
-    function settingInt(name, def) {
-        var val = parseInt(settingValue(name, String(def)), 10);
-        return isNaN(val) ? def : val;
-    }
-
-    function shouldNotifyRuntime() {
-        return settingBool(CFG_NOTIFY_RUNTIME, false);
-    }
-
-    function getPlaybackTimeoutMs() {
-        return Math.max(4, settingInt(CFG_TIMEOUT_FAIL, Math.round(PLAYBACK_TIMEOUT_MS / 1000))) * 1000;
-    }
-
-    function getConfirmTimeoutMs() {
-        return Math.max(6, settingInt(CFG_TIMEOUT_CONFIRM, Math.round(CONFIRM_OK_MS / 1000))) * 1000;
-    }
-
-    function notifyOnce(key, text) {
-        if (!window.Lampa || !Lampa.Storage) {
-            notify(text);
-            return;
-        }
-
-        if (Lampa.Storage.get(key, false)) return;
-        Lampa.Storage.set(key, true);
-        notify(text);
-    }
-
-    function notifyRuntime(text) {
-        if (shouldNotifyRuntime()) notify(text);
-    }
-
-    function normalize(value) {
-        return (value || '').toString().toLowerCase().replace(/\s+/g, ' ').trim();
-    }
-
-    function keyify(value) {
-        return normalize(value).replace(/[^a-z0-9\u0400-\u04FF]+/gi, '_').replace(/^_+|_+$/g, '') || 'unknown';
-    }
-
-    function getStats() {
-        var data = Lampa.Storage.get(STATS_KEY, {});
-        if (!Lampa.Arrays.isObject(data)) data = {};
-        if (!Lampa.Arrays.isObject(data.sources)) data.sources = {};
-        if (!Lampa.Arrays.isObject(data.voices)) data.voices = {};
-        return data;
-    }
-
-    function saveStats(data) {
-        Lampa.Storage.set(STATS_KEY, data);
-    }
-
-    function statWeightByKey(data, type, key) {
-        if (!key) return 0;
-        var stat = data[type][key];
-        if (!stat) return 0;
-        return (stat.success || 0) * 8 - (stat.fail || 0) * 5;
-    }
-
-    function scopedStatsKey(type, key, context) {
-        if (!key) return key;
-        var scope = String(settingValue(CFG_STATS_SCOPE, 'media'));
-        if (scope === 'global' || !context || !context.mediaType) return key;
-
-        if (type === 'voices') return key + '::' + context.mediaType + '::' + (context.sourceKey || 'default');
-        return key + '::' + context.mediaType;
-    }
-
-    function updateStats(type, key, success, context) {
-        if (!key) return;
-
-        var data = getStats();
-        if (!Lampa.Arrays.isObject(data[type][key])) data[type][key] = { success: 0, fail: 0 };
-
-        data[type][key][success ? 'success' : 'fail']++;
-
-        var scoped = scopedStatsKey(type, key, context);
-        if (scoped !== key) {
-            if (!Lampa.Arrays.isObject(data[type][scoped])) data[type][scoped] = { success: 0, fail: 0 };
-            data[type][scoped][success ? 'success' : 'fail']++;
-        }
-
-        saveStats(data);
-    }
-
-    function statsWeight(type, key, context) {
-        if (!key) return 0;
-
-        var data = getStats();
-        var base = statWeightByKey(data, type, key);
-        var scoped = scopedStatsKey(type, key, context);
-        if (scoped === key) return base;
-
-        return Math.round(base * 0.4 + statWeightByKey(data, type, scoped));
-    }
-
-    function getClarification(movie) {
-        var id = Lampa.Utils.hash(movie.number_of_seasons ? movie.original_name : movie.original_title);
-        var all = Lampa.Storage.get(CLARIFICATION_KEY, {});
-        if (!Lampa.Arrays.isObject(all)) all = {};
-        return all[id];
-    }
-
-    // ============================================================
-    // ОПРЕДЕЛЕНИЕ КАЧЕСТВА С ПОГРЕШНОСТЬЮ
-    // ============================================================
-
-    function detectQuality(value) {
-        var text = normalize(value);
-        if (!text) return 0;
-
-        // 2160p (4K, UHD, 2160, 3840) — погрешность
-        if (/(2160|4k|uhd|ultra[\s-]?hd|3840)/i.test(text)) return 2160;
-
-        // 1080p (Full HD, 1080, 1920) — погрешность
-        if (/(1080|full[\s-]?hd|fhd|1920)/i.test(text)) return 1080;
-
-        // 720p (HD Ready, 720, 1280) — исключается
-        if (/(720|hd[\s-]?ready|1280)/i.test(text)) return 0;
-
-        // 480p (SD, 480, 640, 854) — исключается
-        if (/(480|sd|640|854)/i.test(text)) return 0;
-
-        // Все остальные — исключаются
-        return 0;
-    }
-
-    // ============================================================
-    // ВЕСА КАЧЕСТВА
-    // ============================================================
-
-    function qualityWeight(quality) {
-        if (quality >= 2160) return 100;  // 2160p (4K) — максимальный вес
-        if (quality >= 1080) return 50;   // 1080p (Full HD) — средний вес
-        return 0;                          // Все остальные — исключаются
-    }
-
-    // ============================================================
-    // ВЕСА ИСТОЧНИКОВ
-    // ============================================================
-
-    function sourceWeight(source) {
-        var text = normalize(source);
-        if (/phantom/.test(text)) return 10;   // Наивысший приоритет
-        if (/filmix/.test(text)) return 8;     // Высокий приоритет
-        if (/alloha/.test(text)) return 6;     // Средний приоритет
-        if (/kinopub/.test(text)) return 4;    // Базовый приоритет
-        return 0;
-    }
-
-    // ============================================================
-    // ВЕСА ОЗВУЧЕК
-    // ============================================================
-
-    function voiceWeight(name) {
-        var text = normalize(name);
-        var score = 0;
-
-        if (!text) return score;
-
-        // === ПРИОРИТЕТНЫЕ ОЗВУЧКИ ===
-        if (/hdrezka|hd.rezka|rezka/.test(text)) score += 20;
-
-        // === КУБИК В КУБЕ (вес 13) ===
-        if (/(\u043A\u0443\u0431\u0438\u043A|cube|куб|kubik)/i.test(text)) score += 13;
-
-        if (/(\u0434\u0443\u0431\u043B\u044F\u0436|dub\b)/i.test(text)) score += 15;
-        if (/lostfilm|lost.film/.test(text)) score += 10;
-
-        // === СУБТИТРЫ И ОРИГИНАЛ (низкий приоритет) ===
-        if (/(\u0441\u0443\u0431\u0442|sub\b|subtitle|original|\u043E\u0440\u0438\u0433\u0456\u043D|orig)/i.test(text)) score -= 10;
-
-        // === ИСКЛЮЧАЕМ АНГЛИЙСКУЮ ОЗВУЧКУ ===
-        if (/english|eng|en\b/i.test(text) && !/russian|rus/.test(text)) score -= 100;
-
-        return score;
-    }
-
-    function getActiveSource() {
-        return Lampa.Storage.get('active_balanser', '') || Lampa.Storage.get('online_balanser', '');
-    }
-
-    // ============================================================
-    // АНАЛИЗ КАЧЕСТВА ИТЕМА
-    // ============================================================
-
-    function itemQuality(item) {
-        var max = 0;
-
-        // Проверяем качество из объекта quality
-        if (item && item.quality && Lampa.Arrays.isObject(item.quality)) {
-            Lampa.Arrays.getKeys(item.quality).forEach(function (q) {
-                var detected = detectQuality(q + ' ' + item.quality[q]);
-                if (detected > max) max = detected;
-            });
-        }
-
-        // Проверяем текстовые поля
-        var textFields = [item && item.text, item && item.title, item && item.name, item && item.label];
-        textFields.forEach(function (field) {
-            var detected = detectQuality(field);
-            if (detected > max) max = detected;
-        });
-
-        // Проверяем URL
-        var urlFields = [item && item.url, item && item.stream];
-        urlFields.forEach(function (field) {
-            var detected = detectQuality(field);
-            if (detected > max) max = detected;
-        });
-
-        return max;
-    }
-
-    // ============================================================
-    // ФИЛЬТРАЦИЯ И СОРТИРОВКА
-    // ============================================================
-
-    function rankVoices(buttons, sourceName, context) {
-        var sourceKey = keyify(sourceName);
-
-        return buttons.map(function (button, index) {
-            var title = button.text || '';
-            var score = voiceWeight(title) + statsWeight('voices', keyify(title), context) + statsWeight('sources', sourceKey, context);
-
-            if (button.active) score += 1;
-
-            return {
-                index: index,
-                title: title,
-                url: button.url,
-                active: !!button.active,
-                score: score
+                
+                console.log('[Quality Sorter] Отсортировано:', sorted.map(function(s) {
+                    return s.name + ' (' + getQualityFromSource(s) + 'p)';
+                }).join(', '));
+                
+                // Вызываем оригинальный метод с отсортированными данными
+                return originalStartSource.call(this, sorted);
             };
-        }).sort(function (a, b) {
-            return b.score - a.score;
-        });
-    }
-
-    function bestVoice(buttons, sourceName, context) {
-        return rankVoices(buttons, sourceName, context)[0] || null;
-    }
-
-    function buildQueue(videos, sourceName, fallbackVoice, context) {
-        var map = {};
-
-        videos.forEach(function (item) {
-            var voiceName = item.voice_name || item.text || fallbackVoice || '';
-            var voiceKey = keyify(voiceName);
-            var sourceKey = keyify(sourceName);
-            var quality = itemQuality(item);
-
-            // === ФИЛЬТРАЦИЯ: исключаем все, кроме 2160p и 1080p ===
-            if (quality !== 2160 && quality !== 1080) return;
-
-            if (!item || (!item.url && !item.stream)) return;
-
-            var score = 0;
-
-            // === СБОР ОЦЕНОК ===
-            score += qualityWeight(quality);              // 100 или 50
-            score += voiceWeight(voiceName);              // 20/15/13/10
-            score += sourceWeight(sourceName);            // 10/8/6/4
-            score += statsWeight('voices', voiceKey, context);
-            score += statsWeight('sources', sourceKey, context);
-            score += item.method === 'play' ? 10 : 4;
-
-            // Формат
-            var urlHint = normalize(item.url || item.stream || '');
-            if (/m3u8/.test(urlHint)) score += 4;
-            if (/mp4/.test(urlHint)) score += 2;
-            if (/iframe|embed/.test(urlHint)) score -= 4;
-
-            var candidate = {
-                id: Lampa.Utils.hash([sourceKey, voiceKey, item.url || item.stream || item.text || Math.random()].join('::')),
-                item: item,
-                sourceKey: sourceKey,
-                sourceName: sourceName || '',
-                voiceKey: voiceKey,
-                voiceName: voiceName,
-                statsContext: context,
-                quality: quality,
-                score: score
-            };
-
-            if (!map[candidate.id] || map[candidate.id].score < candidate.score) {
-                map[candidate.id] = candidate;
-            }
-        });
-
-        // Сортировка по убыванию оценки
-        return Object.keys(map).map(function (id) { return map[id]; }).sort(function (a, b) {
-            return b.score - a.score;
-        });
-    }
-
-    // ============================================================
-    // ОСТАЛЬНЫЕ ФУНКЦИИ
-    // ============================================================
-
-    function clearPlayback(playback) {
-        if (!playback) return;
-
-        clearTimeout(playback.failTimer);
-        clearTimeout(playback.cleanupTimer);
-        if (runtime.playback === playback) runtime.playback = null;
-    }
-
-    function activityComponentInstance(activity) {
-        if (!activity || !activity.activity || !activity.activity.component) return null;
-        return typeof activity.activity.component === 'function' ? activity.activity.component() : activity.activity.component;
-    }
-
-    function failPlayback(playback, reason) {
-        if (!playback || playback.failing) return;
-
-        playback.failing = true;
-        clearTimeout(playback.failTimer);
-        clearTimeout(playback.cleanupTimer);
-
-        if (playback.candidate) {
-            updateStats('sources', playback.candidate.sourceKey, false, playback.candidate.statsContext);
-            updateStats('voices', playback.candidate.voiceKey, false, playback.candidate.statsContext);
         }
-
-        setTimeout(function () {
-            playback.failing = false;
-            playNextCandidate(playback.instance, playback.state, reason || 'fail');
-        }, 250);
-    }
-
-    function buildPlayElement(instance, candidate, json, jsonCall) {
-        var play = instance.toPlayElement(candidate.item);
-
-        play.url = json.url;
-        play.headers = jsonCall.headers || json.headers;
-        play.quality = jsonCall.quality || candidate.item.qualitys || candidate.item.quality;
-        play.segments = jsonCall.segments || candidate.item.segments;
-        play.hls_manifest_timeout = jsonCall.hls_manifest_timeout || json.hls_manifest_timeout;
-        play.subtitles = json.subtitles;
-        play.subtitles_call = jsonCall.subtitles_call || json.subtitles_call;
-        play.isonline = true;
-        play._lampacSmartId = candidate.id;
-
-        if (json.vast && json.vast.url) {
-            play.vast_url = json.vast.url;
-            play.vast_msg = json.vast.msg;
-            play.vast_region = json.vast.region;
-            play.vast_platform = json.vast.platform;
-            play.vast_screen = json.vast.screen;
+        
+        // Наследуем прототип
+        SortedComponent.prototype = Object.create(BaseComponent.prototype);
+        SortedComponent.prototype.constructor = SortedComponent;
+        
+        // Регистрируем новый компонент
+        Lampa.Component.add(componentName + '_sorted', SortedComponent);
+        
+        // Можно заменить оригинальный компонент
+        if (CONFIG.sortEnabled) {
+            Lampa.Component.add(componentName, SortedComponent);
+            console.log('[Quality Sorter] Компонент ' + componentName + ' заменен на сортирующую версию');
         }
-
-        instance.orUrlReserve(play);
-        if (play.quality && Lampa.Arrays.isObject(play.quality)) instance.setDefaultQuality(play);
-
-        return play;
-    }
-
-    function playNextCandidate(instance, state, reason) {
-        if (!state || state.manualMode) return;
-
-        state.autoStarted = true;
-        state.queueIndex++;
-
-        if (!state.queue.length || state.queueIndex >= state.queue.length) {
-            if (runtime.playback && runtime.playback.state === state) clearPlayback(runtime.playback);
-
-            if (state.tryNextVoice && state.tryNextVoice()) return;
-
-            notifyRuntime(Lampa.Lang.translate('lampac_smart_manual_needed'));
-            return;
-        }
-
-        var candidate = state.queue[state.queueIndex];
-        state.currentCandidate = candidate;
-
-        if (reason && reason !== 'autostart') notifyRuntime(Lampa.Lang.translate('lampac_smart_retrying'));
-
-        instance.getFileUrl(candidate.item, function (json, jsonCall) {
-            if (!json || !json.url) {
-                failPlayback({
-                    instance: instance,
-                    state: state,
-                    candidate: candidate
-                }, 'resolve');
-                return;
-            }
-
-            var play = buildPlayElement(instance, candidate, json, jsonCall || {});
-            var playback = {
-                instance: instance,
-                state: state,
-                candidate: candidate,
-                play: play,
-                readyAt: 0,
-                failing: false,
-                failTimer: null,
-                cleanupTimer: null
-            };
-
-            runtime.playback = playback;
-
-            if (Lampa.Storage.field('player') === 'inner') {
-                playback.failTimer = setTimeout(function () {
-                    failPlayback(playback, 'timeout');
-                }, getPlaybackTimeoutMs());
-            }
-
-            Lampa.Player.play(play);
-            if (play.subtitles_call) instance.loadSubtitles(play.subtitles_call);
-            if (candidate.item.mark) candidate.item.mark();
-        }, true);
-    }
-
-    // ============================================================
-    // PLAYER HOOKS
-    // ============================================================
-
-    function installPlayerHooks() {
-        if (runtime.playerHooksReady) return true;
-        if (!Lampa.Player || !Lampa.Player.listener || !Lampa.Player.listener.follow) return false;
-
-        runtime.playerHooksReady = true;
-
-        Lampa.Player.listener.follow('start', function (data) {
-            var playback = runtime.playback;
-            if (!playback || !data || data._lampacSmartId !== playback.candidate.id) return;
-
-            if (Lampa.Storage.field('player') !== 'inner') {
-                updateStats('sources', playback.candidate.sourceKey, true, playback.candidate.statsContext);
-                updateStats('voices', playback.candidate.voiceKey, true, playback.candidate.statsContext);
-                clearPlayback(playback);
-            }
-        });
-
-        Lampa.Player.listener.follow('ready', function (data) {
-            var playback = runtime.playback;
-            if (!playback || !data || data._lampacSmartId !== playback.candidate.id) return;
-
-            playback.readyAt = Date.now();
-            clearTimeout(playback.failTimer);
-            updateStats('sources', playback.candidate.sourceKey, true, playback.candidate.statsContext);
-            updateStats('voices', playback.candidate.voiceKey, true, playback.candidate.statsContext);
-            playback.cleanupTimer = setTimeout(function () {
-                clearPlayback(playback);
-            }, getConfirmTimeoutMs() + 5000);
-        });
-
-        Lampa.Player.listener.follow('error', function () {
-            var playback = runtime.playback;
-            if (!playback) return;
-
-            if (playback.readyAt && Date.now() - playback.readyAt > getConfirmTimeoutMs()) {
-                clearPlayback(playback);
-                return;
-            }
-
-            try { if (Lampa.Player.close) Lampa.Player.close(); } catch (e) {}
-
-            failPlayback(playback, 'player-error');
-        });
-
-        Lampa.Player.listener.follow('ended', function () {
-            if (runtime.playback) clearPlayback(runtime.playback);
-        });
-
+        
         return true;
     }
 
     // ============================================================
-    // SMART ACTIVITY
+    // ПАТЧ ДЛЯ SMART ONLINE
     // ============================================================
 
-    function smartActivity(movie) {
-        var clarification = getClarification(movie);
-
-        return {
-            url: '',
-            title: Lampa.Lang.translate('lampac_smart_watch'),
-            component: smartComponentName(),
-            search: clarification ? clarification : movie.title,
-            search_one: movie.title,
-            search_two: movie.original_title,
-            movie: movie,
-            page: 1,
-            clarification: clarification ? true : false
-        };
-    }
-
-    // ============================================================
-    // UI: HEAD BUTTON
-    // ============================================================
-
-    function addHeadButton() {
-        if (runtime.headButtonReady) return;
-        runtime.headButtonReady = true;
-
-        var button = $('<div class="head__action selector lampac-smart-manual" style="display:none;"><span style="font-size:1.05em;font-weight:700;">MAN</span></div>');
-
-        button.on('hover:enter', function () {
-            var active = Lampa.Activity.active();
-            if (!active || active.component !== smartComponentName()) return;
-
-            var component = activityComponentInstance(active);
-            if (component && component._lampacSmart && component._lampacSmart.enableManual)
-                component._lampacSmart.enableManual();
-
-            Lampa.Activity.replace({
-                component: baseComponentName()
-            });
-        });
-
-        $('.head .open--search').after(button);
-
-        Lampa.Listener.follow('activity', function (e) {
-            if (!e || e.type !== 'start') return;
-
-            setTimeout(function () {
-                var active = Lampa.Activity.active();
-                if (active && active.component === smartComponentName())
-                    button.show();
-                else
-                    button.hide();
-            }, 0);
-        });
-    }
-
-    // ============================================================
-    // UI: FULL BUTTON (ОДНА ВИДИМАЯ КНОПКА)
-    // ============================================================
-
-    function addFullButton() {
-        if (runtime.fullHookReady) return;
-        runtime.fullHookReady = true;
-
-        function buildButton(movie) {
-            var btn = $(
-                '<div class="full-start__button full-start-new__button selector view--online lampac-smart-button" style="display:flex !important; opacity:1 !important; visibility:visible !important;" data-subtitle="' + Lampa.Lang.translate('lampac_smart_descr') + '">' +
-                    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" style="width:24px;height:24px;">' +
-                        '<path d="M13.5 2 4 14h6l-1.5 8L18 10h-6l1.5-8Z"></path>' +
-                    '</svg>' +
-                    '<span>' + Lampa.Lang.translate('lampac_smart_watch') + '</span>' +
-                '</div>'
-            );
-
-            btn.on('hover:enter', function () {
-                Lampa.Activity.push(smartActivity(movie));
-            });
-
-            return btn;
+    function patchSmartOnline() {
+        // Если есть Smart Online, патчим его
+        var smartComponent = Lampa.Component.get('lampac_smart');
+        if (!smartComponent) {
+            // Может быть другое название
+            smartComponent = Lampa.Component.get('lampac_smart_online');
         }
-
-        function addButtonToCard(data) {
-            if (!data || !data.render || !data.render.length || !data.movie) return;
-
-            var render = data.render;
-
-            // Удаляем все старые кнопки Smart Online
-            render.find('.lampac-smart-button').remove();
-
-            // Ищем контейнер с кнопками
-            var buttonsContainer = render.find('.full-start__buttons, .full-start-new__buttons, [class*="buttons-container"]').eq(0);
-
-            if (!buttonsContainer.length) {
-                buttonsContainer = render.find('.buttons--container').eq(0);
-            }
-
-            if (!buttonsContainer.length) {
-                // Если контейнер не найден, создаем его
-                buttonsContainer = $('<div class="full-start__buttons" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;"></div>');
-                render.append(buttonsContainer);
-            }
-
-            // Добавляем кнопку
-            var btn = buildButton(data.movie);
-            buttonsContainer.append(btn);
-
-            // Убеждаемся, что кнопка видима
-            btn.css({
-                'display': 'flex !important',
-                'opacity': '1 !important',
-                'visibility': 'visible !important'
-            });
-
-            // Убираем стиль display:none у контейнера, если он есть
-            buttonsContainer.css('display', 'flex');
+        
+        if (!smartComponent) {
+            console.log('[Quality Sorter] Smart Online не найден');
+            return false;
         }
-
-        function injectFromActive() {
-            try {
-                var active = Lampa.Activity.active();
-                if (!active || active.component !== 'full' || !active.activity || !active.activity.render) return;
-
-                var render = active.activity.render();
-                var movie = active.card;
-
-                if (!movie) return;
-
-                // Удаляем старые кнопки
-                render.find('.lampac-smart-button').remove();
-
-                // Добавляем новую кнопку
-                addButtonToCard({
-                    render: render,
-                    movie: movie
-                });
-            } catch (e) {
-                console.warn('[SmartOnline] injectFromActive error:', e);
-            }
-        }
-
-        // Подписываемся на событие открытия карточки
-        Lampa.Listener.follow('full', function (e) {
-            if (e.type === 'complite') {
-                var render = e.object.activity.render();
-                render.find('.lampac-smart-button').remove();
-
-                setTimeout(function() {
-                    addButtonToCard({
-                        render: render,
-                        movie: e.data.movie
-                    });
-                }, 100);
-            }
-        });
-
-        // Подписываемся на смену активности
-        Lampa.Listener.follow('activity', function (e) {
-            if (e && e.type === 'start') {
-                setTimeout(function() {
-                    injectFromActive();
-                }, 200);
-            }
-        });
-
-        // Добавляем кнопку при загрузке
-        setTimeout(injectFromActive, 500);
-
-        // Периодическая проверка (на случай, если кнопка пропала)
-        runtime.fullTicker = setInterval(function() {
-            var active = Lampa.Activity.active();
-            if (active && active.component === 'full' && active.activity && active.activity.render) {
-                var render = active.activity.render();
-                if (render.find('.lampac-smart-button').length === 0 && active.card) {
-                    addButtonToCard({
-                        render: render,
-                        movie: active.card
+        
+        console.log('[Quality Sorter] Патчим Smart Online');
+        
+        // Сохраняем оригинальный метод
+        var original = smartComponent.prototype.startSource || smartComponent.startSource;
+        
+        if (original) {
+            smartComponent.prototype.startSource = function(json) {
+                // Сортируем
+                var sorted = sortSourcesByQuality(json);
+                
+                if (CONFIG.showQualityInLabel) {
+                    sorted.forEach(function(source) {
+                        if (source.name) {
+                            source.name = addQualityLabel(source);
+                        }
                     });
                 }
-            }
-        }, 3000);
+                
+                return original.call(this, sorted);
+            };
+        }
+        
+        return true;
     }
 
     // ============================================================
-    // LANG
-    // ============================================================
-
-    function addLang() {
-        Lampa.Lang.add({
-            lampac_smart_watch: { ru: 'Smart Online', en: 'Smart Online', uk: 'Smart Online' },
-            lampac_smart_descr: { ru: 'Автовыбор потока', en: 'Auto stream select', uk: 'Автовибор потоку' },
-            lampac_smart_retrying: { ru: 'Поток не запустился, пробую следующий', en: 'Stream failed, trying next', uk: 'Потік не запустився, пробую наступний' },
-            lampac_smart_manual_needed: { ru: 'Автовыбор не сработал, перейдите в ручной режим', en: 'Autoselect failed, switch to MAN', uk: 'Автовибір не спрацював, перейдіть у ручний режим' },
-            lampac_smart_manual: { ru: 'Ручной режим', en: 'Manual mode', uk: 'Ручний режим' },
-            lampac_smart_settings_title: { ru: 'Настройки Smart Online', en: 'Smart Online settings', uk: 'Налаштування Smart Online' },
-            lampac_smart_settings_noty: { ru: 'Показывать служебные уведомления', en: 'Runtime notifications', uk: 'Показувати службові сповіщення' },
-            lampac_smart_settings_fail_timeout: { ru: 'Таймаут неудачного старта (сек.)', en: 'Fail timeout (sec)', uk: 'Таймаут невдалого старту (сек.)' },
-            lampac_smart_settings_confirm_timeout: { ru: 'Таймаут подтверждения (сек.)', en: 'Confirm timeout (sec)', uk: 'Таймаут підтвердження (сек.)' },
-            lampac_smart_settings_scope: { ru: 'Профиль статистики', en: 'Stats profile', uk: 'Профіль статистики' },
-            lampac_smart_settings_clear_stats: { ru: 'Очистить статистику Smart', en: 'Reset Smart stats', uk: 'Очистити статистику Smart' },
-            lampac_smart_settings_cleared: { ru: 'Статистика Smart очищена', en: 'Smart stats reset', uk: 'Статистику Smart очищено' }
-        });
-    }
-
-    // ============================================================
-    // SETTINGS
+    // НАСТРОЙКИ
     // ============================================================
 
     function registerSettings() {
-        if (runtime.settingsReady) return true;
-        if (!window.Lampa || !Lampa.SettingsApi) return false;
-
-        runtime.settingsReady = true;
-
+        if (!Lampa.SettingsApi) return;
+        
         Lampa.SettingsApi.addComponent({
-            component: 'smart_online',
-            name: 'Смарт Online',
-            icon: '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M13.5 2L4 14H10L8.5 22L18 10H12L13.5 2Z" fill="white"/></svg>'
+            component: 'quality_sorter',
+            name: 'Сортировка по качеству',
+            icon: '<svg viewBox="0 0 24 24" fill="none"><path d="M3 4h18v2H3V4zm0 7h12v2H3v-2zm0 7h18v2H3v-2z" fill="white"/></svg>'
         });
-
+        
         Lampa.SettingsApi.addParam({
-            component: 'smart_online',
-            param: { type: 'title' },
-            field: { name: Lampa.Lang.translate('lampac_smart_settings_title') }
-        });
-
-        Lampa.SettingsApi.addParam({
-            component: 'smart_online',
-            param: { name: CFG_NOTIFY_RUNTIME, type: 'trigger', "default": false },
-            field: { name: Lampa.Lang.translate('lampac_smart_settings_noty') }
-        });
-
-        Lampa.SettingsApi.addParam({
-            component: 'smart_online',
+            component: 'quality_sorter',
             param: {
-                name: CFG_TIMEOUT_FAIL,
-                type: 'select',
-                values: { '8': '8', '12': '12', '16': '16', '20': '20' },
-                "default": '12'
+                name: 'quality_sort_enabled',
+                type: 'trigger',
+                default: true
             },
-            field: { name: Lampa.Lang.translate('lampac_smart_settings_fail_timeout') }
+            field: {
+                name: 'Сортировать источники по качеству'
+            },
+            onChange: function(value) {
+                CONFIG.sortEnabled = value;
+                Lampa.Noty.show('Сортировка ' + (value ? 'включена' : 'выключена') + '. Перезайдите в фильм.');
+            }
         });
-
+        
         Lampa.SettingsApi.addParam({
-            component: 'smart_online',
+            component: 'quality_sorter',
             param: {
-                name: CFG_TIMEOUT_CONFIRM,
-                type: 'select',
-                values: { '10': '10', '15': '15', '20': '20', '25': '25' },
-                "default": '15'
+                name: 'quality_show_label',
+                type: 'trigger',
+                default: true
             },
-            field: { name: Lampa.Lang.translate('lampac_smart_settings_confirm_timeout') }
+            field: {
+                name: 'Показывать качество в названии'
+            },
+            onChange: function(value) {
+                CONFIG.showQualityInLabel = value;
+                Lampa.Noty.show('Метки качества ' + (value ? 'включены' : 'выключены') + '. Перезайдите в фильм.');
+            }
         });
-
+        
         Lampa.SettingsApi.addParam({
-            component: 'smart_online',
+            component: 'quality_sorter',
             param: {
-                name: CFG_STATS_SCOPE,
-                type: 'select',
-                values: {
-                    media: 'По типу контента',
-                    global: 'Глобальный'
-                },
-                "default": 'media'
+                name: 'quality_prefer_dub',
+                type: 'trigger',
+                default: true
             },
-            field: { name: Lampa.Lang.translate('lampac_smart_settings_scope') }
-        });
-
-        Lampa.SettingsApi.addParam({
-            component: 'smart_online',
-            param: { type: 'button' },
-            field: { name: Lampa.Lang.translate('lampac_smart_settings_clear_stats') },
-            onChange: function onChange() {
-                Lampa.Storage.set(STATS_KEY, { sources: {}, voices: {} });
-                notify(Lampa.Lang.translate('lampac_smart_settings_cleared'));
-            }
-        });
-
-        return true;
-    }
-
-    // ============================================================
-    // MANIFEST
-    // ============================================================
-
-    function registerManifest() {
-        if (!window.Lampa || !Lampa.Manifest) return false;
-
-        runtime.manifestReady = true;
-        window.smartonline_plugin = true;
-
-        var manifest = {
-            type: 'video',
-            version: SMART_MANIFEST_VERSION,
-            name: 'Smart Online',
-            description: 'Автовыбор потока',
-            apn: '',
-            component: smartComponentName(),
-            onContextMenu: function onContextMenu() {
-                return {
-                    name: Lampa.Lang.translate('lampac_smart_watch'),
-                    description: ''
-                };
+            field: {
+                name: 'Предпочитать дубляж'
             },
-            onContextLauch: function onContextLauch(object) {
-                var smartReady = !!(Lampa.Component && Lampa.Component.get && Lampa.Component.get(smartComponentName()));
-                if (!smartReady) smartReady = installComponent();
-
-                if (smartReady) {
-                    Lampa.Activity.push(smartActivity(object));
-                    return;
-                }
-
-                Lampa.Activity.push({
-                    url: '',
-                    title: Lampa.Lang.translate('title_online') || 'Online',
-                    component: baseComponentName(),
-                    search: object.title,
-                    search_one: object.title,
-                    search_two: object.original_title,
-                    movie: object,
-                    page: 1
-                });
+            onChange: function(value) {
+                CONFIG.preferDub = value;
             }
-        };
-
-        var plugins = Lampa.Manifest.plugins;
-        if (Array.isArray(plugins)) {
-            var replaced = false;
-            for (var i = 0; i < plugins.length; i++) {
-                var p = plugins[i];
-                if (!p) continue;
-                if (p.name === 'Smart Online' || p.name === 'Smart Онлайн' || p.component === smartComponentName()) {
-                    if (p.name === manifest.name && p.component === manifest.component && String(p.version || '') === String(manifest.version || '') && p.description === manifest.description)
-                        return true;
-                    plugins[i] = manifest;
-                    replaced = true;
-                    break;
-                }
-            }
-            if (!replaced) plugins.push(manifest);
-        } else if (plugins && typeof plugins === 'object') {
-            if (plugins.name === 'Smart Online' || plugins.name === 'Smart Онлайн' || plugins.component === smartComponentName()) {
-                if (plugins.name !== manifest.name || plugins.component !== manifest.component || String(plugins.version || '') !== String(manifest.version || '') || plugins.description !== manifest.description)
-                    Lampa.Manifest.plugins = manifest;
-            } else
-                Lampa.Manifest.plugins = [plugins, manifest];
-        } else {
-            Lampa.Manifest.plugins = manifest;
-        }
-        return true;
-    }
-
-    function scheduleManifestSync() {
-        if (runtime.manifestTimer) return;
-
-        runtime.manifestSyncCount = 0;
-        runtime.manifestTimer = setInterval(function () {
-            runtime.manifestSyncCount++;
-            registerManifest();
-
-            if (runtime.manifestSyncCount >= MANIFEST_SYNC_LIMIT) {
-                clearInterval(runtime.manifestTimer);
-                runtime.manifestTimer = null;
-            }
-        }, 2000);
-    }
-
-    // ============================================================
-    // COMPONENT
-    // ============================================================
-
-    function installComponent() {
-        if (runtime.componentReady) return true;
-        if (!Lampa.Component || !Lampa.Component.get) return false;
-
-        var BaseLampac = Lampa.Component.get(baseComponentName());
-        if (!BaseLampac) return false;
-
-        runtime.componentReady = true;
-
-        function SmartLampac(object) {
-            BaseLampac.call(this, object);
-
-            var self = this;
-            var baseParse = this.parse;
-            var state = {
-                manualMode: false,
-                autoStarted: false,
-                autoTimer: null,
-                queue: [],
-                queueIndex: -1,
-                currentCandidate: null,
-                lastVoiceUrl: '',
-                sourceName: '',
-                voiceQueue: [],
-                voiceIndex: -1,
-                voiceSignature: '',
-                statsContext: {
-                    mediaType: object.movie && object.movie.number_of_seasons ? 'tv' : 'movie',
-                    sourceKey: ''
-                }
-            };
-
-            function stopAuto() {
-                clearTimeout(state.autoTimer);
-                state.autoTimer = null;
-            }
-
-            function enableManual() {
-                state.manualMode = true;
-                stopAuto();
-                if (runtime.playback && runtime.playback.state === state) clearPlayback(runtime.playback);
-                notifyRuntime(Lampa.Lang.translate('lampac_smart_manual'));
-            }
-
-            function syncVoiceQueue(parsed) {
-                if (!parsed || !parsed.buttons || !parsed.buttons.length) return;
-
-                state.statsContext = state.statsContext || {
-                    mediaType: object.movie && object.movie.number_of_seasons ? 'tv' : 'movie',
-                    sourceKey: keyify(state.sourceName || '')
-                };
-
-                var queue = rankVoices(parsed.buttons, state.sourceName, state.statsContext);
-                var signature = queue.map(function (voice) { return voice.url; }).join('|');
-
-                if (signature !== state.voiceSignature) {
-                    state.voiceQueue = queue;
-                    state.voiceSignature = signature;
-                    var currentIndex = -1;
-                    if (state.lastVoiceUrl) {
-                        for (var i = 0; i < queue.length; i++) {
-                            if (queue[i].url === state.lastVoiceUrl) {
-                                currentIndex = i;
-                                break;
-                            }
-                        }
-                    }
-                    state.voiceIndex = currentIndex >= 0 ? currentIndex : 0;
-                } else if (state.voiceIndex < 0) {
-                    state.voiceIndex = 0;
-                }
-            }
-
-            function tryVoiceByIndex(index) {
-                var candidate = state.voiceQueue[index];
-                if (!candidate || !candidate.url) return false;
-
-                state.voiceIndex = index;
-
-                if (candidate.active) {
-                    state.autoStarted = false;
-                    state.queue = [];
-                    state.queueIndex = -1;
-                    state.currentCandidate = null;
-                    state.lastVoiceUrl = candidate.url;
-                    self.replaceChoice({
-                        voice: candidate.index,
-                        voice_name: candidate.title,
-                        voice_url: candidate.url
-                    });
-                    return false;
-                }
-
-                if (state.lastVoiceUrl === candidate.url) return false;
-
-                state.lastVoiceUrl = candidate.url;
-                state.autoStarted = false;
-                state.queue = [];
-                state.queueIndex = -1;
-                state.currentCandidate = null;
-                self.replaceChoice({
-                    voice: candidate.index,
-                    voice_name: candidate.title,
-                    voice_url: candidate.url
-                });
-                self.request(candidate.url);
-                return true;
-            }
-
-            state.tryNextVoice = function () {
-                if (!state.voiceQueue.length) return false;
-
-                var nextIndex = state.voiceIndex + 1;
-                if (nextIndex >= state.voiceQueue.length) return false;
-
-                return tryVoiceByIndex(nextIndex);
-            };
-
-            function inspect(str) {
-                var json = Lampa.Arrays.decodeJson(str, {});
-                if (Lampa.Arrays.isObject(str) && str.rch) return { rch: true };
-                if (json.rch) return { rch: true };
-
-                try {
-                    var items = self.parseJsonDate(str, '.videos__item');
-                    var buttons = self.parseJsonDate(str, '.videos__button');
-
-                    return {
-                        items: items,
-                        buttons: buttons,
-                        videos: items.filter(function (item) {
-                            return item.method === 'play' || item.method === 'call';
-                        })
-                    };
-                } catch (e) {
-                    return null;
-                }
-            }
-
-            function maybeSwitchVoice(parsed) {
-                if (!parsed || !parsed.buttons || !parsed.buttons.length || state.manualMode) return false;
-
-                state.sourceName = getActiveSource();
-                state.statsContext = state.statsContext || {
-                    mediaType: object.movie && object.movie.number_of_seasons ? 'tv' : 'movie',
-                    sourceKey: ''
-                };
-                state.statsContext.sourceKey = keyify(state.sourceName || '');
-                syncVoiceQueue(parsed);
-
-                var best = bestVoice(parsed.buttons, state.sourceName, state.statsContext);
-                if (!best || !best.url) return false;
-
-                if (state.voiceIndex < 0) state.voiceIndex = 0;
-
-                return tryVoiceByIndex(state.voiceIndex);
-            }
-
-            function maybeAutoplay(parsed) {
-                if (!parsed || !parsed.videos || !parsed.videos.length) return;
-                if (state.manualMode || state.autoStarted) return;
-                if (object.movie && object.movie.name) return;
-
-                stopAuto();
-                state.sourceName = getActiveSource();
-
-                state.autoTimer = setTimeout(function () {
-                    if (state.manualMode || state.autoStarted) return;
-
-                    state.autoStarted = false;
-                    state.currentCandidate = null;
-                    state.statsContext = state.statsContext || {
-                        mediaType: object.movie && object.movie.number_of_seasons ? 'tv' : 'movie',
-                        sourceKey: ''
-                    };
-                    state.statsContext.sourceKey = keyify(state.sourceName || '');
-                    state.queue = buildQueue(parsed.videos, state.sourceName, self.getChoice().voice_name || '', state.statsContext);
-                    state.queueIndex = -1;
-
-                    if (!state.queue.length) return;
-
-                    playNextCandidate(self, state, 'autostart');
-                }, 150);
-            }
-
-            this._lampacSmart = {
-                enableManual: enableManual
-            };
-
-            this.parse = function (str) {
-                var parsed = inspect(str);
-
-                if (parsed && maybeSwitchVoice(parsed)) return;
-
-                var result = baseParse.call(this, str);
-                if (parsed && parsed.videos && parsed.videos.length) maybeAutoplay(parsed);
-                return result;
-            };
-        }
-
-        SmartLampac.prototype = Object.create(BaseLampac.prototype);
-        SmartLampac.prototype.constructor = SmartLampac;
-
-        Lampa.Component.add(smartComponentName(), SmartLampac);
-        return true;
-    }
-
-    // ============================================================
-    // BOOT
-    // ============================================================
-
-    function ensureRuntime() {
-        var tries = 0;
-        var timer = setInterval(function () {
-            tries++;
-
-            var playerReady = installPlayerHooks();
-            var componentReady = installComponent();
-            var manifestReady = registerManifest();
-            var settingsReady = registerSettings();
-
-            if (!componentReady && !runtime.loadingBase) {
-                ensureBaseOnline(function () {});
-            }
-
-            if (componentReady && manifestReady && settingsReady && (playerReady || tries >= WAIT_MAX_TRIES)) {
-                clearInterval(timer);
-            } else if (tries >= WAIT_MAX_TRIES * 2) {
-                clearInterval(timer);
-            }
-        }, WAIT_INTERVAL_MS);
-    }
-
-    function buildOnlineScriptUrl() {
-        var token = '';
-        var localhost = 'http://lampaua.mooo.com';
-
-        if (token) return localhost + '/online/js/' + token;
-        return localhost + '/online.js';
-    }
-
-    function loadScript(url, done) {
-        var script = document.createElement('script');
-        script.src = url;
-        script.async = true;
-
-        script.onload = function () {
-            if (done) done(true);
-        };
-
-        script.onerror = function () {
-            if (done) done(false);
-        };
-
-        document.head.appendChild(script);
-    }
-
-    function ensureBaseOnline(done) {
-        if (window.lampac_plugin) {
-            done(true);
-            return;
-        }
-
-        if (runtime.loadingBase) {
-            var wait = 0;
-            var timer = setInterval(function () {
-                wait++;
-                if (window.lampac_plugin) {
-                    clearInterval(timer);
-                    done(true);
-                } else if (wait >= WAIT_MAX_TRIES) {
-                    clearInterval(timer);
-                    done(false);
-                }
-            }, WAIT_INTERVAL_MS);
-            return;
-        }
-
-        runtime.loadingBase = true;
-        loadScript(buildOnlineScriptUrl(), function (ok) {
-            runtime.loadingBase = false;
-            done(ok && !!window.lampac_plugin);
         });
     }
 
-    function start() {
-        if (runtime.started) return;
+    // ============================================================
+    // ЗАПУСК
+    // ============================================================
 
-        runtime.started = true;
-        window.smartonline_started = true;
-        window.smartonline_plugin = true;
-        addLang();
+    function init() {
+        console.log('[Quality Sorter] Инициализация...');
+        
+        // Регистрируем настройки
         registerSettings();
-        installPlayerHooks();
-        installComponent();
-        registerManifest();
-        addFullButton();
-        addHeadButton();
-        ensureRuntime();
-        scheduleManifestSync();
+        
+        // Патчим компоненты
+        var patched = false;
+        
+        // Пробуем патчить Lampac
+        if (patchLampacComponent()) {
+            patched = true;
+        }
+        
+        // Пробуем патчить Smart Online
+        if (patchSmartOnline()) {
+            patched = true;
+        }
+        
+        if (patched) {
+            console.log('[Quality Sorter] Готово!');
+            Lampa.Noty.show('Сортировка источников по качеству включена');
+        } else {
+            console.log('[Quality Sorter] Не удалось найти компоненты для патча');
+            
+            // Пробуем позже
+            setTimeout(init, 3000);
+        }
     }
 
-    function waitLampac() {
-        if (runtime.waitStarted) return;
+    // ============================================================
+    // ОЖИДАНИЕ LAMPA
+    // ============================================================
 
-        runtime.waitStarted = true;
-        var tries = 0;
-        var timer = setInterval(function () {
-            tries++;
+    function waitForLampa() {
+        if (window.Lampa && Lampa.Component) {
+            init();
+        } else {
+            setTimeout(waitForLampa, 500);
+        }
+    }
 
-            if (window.Lampa) {
-                clearInterval(timer);
-                runtime.waitStarted = false;
-                ensureBaseOnline(function (ok) {
-                    start();
-
-                    if (!ok && shouldNotifyRuntime())
-                        notifyOnce(FAIL_NOTIFY_KEY, 'Смарт Online: не удалось загрузить базовый online-плагин');
-                });
-            } else if (tries >= WAIT_MAX_TRIES) {
-                clearInterval(timer);
-                runtime.waitStarted = false;
+    // Ждем готовности Lampa
+    if (window.Lampa && Lampa.Listener) {
+        Lampa.Listener.follow('app', function(e) {
+            if (e.type === 'ready') {
+                waitForLampa();
             }
-        }, WAIT_INTERVAL_MS);
-    }
-
-    waitLampac();
-
-    if (window.Lampa && Lampa.Listener && Lampa.Listener.follow) {
-        Lampa.Listener.follow('app', function (e) {
-            if (e.type === 'ready') waitLampac();
         });
     }
+    
+    waitForLampa();
 
 })();
