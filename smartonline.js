@@ -1,7 +1,7 @@
 /**
  * Online Source Manager
- * Версия: 3.1.0
- * Полное управление источниками с логированием
+ * Версия: 3.2.0
+ * Исправлена инициализация
  */
 
 (function() {
@@ -29,7 +29,7 @@
     }
 
     log('========================================');
-    log('Online Source Manager v3.1.0');
+    log('Online Source Manager v3.2.0');
     log('Приоритет: hdrezka → Дубляж → LostFilm → Кубик → Остальные');
     log('Минимальное качество: 1080p');
     log('========================================');
@@ -78,10 +78,7 @@
     }
 
     function sortVoices(buttons) {
-        if (!buttons || !buttons.length) {
-            log('sortVoices: нет кнопок для сортировки');
-            return buttons;
-        }
+        if (!buttons || !buttons.length) return buttons;
 
         log('sortVoices: сортируем ' + buttons.length + ' озвучек');
         log('  До сортировки:', buttons.map(function(v) { return v.text || v.title || 'unknown'; }));
@@ -156,10 +153,7 @@
     // 5. Сортировка видео (для фильмов)
     // ============================================================
     function sortVideos(videos) {
-        if (!videos || !videos.length) {
-            log('sortVideos: нет видео для сортировки');
-            return videos;
-        }
+        if (!videos || !videos.length) return videos;
 
         log('sortVideos: сортируем ' + videos.length + ' видео');
         log('  До сортировки:', videos.map(function(v) { return v.text || v.title || 'unknown'; }));
@@ -492,6 +486,12 @@
     function patchVoiceSorting() {
         log('patchVoiceSorting: начало');
 
+        // Проверяем наличие Lampa.Component
+        if (!window.Lampa || !Lampa.Component) {
+            logError('Lampa.Component не найден, пропускаем');
+            return;
+        }
+
         // Патчим Lampa.Filter для сортировки озвучек
         if (Lampa.Filter && Lampa.Filter.prototype) {
             var filterProto = Lampa.Filter.prototype;
@@ -562,6 +562,8 @@
             var targetComponents = ['lampac', 'lampacskaz', 'online', 'lampac_online', 'bwa'];
             var patchedCount = 0;
 
+            log('patchVoiceSorting: найдено компонентов:', Object.keys(comps).length);
+
             for (var name in comps) {
                 var isTarget = false;
                 for (var t = 0; t < targetComponents.length; t++) {
@@ -575,6 +577,8 @@
                 var comp = comps[name];
                 if (!comp || !comp.prototype) continue;
                 var proto = comp.prototype;
+
+                log('patchVoiceSorting: патчим компонент ' + name);
 
                 // Патчим parse для озвучек
                 if (typeof proto.parse === 'function' && !proto._voiceParsePatched) {
@@ -599,19 +603,15 @@
                                         data.text = $item.text().trim();
                                         data.active = $item.hasClass('active');
                                         voiceButtons.push(data);
-                                    } catch(e) {
-                                        logError('parse: ошибка парсинга кнопки', e);
-                                    }
+                                    } catch(e) {}
                                 });
 
                                 if (voiceButtons.length > 1) {
                                     log('parse: найдено ' + voiceButtons.length + ' озвучек в ' + name);
-                                    var sorted = sortVoices(voiceButtons);
+                                    sortVoices(voiceButtons);
                                 }
                             }
-                        } catch(e) {
-                            logError('parse: ошибка', e);
-                        }
+                        } catch(e) {}
 
                         return result;
                     };
@@ -648,7 +648,7 @@
 
             log('patchVoiceSorting: пропатчено ' + patchedCount + ' компонентов');
         } else {
-            logError('patchVoiceSorting: Lampa.Component не найден');
+            logError('patchVoiceSorting: Lampa.Component._components не найден');
         }
     }
 
@@ -656,6 +656,11 @@
     // 10. Перехват новых компонентов
     // ============================================================
     function overrideComponentAdd() {
+        if (!window.Lampa || !Lampa.Component) {
+            logError('Lampa.Component не найден');
+            return;
+        }
+
         if (typeof Lampa.Component.add !== 'function') {
             logError('Lampa.Component.add не найден');
             return;
@@ -738,12 +743,26 @@
     }
 
     // ============================================================
-    // 11. Запуск
+    // 11. ИНИЦИАЛИЗАЦИЯ (правильный порядок)
     // ============================================================
     function init() {
         log('========================================');
         log('ИНИЦИАЛИЗАЦИЯ');
         log('========================================');
+
+        // Проверяем наличие Lampa
+        if (!window.Lampa) {
+            logError('Lampa не найдена, ждём...');
+            return false;
+        }
+
+        // Проверяем наличие Lampa.Component
+        if (!Lampa.Component) {
+            logError('Lampa.Component не найден, ждём...');
+            return false;
+        }
+
+        log('Lampa найдена, начинаем патчинг...');
 
         try {
             patchFilter();
@@ -766,20 +785,6 @@
             logError('overrideComponentAdd:', e);
         }
 
-        // Периодическая проверка
-        var checkCount = 0;
-        setInterval(function() {
-            checkCount++;
-            if (checkCount % 10 === 0) {
-                log('Периодическая проверка #' + checkCount);
-            }
-            try {
-                patchVoiceSorting();
-            } catch(e) {
-                logError('Периодическая проверка:', e);
-            }
-        }, 5000);
-
         log('========================================');
         log('ГОТОВО!');
         log('========================================');
@@ -788,22 +793,54 @@
         log('2. Посмотрите логи выше');
         log('3. Напишите название компонента, который открывается');
         log('========================================');
+
+        return true;
     }
 
-    if (window.Lampa) {
-        if (Lampa.Component) {
-            init();
-        } else {
-            log('Ждём загрузки Lampa...');
-            Lampa.Listener.follow('app', function(e) {
-                if (e.type === 'ready') {
-                    log('Lampa загружена');
-                    init();
-                }
-            });
+    // ============================================================
+    // 12. ЗАПУСК С ОЖИДАНИЕМ
+    // ============================================================
+    var initAttempts = 0;
+    var maxAttempts = 30;
+
+    function tryInit() {
+        initAttempts++;
+        log('Попытка инициализации #' + initAttempts);
+
+        if (init()) {
+            log('Инициализация успешна!');
+            return;
         }
-    } else {
-        logError('Lampa не найдена');
+
+        if (initAttempts >= maxAttempts) {
+            logError('Не удалось инициализировать плагин после ' + maxAttempts + ' попыток');
+            return;
+        }
+
+        log('Повторная попытка через 1 секунду...');
+        setTimeout(tryInit, 1000);
     }
+
+    // Подписываемся на событие ready
+    if (window.Lampa && Lampa.Listener) {
+        Lampa.Listener.follow('app', function(e) {
+            if (e.type === 'ready') {
+                log('Событие app:ready получено');
+                tryInit();
+            }
+        });
+    }
+
+    // Начинаем попытки сразу
+    tryInit();
+
+    // Дополнительная проверка каждые 5 секунд
+    setInterval(function() {
+        if (window.Lampa && Lampa.Component && !window._osm_initialized) {
+            window._osm_initialized = true;
+            log('Дополнительная инициализация через интервал');
+            init();
+        }
+    }, 5000);
 
 })();
