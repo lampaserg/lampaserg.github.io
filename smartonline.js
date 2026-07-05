@@ -183,6 +183,11 @@
                 score += Math.min(result.videos, 5);
             }
 
+            // Для фильмов бонус за наличие видео
+            if (!isSerial && result.videos > 0) {
+                score += 2;
+            }
+
             console.log('  📊 ' + source + ': вес ' + score + ' (качество ' + result.quality + 'p, дубляж ' + (result.hasDub ? '✅' : '❌') + ', видео ' + result.videos + ')');
 
             if (score > bestScore) {
