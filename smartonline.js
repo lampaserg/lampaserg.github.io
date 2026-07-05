@@ -1,7 +1,7 @@
 /**
  * Online Source Manager
- * Версия: 2.6.0
- * Полная сортировка озвучек для фильмов и сериалов
+ * Версия: 2.7.0
+ * Сортировка видео для фильмов (по переводу и качеству)
  */
 
 (function() {
@@ -29,24 +29,17 @@
         SHOW_LABEL: true
     };
 
-    var SORT_TYPES = {
-        DEFAULT: 'default',
-        ALPHABET: 'alphabet',
-        QUALITY: 'quality'
-    };
-
     // ============================================================
-    // 2. Приоритет озвучек (голосов) - расширенный
+    // 2. Приоритет перевода (озвучки)
     // ============================================================
     function getVoicePriority(name) {
         if (!name) return 0;
         var text = name.toLowerCase();
         
-        // hdrezka - наивысший приоритет (в любом виде)
+        // hdrezka - наивысший приоритет
         if (/hdrezka|hd\.rezka|rezka/i.test(text)) return 1000;
-        if (/дубликация\s*hdrezka|hdrezka.*студия/i.test(text)) return 1000;
         
-        // Дубляж
+        // Дубляж / дублированный / дубликация
         if (/дубляж|дублированный|дубликация|dub/i.test(text)) return 900;
         
         // LostFilm
@@ -55,189 +48,150 @@
         // Кубик в Кубе
         if (/кубик|cube|куб|kubik/i.test(text)) return 700;
         
-        // Профессиональные
+        // Профессиональный (многоголосый)
         if (/профессиональный|многоголосый|двухголосый|проф/i.test(text)) return 500;
         
-        // Любительские
+        // Любительский (одноголосый)
         if (/любительский|одноголосый|люб/i.test(text)) return 300;
         
-        // Субтитры и оригинал
+        // Субтитры / оригинал
         if (/субтитры|sub|subtitles|оригинал|original/i.test(text)) return 100;
         
-        // Всё остальное
         return 200;
     }
 
-    function sortVoices(buttons) {
-        if (!buttons || !buttons.length) return buttons;
-        
-        return buttons.slice().sort(function(a, b) {
-            var nameA = a.text || a.title || a.name || '';
-            var nameB = b.text || b.title || b.name || '';
-            
-            // Активная озвучка - наверх
-            var aActive = a.active || a.selected ? 1 : 0;
-            var bActive = b.active || b.selected ? 1 : 0;
-            if (aActive !== bActive) return bActive - aActive;
-            
-            // Приоритет озвучки
-            var aPriority = getVoicePriority(nameA);
-            var bPriority = getVoicePriority(nameB);
-            if (aPriority !== bPriority) return bPriority - aPriority;
-            
-            // По алфавиту
-            return nameA.localeCompare(nameB);
+    function extractQualityFromText(text) {
+        if (!text) return 0;
+        var upper = text.toUpperCase();
+        if (upper.indexOf('4K') !== -1 || upper.indexOf('UHD') !== -1 || upper.indexOf('2160') !== -1) return 2160;
+        if (upper.indexOf('FULLHD') !== -1 || upper.indexOf('FHD') !== -1 || upper.indexOf('1080') !== -1) return 1080;
+        if (upper.indexOf('HD') !== -1 && upper.indexOf('FULL') === -1 || upper.indexOf('720') !== -1) return 720;
+        if (upper.indexOf('SD') !== -1 || upper.indexOf('480') !== -1) return 480;
+        var match = text.match(/(\d{3,4})\s*[pP]?/);
+        if (match) return parseInt(match[1], 10);
+        return 0;
+    }
+
+    function getQuality(item) {
+        var text = item.text || item.title || item.name || '';
+        var quality = extractQualityFromText(text);
+        if (item.quality) {
+            var q = extractQualityFromText(item.quality);
+            if (q > quality) quality = q;
+        }
+        return quality;
+    }
+
+    function isDub(text) {
+        return /дубляж|дублированный|дубликация|dub/i.test(text);
+    }
+
+    // ============================================================
+    // 3. Сортировка видео (для фильмов и сериалов)
+    // ============================================================
+    function sortVideos(videos) {
+        if (!videos || !videos.length) return videos;
+
+        var preferDub = Lampa.Storage.get(STORAGE.PREFER_DUB, DEFAULTS.PREFER_DUB);
+
+        return videos.slice().sort(function(a, b) {
+            var textA = a.text || a.title || a.name || '';
+            var textB = b.text || b.title || b.name || '';
+
+            // 1. Сначала по приоритету перевода (hdrezka → дубляж → остальные)
+            var priorityA = getVoicePriority(textA);
+            var priorityB = getVoicePriority(textB);
+            if (priorityA !== priorityB) return priorityB - priorityA;
+
+            // 2. Затем по качеству (от большего к меньшему)
+            var qualityA = getQuality(a);
+            var qualityB = getQuality(b);
+            if (qualityA !== qualityB) return qualityB - qualityA;
+
+            // 3. При равном качестве и приоритете - дубляж выше (если включено)
+            if (preferDub) {
+                var dubA = isDub(textA) ? 1 : 0;
+                var dubB = isDub(textB) ? 1 : 0;
+                if (dubA !== dubB) return dubB - dubA;
+            }
+
+            return 0;
         });
     }
 
     // ============================================================
-    // 3. Функции качества
+    // 4. Сортировка источников (балансеров)
     // ============================================================
-    function extractQuality(name) {
+    function extractQualityFromSource(name) {
         if (!name) return 0;
         var upper = name.toUpperCase();
         if (upper.indexOf('4K') !== -1 || upper.indexOf('UHD') !== -1 || upper.indexOf('2160') !== -1) return 2160;
         if (upper.indexOf('FULLHD') !== -1 || upper.indexOf('FHD') !== -1 || upper.indexOf('1080') !== -1) return 1080;
         if (upper.indexOf('HD') !== -1 && upper.indexOf('FULL') === -1 || upper.indexOf('720') !== -1) return 720;
         if (upper.indexOf('SD') !== -1 || upper.indexOf('480') !== -1) return 480;
-        var match = name.match(/(\d{3,4})[pP]?/);
+        var match = name.match(/(\d{3,4})\s*[pP]?/);
         if (match) return parseInt(match[1], 10);
         return 0;
     }
 
-    function getQuality(source) {
-        var name = source.name || source.title || source.text || '';
-        var quality = extractQuality(name);
+    function getSourceQuality(source) {
+        var name = source.name || source.title || '';
+        var quality = extractQualityFromSource(name);
         if (source.quality) {
-            var q = extractQuality(source.quality);
+            var q = extractQualityFromSource(source.quality);
             if (q > quality) quality = q;
         }
         return quality;
     }
 
-    function isDub(name) {
+    function isSourceDub(name) {
         return /дубляж|дублированный|дубликация|dub/i.test(name);
     }
 
-    function addQualityLabel(source) {
-        var q = getQuality(source);
-        if (!q) return source.name || source.title || source.text || '';
-        var name = (source.name || source.title || source.text || '').replace(/\s*\(\d{3,4}p\)\s*/g, '').trim();
-        return name + ' (' + q + 'p)';
-    }
-
-    // ============================================================
-    // 4. Сортировка видео
-    // ============================================================
-    function sortVideosByQuality(videos) {
-        if (!videos || !videos.length) return videos;
-
-        var preferDub = Lampa.Storage.get(STORAGE.PREFER_DUB, DEFAULTS.PREFER_DUB);
-
-        return videos.slice().sort(function(a, b) {
-            var qA = getQuality(a);
-            var qB = getQuality(b);
-            if (qB !== qA) return qB - qA;
-
-            if (preferDub) {
-                var dA = isDub(a.text || a.voice_name || '') ? 1 : 0;
-                var dB = isDub(b.text || b.voice_name || '') ? 1 : 0;
-                if (dA !== dB) return dB - dA;
-            }
-
-            return 0;
-        });
-    }
-
-    // ============================================================
-    // 5. Сортировка источников
-    // ============================================================
-    function sortByAlphabet(sources) {
-        var available = [];
-        var unavailable = [];
-        for (var i = 0; i < sources.length; i++) {
-            if (sources[i].ghost) unavailable.push(sources[i]);
-            else available.push(sources[i]);
-        }
-        available.sort(function(a, b) {
-            var nameA = (a.title || a.name || '').toLowerCase();
-            var nameB = (b.title || b.name || '').toLowerCase();
-            if (nameA < nameB) return -1;
-            if (nameA > nameB) return 1;
-            return 0;
-        });
-        return available.concat(unavailable);
-    }
-
-    function sortByQuality(sources) {
-        var available = [];
-        var unavailable = [];
-        for (var i = 0; i < sources.length; i++) {
-            if (sources[i].ghost) unavailable.push(sources[i]);
-            else available.push(sources[i]);
-        }
+    function sortSourcesByQuality(sources) {
+        if (!sources || !sources.length) return sources;
 
         var preferDub = Lampa.Storage.get(STORAGE.PREFER_DUB, DEFAULTS.PREFER_DUB);
         var showLabel = Lampa.Storage.get(STORAGE.SHOW_LABEL, DEFAULTS.SHOW_LABEL);
 
-        for (var j = 0; j < available.length; j++) {
-            available[j]._idx = j;
+        var available = [];
+        var unavailable = [];
+        for (var i = 0; i < sources.length; i++) {
+            if (sources[i].ghost) unavailable.push(sources[i]);
+            else available.push(sources[i]);
         }
 
         available.sort(function(a, b) {
-            var qA = getQuality(a);
-            var qB = getQuality(b);
-            if (qB !== qA) return qB - qA;
+            var qA = getSourceQuality(a);
+            var qB = getSourceQuality(b);
+            if (qA !== qB) return qB - qA;
 
             if (preferDub) {
-                var dA = isDub(a.name || a.title || '') ? 1 : 0;
-                var dB = isDub(b.name || b.title || '') ? 1 : 0;
+                var dA = isSourceDub(a.name || a.title || '') ? 1 : 0;
+                var dB = isSourceDub(b.name || b.title || '') ? 1 : 0;
                 if (dA !== dB) return dB - dA;
             }
 
-            return a._idx - b._idx;
+            return 0;
         });
-
-        for (var k = 0; k < available.length; k++) {
-            delete available[k]._idx;
-        }
 
         if (showLabel) {
             available.forEach(function(s) {
-                if (s.name) s.name = addQualityLabel(s);
-                else if (s.title) s.title = addQualityLabel(s);
-            });
-            unavailable.forEach(function(s) {
-                if (s.name) s.name = addQualityLabel(s);
-                else if (s.title) s.title = addQualityLabel(s);
+                var q = getSourceQuality(s);
+                if (q && s.name) {
+                    s.name = s.name.replace(/\s*\(\d{3,4}p\)\s*/g, '').trim() + ' (' + q + 'p)';
+                }
             });
         }
 
         return available.concat(unavailable);
     }
 
-    function applySorting(sources) {
-        if (!sources || !sources.length) return sources;
-        var sortType = Lampa.Storage.get(STORAGE.SORT_TYPE, DEFAULTS.SORT_TYPE);
-        var sorted = sources.slice();
-
-        if (sortType === SORT_TYPES.ALPHABET) return sortByAlphabet(sorted);
-        if (sortType === SORT_TYPES.QUALITY) return sortByQuality(sorted);
-
-        var available = [];
-        var unavailable = [];
-        for (var i = 0; i < sorted.length; i++) {
-            if (sorted[i].ghost) unavailable.push(sorted[i]);
-            else available.push(sorted[i]);
-        }
-        return available.concat(unavailable);
-    }
-
-    function filterByMinQuality(sources) {
+    function filterSourcesByMinQuality(sources) {
         var minQuality = parseInt(Lampa.Storage.get(STORAGE.MIN_QUALITY, DEFAULTS.MIN_QUALITY), 10);
         if (minQuality <= 0) return sources;
         return sources.filter(function(s) {
-            return getQuality(s) >= minQuality;
+            return getSourceQuality(s) >= minQuality;
         });
     }
 
@@ -249,14 +203,14 @@
     window.processSources = function(sources) {
         if (!sources || !sources.length) return sources;
         var result = sources.slice();
-        result = applySorting(result);
-        result = filterByMinQuality(result);
+        result = sortSourcesByQuality(result);
+        result = filterSourcesByMinQuality(result);
         result = filterUnavailable(result);
         return result;
     };
 
     // ============================================================
-    // 6. UI: Меню в фильтре
+    // 5. UI: Меню в фильтре
     // ============================================================
     var ICON = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M3 18h6v-2H3v2zM3 6v2h18V6H3zm0 7h12v-2H3v2z" fill="currentColor"/></svg>';
 
@@ -274,8 +228,8 @@
             '1080': '≥1080p'
         };
 
-        var sortTitle = sortType === SORT_TYPES.ALPHABET ? 'По алфавиту' :
-                       sortType === SORT_TYPES.QUALITY ? 'По качеству' :
+        var sortTitle = sortType === 'alphabet' ? 'По алфавиту' :
+                       sortType === 'quality' ? 'По качеству' :
                        'Стандартная';
 
         var hideTitle = hideEnabled ? 'Да' : 'Нет';
@@ -325,9 +279,9 @@
         Lampa.Select.show({
             title: 'Сортировка',
             items: [
-                {title: 'Стандартная', subtitle: 'Порядок от сервера', value: SORT_TYPES.DEFAULT, selected: current === SORT_TYPES.DEFAULT},
-                {title: 'По алфавиту', subtitle: 'От А до Я', value: SORT_TYPES.ALPHABET, selected: current === SORT_TYPES.ALPHABET},
-                {title: 'По качеству', subtitle: 'От лучшего к худшему', value: SORT_TYPES.QUALITY, selected: current === SORT_TYPES.QUALITY}
+                {title: 'Стандартная', subtitle: 'Порядок от сервера', value: 'default', selected: current === 'default'},
+                {title: 'По алфавиту', subtitle: 'От А до Я', value: 'alphabet', selected: current === 'alphabet'},
+                {title: 'По качеству', subtitle: 'От лучшего к худшему', value: 'quality', selected: current === 'quality'}
             ],
             onSelect: function(item) {
                 Lampa.Storage.set(STORAGE.SORT_TYPE, item.value);
@@ -363,126 +317,54 @@
     }
 
     // ============================================================
-    // 7. ГЛАВНЫЙ ПАТЧ - сортировка озвучек для фильмов и сериалов
+    // 6. ГЛАВНЫЙ ПАТЧ - сортировка видео
     // ============================================================
-    function patchVoiceSorting() {
-        // Перехватываем display - отображение видео и озвучек
-        var originalDisplay = Lampa.Component.get('lampac')?.prototype?.display;
-        if (originalDisplay) {
-            var LampacProto = Lampa.Component.get('lampac').prototype;
-            var origDisplay = LampacProto.display;
+    function patchVideoSorting() {
+        // Патчим display для сортировки видео
+        function patchComponentDisplay(comp, name) {
+            if (!comp || !comp.prototype) return;
+            var proto = comp.prototype;
+            if (typeof proto.display !== 'function') return;
+            if (proto._osm_video_patched) return;
+            proto._osm_video_patched = true;
 
-            LampacProto.display = function(videos) {
+            var originalDisplay = proto.display;
+            proto.display = function(videos) {
                 // Сортируем видео перед отображением
-                var sortedVideos = sortVideosByQuality(videos);
-                return origDisplay.call(this, sortedVideos);
+                var sorted = sortVideos(videos);
+                return originalDisplay.call(this, sorted);
             };
-            console.log('[OSM] Patched display for voice sorting');
+            console.log('[OSM] Patched display for:', name);
         }
 
-        // Перехватываем создание фильтра озвучек
-        var OriginalFilter = Lampa.Filter;
-        if (OriginalFilter && OriginalFilter.prototype) {
-            // Патчим метод onSelect для сортировки озвучек при открытии
-            var origOnSelect = OriginalFilter.prototype.onSelect;
-            if (origOnSelect) {
-                OriginalFilter.prototype.onSelect = function(type, a, b) {
-                    // Если это выбор озвучки
-                    if (type === 'filter' && a && a.stype === 'voice' && a.items && a.items.length > 1) {
-                        var items = a.items.slice();
-                        var sorted = items.sort(function(x, y) {
-                            var nameX = x.title || '';
-                            var nameY = y.title || '';
-                            var priorityX = getVoicePriority(nameX);
-                            var priorityY = getVoicePriority(nameY);
-                            if (priorityX !== priorityY) return priorityY - priorityX;
-                            return nameX.localeCompare(nameY);
-                        });
-                        a.items = sorted;
-                        if (sorted.length > 0) {
-                            a.subtitle = sorted[0].title || '';
-                        }
-                    }
-                    return origOnSelect.call(this, type, a, b);
-                };
-                console.log('[OSM] Patched Filter.onSelect');
-            }
-
-            // Патчим метод set для сортировки озвучек при создании фильтра
-            var origSet = OriginalFilter.prototype.set;
-            if (origSet) {
-                OriginalFilter.prototype.set = function(type, items) {
-                    if (type === 'filter' && items && items.length) {
-                        for (var i = 0; i < items.length; i++) {
-                            var item = items[i];
-                            if (item && item.stype === 'voice' && item.items && item.items.length > 1) {
-                                var sorted = item.items.slice().sort(function(a, b) {
-                                    var nameA = a.title || '';
-                                    var nameB = b.title || '';
-                                    var priorityA = getVoicePriority(nameA);
-                                    var priorityB = getVoicePriority(nameB);
-                                    if (priorityA !== priorityB) return priorityB - priorityA;
-                                    return nameA.localeCompare(nameB);
-                                });
-                                item.items = sorted;
-                                if (sorted.length > 0) {
-                                    item.subtitle = sorted[0].title || '';
-                                }
-                            }
-                        }
-                    }
-                    return origSet.call(this, type, items);
-                };
-                console.log('[OSM] Patched Filter.set');
+        // Патчим существующие компоненты
+        if (Lampa.Component && Lampa.Component._components) {
+            var comps = Lampa.Component._components;
+            for (var name in comps) {
+                var comp = comps[name];
+                if (comp && name.toLowerCase().indexOf('lampac') !== -1) {
+                    patchComponentDisplay(comp, name);
+                }
             }
         }
 
-        // Перехватываем добавление кнопок озвучек в parse
-        var Lampac = Lampa.Component.get('lampac');
-        if (Lampac && Lampac.prototype && Lampac.prototype.parse) {
-            var proto = Lampac.prototype;
-            if (!proto._voicePatched) {
-                proto._voicePatched = true;
-                var origParse = proto.parse;
-
-                proto.parse = function(str) {
-                    var result = origParse.call(this, str);
-
-                    try {
-                        var $html = $('<div>' + str + '</div>');
-                        var buttons = $html.find('.videos__button');
-
-                        if (buttons.length > 1) {
-                            var voiceButtons = [];
-                            buttons.each(function() {
-                                var $item = $(this);
-                                try {
-                                    var data = JSON.parse($item.attr('data-json'));
-                                    data.text = $item.text().trim();
-                                    data.active = $item.hasClass('active');
-                                    voiceButtons.push(data);
-                                } catch(e) {}
-                            });
-
-                            if (voiceButtons.length > 1) {
-                                var sorted = sortVoices(voiceButtons);
-                                // Сохраняем для отладки
-                                if (window._osm_debug) {
-                                    console.log('[OSM] Sorted voices:', sorted.map(function(v) { return v.text; }));
-                                }
-                            }
-                        }
-                    } catch(e) {}
-
-                    return result;
-                };
-                console.log('[OSM] Patched Lampac.parse');
-            }
+        // Перехватываем добавление новых компонентов
+        if (typeof Lampa.Component.add === 'function') {
+            var originalAdd = Lampa.Component.add;
+            Lampa.Component.add = function(name, comp) {
+                originalAdd.call(this, name, comp);
+                if (name.toLowerCase().indexOf('lampac') !== -1) {
+                    var instance = Lampa.Component.get(name);
+                    if (instance) {
+                        patchComponentDisplay(instance, name);
+                    }
+                }
+            };
         }
     }
 
     // ============================================================
-    // 8. Патч фильтра
+    // 7. Патч фильтра для сортировки источников
     // ============================================================
     function addButton(filterElement, onUpdate) {
         if (!filterElement || !filterElement.length) return;
@@ -554,86 +436,59 @@
     }
 
     // ============================================================
-    // 9. Патч компонентов
+    // 8. Патч startSource для источников
     // ============================================================
-    function patchLampacComponents() {
+    function patchStartSource() {
         if (!Lampa.Component || !Lampa.Component._components) return;
 
         var comps = Lampa.Component._components;
         for (var name in comps) {
             var comp = comps[name];
             if (!comp || !comp.prototype) continue;
+            if (typeof comp.prototype.startSource !== 'function') continue;
+            if (comp._osm_source_patched) continue;
+            comp._osm_source_patched = true;
 
-            var proto = comp.prototype;
-
-            // Патчим startSource
-            if (typeof proto.startSource === 'function' && !comp._osm_patched) {
-                comp._osm_patched = true;
-                var originalStart = proto.startSource;
-                proto.startSource = function(json) {
-                    var processed = window.processSources(json);
-                    return originalStart.call(this, processed);
-                };
-                console.log('[OSM] Patched startSource:', name);
-            }
-
-            // Патчим display для сортировки видео
-            if (typeof proto.display === 'function' && !comp._osm_display_patched) {
-                comp._osm_display_patched = true;
-                var originalDisplay = proto.display;
-                proto.display = function(videos) {
-                    var sorted = sortVideosByQuality(videos);
-                    return originalDisplay.call(this, sorted);
-                };
-                console.log('[OSM] Patched display:', name);
-            }
+            var original = comp.prototype.startSource;
+            comp.prototype.startSource = function(json) {
+                var processed = window.processSources(json);
+                return original.call(this, processed);
+            };
+            console.log('[OSM] Patched startSource:', name);
         }
     }
 
-    function overrideComponentAdd() {
-        if (typeof Lampa.Component.add !== 'function') return;
-        var originalAdd = Lampa.Component.add;
-
-        Lampa.Component.add = function(name, comp) {
-            originalAdd.call(this, name, comp);
-
-            var instance = Lampa.Component.get(name);
-            if (instance && instance.prototype) {
-                var proto = instance.prototype;
-
-                if (typeof proto.startSource === 'function' && !instance._osm_patched) {
-                    instance._osm_patched = true;
-                    var originalStart = proto.startSource;
-                    proto.startSource = function(json) {
-                        var processed = window.processSources(json);
-                        return originalStart.call(this, processed);
-                    };
-                }
-
-                if (typeof proto.display === 'function' && !instance._osm_display_patched) {
-                    instance._osm_display_patched = true;
-                    var originalDisplay = proto.display;
-                    proto.display = function(videos) {
-                        var sorted = sortVideosByQuality(videos);
-                        return originalDisplay.call(this, sorted);
-                    };
-                }
-            }
-        };
-    }
-
     // ============================================================
-    // 10. Запуск
+    // 9. Запуск
     // ============================================================
     function init() {
         console.log('[OSM] Инициализация...');
+        console.log('[OSM] Приоритет: hdrezka → Дубляж → LostFilm → Кубик → Остальные');
+        console.log('[OSM] Минимальное качество: 1080p');
+
         patchFilter();
-        patchVoiceSorting();
-        overrideComponentAdd();
-        patchLampacComponents();
-        setInterval(patchLampacComponents, 5000);
+        patchStartSource();
+        patchVideoSorting();
+
+        // Перехватываем добавление компонентов
+        if (typeof Lampa.Component.add === 'function') {
+            var originalAdd = Lampa.Component.add;
+            Lampa.Component.add = function(name, comp) {
+                originalAdd.call(this, name, comp);
+                setTimeout(function() {
+                    patchStartSource();
+                    patchVideoSorting();
+                }, 100);
+            };
+        }
+
+        // Периодическая проверка
+        setInterval(function() {
+            patchStartSource();
+            patchVideoSorting();
+        }, 5000);
+
         console.log('[OSM] Готово!');
-        console.log('[OSM] Приоритет озвучек: hdrezka → Дубляж → LostFilm → Кубик → Остальные');
     }
 
     if (window.Lampa) {
