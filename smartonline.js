@@ -4,6 +4,37 @@
     if (window.smartonline_plugin_v2) return;
     window.smartonline_plugin_v2 = true;
 
+    var PLAYBACK_TIMEOUT_MS = 12000;
+    var CONFIRM_OK_MS = 15000;
+    var WAIT_INTERVAL_MS = 300;
+    var WAIT_MAX_TRIES = 120;
+    var STATS_KEY = 'lampac_smart_stats_v2';
+    var CLARIFICATION_KEY = 'clarification_search';
+    var FAIL_NOTIFY_KEY = 'lampac_smart_fail_notified_v2';
+    var MANIFEST_SYNC_LIMIT = 6;
+    var CFG_NOTIFY_RUNTIME = 'lampac_smart_notify_runtime';
+    var CFG_TIMEOUT_FAIL = 'lampac_smart_timeout_fail';
+    var CFG_TIMEOUT_CONFIRM = 'lampac_smart_timeout_confirm';
+    var CFG_STATS_SCOPE = 'lampac_smart_stats_scope';
+
+    var runtime = {
+        playback: null,
+        playerHooksReady: false,
+        fullHookReady: false,
+        headButtonReady: false,
+        manifestReady: false,
+        componentReady: false,
+        started: false,
+        loadingBase: false,
+        waitStarted: false,
+        manifestTimer: null,
+        manifestSyncCount: 0,
+        settingsReady: false,
+        baseComponentCache: ''
+    };
+
+    var SMART_MANIFEST_VERSION = '2.0.0';
+
     // ============================================================
     // ПРИОРИТЕТЫ
     // ============================================================
@@ -74,37 +105,6 @@
     // ============================================================
     // ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
     // ============================================================
-
-    var PLAYBACK_TIMEOUT_MS = 12000;
-    var CONFIRM_OK_MS = 15000;
-    var WAIT_INTERVAL_MS = 300;
-    var WAIT_MAX_TRIES = 120;
-    var STATS_KEY = 'lampac_smart_stats_v2';
-    var CLARIFICATION_KEY = 'clarification_search';
-    var FAIL_NOTIFY_KEY = 'lampac_smart_fail_notified_v2';
-    var MANIFEST_SYNC_LIMIT = 6;
-    var CFG_NOTIFY_RUNTIME = 'lampac_smart_notify_runtime';
-    var CFG_TIMEOUT_FAIL = 'lampac_smart_timeout_fail';
-    var CFG_TIMEOUT_CONFIRM = 'lampac_smart_timeout_confirm';
-    var CFG_STATS_SCOPE = 'lampac_smart_stats_scope';
-
-    var runtime = {
-        playback: null,
-        playerHooksReady: false,
-        fullHookReady: false,
-        headButtonReady: false,
-        manifestReady: false,
-        componentReady: false,
-        started: false,
-        loadingBase: false,
-        waitStarted: false,
-        manifestTimer: null,
-        manifestSyncCount: 0,
-        settingsReady: false,
-        baseComponentCache: ''
-    };
-
-    var SMART_MANIFEST_VERSION = '2.0.0';
 
     function detectBaseComponentFromManifest() {
         if (!window.Lampa || !Lampa.Manifest) return '';
@@ -671,6 +671,88 @@
     }
 
     // ============================================================
+    // ПОЛУЧЕНИЕ СПИСКА БАЛАНСЕРОВ ИЗ LAMPA
+    // ============================================================
+
+    function getAvailableBalansers() {
+        var sources = [];
+        var activeBalanser = Lampa.Storage.get('active_balanser', '');
+        var onlineBalanser = Lampa.Storage.get('online_balanser', '');
+
+        // Получаем из хранилища
+        if (activeBalanser) sources.push(activeBalanser);
+        if (onlineBalanser && onlineBalanser !== activeBalanser) sources.push(onlineBalanser);
+
+        // Добавляем приоритетные
+        var priority = ['phantom', 'filmix', 'alloha', 'kinopub'];
+        priority.forEach(function(name) {
+            var exists = sources.some(function(s) { return s.toLowerCase() === name; });
+            if (!exists) sources.push(name);
+        });
+
+        // Убираем дубликаты
+        var unique = [];
+        sources.forEach(function(s) {
+            var lower = s.toLowerCase();
+            if (!unique.some(function(u) { return u.toLowerCase() === lower; })) {
+                unique.push(s);
+            }
+        });
+
+        console.log('📋 Доступные балансеры:', unique);
+        return unique;
+    }
+
+    // ============================================================
+    // ПЕРЕКЛЮЧЕНИЕ НА ИСТОЧНИК ЧЕРЕЗ LAMPA
+    // ============================================================
+
+    function switchToBalanser(balanserName, movie) {
+        if (!balanserName) return;
+
+        console.log('🔄 Переключение на балансер:', balanserName);
+
+        // Сохраняем в хранилище
+        Lampa.Storage.set('active_balanser', balanserName);
+        Lampa.Storage.set('online_balanser', balanserName);
+
+        if (movie && movie.id) {
+            var lastSelect = Lampa.Storage.cache('online_last_balanser', 3000, {});
+            lastSelect[movie.id] = balanserName;
+            Lampa.Storage.set('online_last_balanser', lastSelect);
+        }
+
+        // Перезагружаем активность с новым балансером
+        var active = Lampa.Activity.active();
+        if (active) {
+            var params = {
+                url: active.url || '',
+                title: active.title || '',
+                component: active.component || 'lampac',
+                search: active.search || (movie ? movie.title : ''),
+                search_one: active.search_one || (movie ? movie.title : ''),
+                search_two: active.search_two || (movie ? movie.original_title : ''),
+                movie: movie,
+                page: active.page || 1,
+                balanser: balanserName,
+                clarification: active.clarification || false
+            };
+
+            if (active.params) {
+                params = Object.assign({}, active.params, params);
+            }
+
+            Lampa.Activity.replace(params);
+        }
+
+        if (Lampa.Noty && Lampa.Noty.show) {
+            Lampa.Noty.show('🔊 Переключено на: ' + balanserName);
+        }
+
+        console.log('✅ Переключено на:', balanserName);
+    }
+
+    // ============================================================
     // КНОПКА В КАРТОЧКЕ
     // ============================================================
 
@@ -680,7 +762,7 @@
 
         function buildButton(movie) {
             var isSerial = !!(movie && movie.name);
-            var label = isSerial ? '📺 Онлайн' : '🎬 Smart Online';
+            var label = isSerial ? '📺 Выбрать балансер' : '🎬 Smart Online';
 
             var btn = $(
                 '<div class="full-start__button full-start-new__button selector view--online lampac-smart-button" style="display:flex !important; opacity:1 !important; visibility:visible !important;" data-subtitle="' + Lampa.Lang.translate('lampac_smart_descr') + '">' +
@@ -695,16 +777,29 @@
                 var isSerial = !!(movie && movie.name);
 
                 if (isSerial) {
-                    // Для сериалов - просто открываем онлайн
-                    Lampa.Activity.push({
-                        url: '',
-                        title: Lampa.Lang.translate('title_online'),
-                        component: 'lampac',
-                        search: movie.title,
-                        search_one: movie.title,
-                        search_two: movie.original_title,
-                        movie: movie,
-                        page: 1
+                    // Для сериалов - показываем список балансеров
+                    var balansers = getAvailableBalansers();
+                    if (balansers.length === 0) {
+                        Lampa.Noty.show('❌ Нет доступных балансеров');
+                        return;
+                    }
+
+                    var items = balansers.map(function(b) {
+                        return {
+                            title: b.charAt(0).toUpperCase() + b.slice(1),
+                            value: b
+                        };
+                    });
+
+                    Lampa.Select.show({
+                        title: 'Выберите балансер',
+                        items: items,
+                        onSelect: function(item) {
+                            switchToBalanser(item.value, movie);
+                        },
+                        onBack: function() {
+                            Lampa.Controller.toggle('content');
+                        }
                     });
                 } else {
                     // Для фильмов - открываем Smart Online с сортировкой
@@ -804,7 +899,7 @@
     }
 
     // ============================================================
-    // COMPONENT - ОСНОВНАЯ ЛОГИКА (БЕЗ ЗАПРОСОВ К ab2024.ru)
+    // COMPONENT - ОСНОВНАЯ ЛОГИКА
     // ============================================================
 
     function installComponent() {
@@ -1065,7 +1160,6 @@
 
                     if (!state.queue.length) return;
 
-                    // ЛОГ ВЫБРАННОГО ПОТОКА
                     if (state.queue.length > 0) {
                         console.log('');
                         console.log('%c═══════════════════════════════════════════════════════════', 'color: #4fc3f7;');
@@ -1089,7 +1183,6 @@
             this.parse = function (str) {
                 var parsed = inspect(str);
 
-                // Для сериалов - не переключаем голоса
                 if (parsed && maybeSwitchVoice(parsed)) {
                     if (isSerial) {
                         // Для сериалов просто возвращаем результат без переключения голоса
