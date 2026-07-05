@@ -74,17 +74,6 @@
     }
 
     // ============================================================
-    // СОРТИРОВКА ОЗВУЧЕК (ДЛЯ ФИЛЬМОВ)
-    // ============================================================
-
-    function sortVoicesByPriority(buttons) {
-        if (!buttons || !buttons.length) return buttons;
-        return buttons.slice().sort(function(a, b) {
-            return getVoiceScore(b.text || '') - getVoiceScore(a.text || '');
-        });
-    }
-
-    // ============================================================
     // ПОЛУЧЕНИЕ ВСЕХ БАЛАНСЕРОВ
     // ============================================================
 
@@ -119,14 +108,13 @@
     // ПАРСИНГ ВИДЕО ИЗ ОТВЕТА
     // ============================================================
 
-    function parseVideosFromResponse(str, sourceName, isSerial) {
+    function parseVideosFromResponse(str, sourceName) {
         var videos = [];
         var buttons = [];
 
         try {
             var $html = $('<div>' + str + '</div>');
 
-            // Парсим видео элементы
             $html.find('.videos__item').each(function() {
                 var $item = $(this);
                 try {
@@ -145,7 +133,6 @@
                 } catch (e) {}
             });
 
-            // Парсим кнопки озвучек
             $html.find('.videos__button').each(function() {
                 var $item = $(this);
                 try {
@@ -163,46 +150,48 @@
     }
 
     // ============================================================
-    // ПОЛУЧЕНИЕ ТЕКУЩЕГО СЕЗОНА И СЕРИИ
+    // ВЫБОР ЛУЧШЕГО БАЛАНСЕРА
     // ============================================================
 
-    function getCurrentSeasonEpisode(movie) {
-        var season = 1;
-        var episode = 1;
+    function selectBestBalanser(results, isSerial) {
+        if (!results || results.length === 0) return null;
 
-        // Пытаемся получить из Lampa
-        try {
-            var full = Lampa.Storage.get('full', {});
-            if (full && full.season) {
-                season = parseInt(full.season) || 1;
+        var best = null;
+        var bestScore = -1;
+
+        results.forEach(function(result) {
+            var score = 0;
+
+            // Дубляж - главный приоритет
+            if (result.hasDub) score += 1000;
+
+            // Качество
+            if (result.quality >= 2160) score += 90;
+            else if (result.quality >= 1080) score += 50;
+            else if (result.quality >= 720) score += 20;
+            else if (result.quality >= 480) score += 5;
+
+            // Приоритет источников
+            var source = result.source;
+            if (/phantom/.test(source)) score += 10;
+            else if (/fxapi/.test(source)) score += 8;
+            else if (/alloha/.test(source)) score += 6;
+            else if (/kinopub/.test(source)) score += 4;
+
+            // Для сериалов дополнительный бонус за количество видео
+            if (isSerial && result.videos > 0) {
+                score += Math.min(result.videos, 5);
             }
-            if (full && full.episode) {
-                episode = parseInt(full.episode) || 1;
+
+            console.log('  📊 ' + source + ': вес ' + score + ' (качество ' + result.quality + 'p, дубляж ' + (result.hasDub ? '✅' : '❌') + ', видео ' + result.videos + ')');
+
+            if (score > bestScore) {
+                bestScore = score;
+                best = result;
             }
-        } catch (e) {}
+        });
 
-        // Если есть в movie
-        if (movie && movie.season) {
-            season = parseInt(movie.season) || 1;
-        }
-        if (movie && movie.episode) {
-            episode = parseInt(movie.episode) || 1;
-        }
-
-        // Проверяем активную серию в плеере
-        try {
-            var player = Lampa.Player;
-            if (player && player.series && player.series.current) {
-                if (player.series.current.season) {
-                    season = parseInt(player.series.current.season) || 1;
-                }
-                if (player.series.current.episode) {
-                    episode = parseInt(player.series.current.episode) || 1;
-                }
-            }
-        } catch (e) {}
-
-        return { season: season, episode: episode };
+        return best;
     }
 
     // ============================================================
@@ -212,33 +201,23 @@
     function findBestBalanser(movie, callback) {
         getAllBalansers(function(balansers) {
             var isSerial = !!(movie && movie.name);
-            
-            // Получаем текущий сезон и серию для сериалов
-            var seasonInfo = { season: 1, episode: 1 };
-            if (isSerial) {
-                seasonInfo = getCurrentSeasonEpisode(movie);
-            }
 
-            var logLines = [];
-            logLines.push('═══════════════════════════════════════════════════════════');
-            logLines.push('🔍 ПОИСК ЛУЧШЕГО БАЛАНСЕРА');
-            logLines.push('  📺 ' + (movie.title || movie.name));
-            logLines.push('  🎬 Тип: ' + (isSerial ? 'СЕРИАЛ' : 'ФИЛЬМ'));
-            if (isSerial) {
-                logLines.push('  📅 Сезон: ' + seasonInfo.season + ', Серия: ' + seasonInfo.episode);
-            }
-            logLines.push('  🆔 ID: ' + movie.id);
-            if (movie.imdb_id) logLines.push('  🆔 IMDB: ' + movie.imdb_id);
-            if (movie.kinopoisk_id) logLines.push('  🆔 Кинопоиск: ' + movie.kinopoisk_id);
-            logLines.push('📋 Балансеров: ' + balansers.length + ' (' + balansers.join(', ') + ')');
-            logLines.push('═══════════════════════════════════════════════════════════');
+            console.log('═══════════════════════════════════════════════════════════');
+            console.log('🔍 ПОИСК ЛУЧШЕГО БАЛАНСЕРА');
+            console.log('  📺 ' + (movie.title || movie.name));
+            console.log('  🎬 Тип: ' + (isSerial ? 'СЕРИАЛ' : 'ФИЛЬМ'));
+            console.log('  🆔 ID: ' + movie.id);
+            if (movie.imdb_id) console.log('  🆔 IMDB: ' + movie.imdb_id);
+            if (movie.kinopoisk_id) console.log('  🆔 Кинопоиск: ' + movie.kinopoisk_id);
+            console.log('📋 Балансеров: ' + balansers.length + ' (' + balansers.join(', ') + ')');
+            console.log('═══════════════════════════════════════════════════════════');
 
             var results = [];
             var total = balansers.length;
             var completed = 0;
 
             if (total === 0) {
-                callback(null, logLines);
+                callback(null);
                 return;
             }
 
@@ -254,24 +233,17 @@
                 query.push('original_language=' + (movie.original_language || ''));
                 query.push('year=' + ((movie.release_date || movie.first_air_date || '0000') + '').slice(0, 4));
                 query.push('source=' + (movie.source || 'tmdb'));
-                
-                // ДОБАВЛЯЕМ СЕЗОН И СЕРИЮ ДЛЯ СЕРИАЛОВ
-                if (isSerial) {
-                    query.push('s=' + seasonInfo.season);
-                    query.push('e=' + seasonInfo.episode);
-                }
 
                 var url = AB_HOST + '/lite/' + sourceName + '?' + query.join('&');
 
-                console.log('📡 [' + sourceName + '] Запрос' + (isSerial ? ' (сериал s' + seasonInfo.season + 'e' + seasonInfo.episode + ')' : ' (фильм)'));
-                console.log('📡 URL: ' + url);
+                console.log('📡 [' + sourceName + '] Запрос');
 
                 var network = new Lampa.Reguest();
                 network.timeout(10000);
                 network["native"](url, function(str) {
                     completed++;
 
-                    var parsed = parseVideosFromResponse(str, sourceName, isSerial);
+                    var parsed = parseVideosFromResponse(str, sourceName);
                     var videos = parsed.videos;
                     var buttons = parsed.buttons;
 
@@ -284,31 +256,15 @@
                         videos.forEach(function(item) {
                             var quality = getItemQuality(item);
                             var voice = item.voice_name || item.text || '';
-                            
-                            // Для сериалов проверяем соответствие сезона и серии
-                            var isMatch = true;
-                            if (isSerial) {
-                                var itemSeason = item.season || item.s || 1;
-                                var itemEpisode = item.episode || item.e || 1;
-                                if (itemSeason != seasonInfo.season || itemEpisode != seasonInfo.episode) {
-                                    isMatch = false;
-                                }
-                            }
-                            
-                            if (isMatch && quality > bestQuality) {
+                            if (quality > bestQuality) {
                                 bestQuality = quality;
                                 bestItem = item;
                             }
-                            if (isDubVoice(voice) && isMatch) {
+                            if (isDubVoice(voice)) {
                                 hasDub = true;
                                 if (!bestVoice) bestVoice = voice;
                             }
                         });
-
-                        // Для фильмов сортируем озвучки
-                        if (!isSerial && buttons.length > 0) {
-                            buttons = sortVoicesByPriority(buttons);
-                        }
 
                         results.push({
                             source: sourceName,
@@ -317,68 +273,36 @@
                             hasDub: hasDub,
                             voice: bestVoice,
                             bestItem: bestItem,
-                            buttons: buttons,
-                            response: str
+                            buttons: buttons
                         });
 
-                        logLines.push('  ✅ ' + sourceName + ': ' + videos.length + ' видео, ' + bestQuality + 'p' + (hasDub ? ', ДУБЛЯЖ' : ''));
+                        console.log('  ✅ ' + sourceName + ': ' + videos.length + ' видео, ' + bestQuality + 'p' + (hasDub ? ', ДУБЛЯЖ' : ''));
                     } else {
-                        logLines.push('  ⚠️ ' + sourceName + ': видео не найдены');
-                        // Для отладки показываем первые 200 символов ответа
-                        if (str && str.length > 0) {
-                            var preview = str.substring(0, 200).replace(/\n/g, ' ');
-                            console.log('    Ответ: ' + preview + '...');
-                        }
+                        console.log('  ⚠️ ' + sourceName + ': видео не найдены');
                     }
 
                     if (completed === total) {
-                        var best = null;
-                        var bestScore = -1;
-
-                        results.forEach(function(result) {
-                            var score = 0;
-                            if (result.hasDub) score += 1000;
-                            if (result.quality >= 2160) score += 90;
-                            else if (result.quality >= 1080) score += 50;
-                            else if (result.quality >= 720) score += 20;
-                            else if (result.quality >= 480) score += 5;
-
-                            var source = result.source;
-                            if (/phantom/.test(source)) score += 10;
-                            else if (/fxapi/.test(source)) score += 8;
-                            else if (/alloha/.test(source)) score += 6;
-                            else if (/kinopub/.test(source)) score += 4;
-
-                            if (score > bestScore) {
-                                bestScore = score;
-                                best = result;
-                            }
-                        });
+                        // Выбираем лучший балансер
+                        var best = selectBestBalanser(results, isSerial);
 
                         if (best) {
-                            logLines.push('═══════════════════════════════════════════════════════════');
-                            logLines.push('🏆 ЛУЧШИЙ БАЛАНСЕР: ' + best.source);
-                            logLines.push('  📹 Видео: ' + best.videos);
-                            logLines.push('  📐 Качество: ' + best.quality + 'p');
-                            logLines.push('  🎤 Дубляж: ' + (best.hasDub ? '✅ есть' : '❌ нет'));
-                            logLines.push('  ⚖️ Вес: ' + bestScore);
-                            logLines.push('═══════════════════════════════════════════════════════════');
+                            console.log('═══════════════════════════════════════════════════════════');
+                            console.log('🏆 ЛУЧШИЙ БАЛАНСЕР: ' + best.source);
+                            console.log('  📹 Видео: ' + best.videos);
+                            console.log('  📐 Качество: ' + best.quality + 'p');
+                            console.log('  🎤 Дубляж: ' + (best.hasDub ? '✅ есть' : '❌ нет'));
+                            console.log('═══════════════════════════════════════════════════════════');
                         } else {
-                            logLines.push('❌ Подходящий балансер не найден');
-                            logLines.push('═══════════════════════════════════════════════════════════');
+                            console.log('❌ Подходящий балансер не найден');
                         }
 
-                        callback(best, logLines);
+                        callback(best);
                     }
                 }, function(err) {
                     completed++;
-                    logLines.push('  ❌ ' + sourceName + ': ошибка (' + (err.status || 'таймаут') + ')');
+                    console.log('  ❌ ' + sourceName + ': ошибка');
                     if (completed === total) {
-                        if (results.length === 0) {
-                            logLines.push('❌ Ни один балансер не ответил');
-                            logLines.push('═══════════════════════════════════════════════════════════');
-                        }
-                        callback(null, logLines);
+                        callback(null);
                     }
                 }, false, { dataType: 'text' });
             });
@@ -392,6 +316,8 @@
     function switchToBalanserAndOpen(sourceName, movie) {
         if (!sourceName) return;
 
+        console.log('🔄 Переключение на балансер:', sourceName);
+
         Lampa.Storage.set('active_balanser', sourceName);
         Lampa.Storage.set('online_balanser', sourceName);
 
@@ -401,15 +327,8 @@
             Lampa.Storage.set('online_last_balanser', lastSelect);
         }
 
-        var isSerial = !!(movie && movie.name);
-        var id = Lampa.Utils.hash(isSerial ? movie.original_name : movie.original_title);
+        var id = Lampa.Utils.hash(movie.number_of_seasons ? movie.original_name : movie.original_title);
         var all = Lampa.Storage.get('clarification_search', {});
-
-        // Получаем текущий сезон и серию
-        var seasonInfo = { season: 1, episode: 1 };
-        if (isSerial) {
-            seasonInfo = getCurrentSeasonEpisode(movie);
-        }
 
         Lampa.Activity.push({
             url: '',
@@ -421,14 +340,11 @@
             movie: movie,
             page: 1,
             balanser: sourceName,
-            clarification: all[id] ? true : false,
-            // Передаём сезон и серию
-            season: seasonInfo.season,
-            episode: seasonInfo.episode
+            clarification: all[id] ? true : false
         });
 
         if (Lampa.Noty && Lampa.Noty.show) {
-            Lampa.Noty.show('🔊 ' + sourceName + ' (' + (isSerial ? 'сериал s' + seasonInfo.season + 'e' + seasonInfo.episode : 'фильм') + ')');
+            Lampa.Noty.show('🔊 ' + sourceName);
         }
     }
 
@@ -458,11 +374,7 @@
                 );
 
                 btn.on('hover:enter', function() {
-                    findBestBalanser(movie, function(best, logLines) {
-                        if (logLines) {
-                            console.log(logLines.join('\n'));
-                        }
-
+                    findBestBalanser(movie, function(best) {
                         if (best) {
                             switchToBalanserAndOpen(best.source, movie);
                         } else {
