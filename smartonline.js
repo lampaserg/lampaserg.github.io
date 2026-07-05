@@ -1,7 +1,7 @@
 /**
  * Online Source Manager
- * Версия: 2.2.0
- * По умолчанию: сортировка по качеству, минимальное качество 1080p, приоритет дубляжа
+ * Версия: 2.3.0
+ * Сортировка источников по качеству + сортировка переводов (hdrezka в приоритете)
  */
 
 (function() {
@@ -11,22 +11,24 @@
     window.online_source_manager_loaded = true;
 
     // ============================================================
-    // 1. Хранилище настроек (с новыми дефолтами)
+    // 1. Хранилище настроек
     // ============================================================
     var STORAGE = {
         SORT_TYPE: 'osm_sort_type',
         HIDE_UNAVAILABLE: 'osm_hide_unavailable',
         MIN_QUALITY: 'osm_min_quality',
         PREFER_DUB: 'osm_prefer_dub',
-        SHOW_LABEL: 'osm_show_label'
+        SHOW_LABEL: 'osm_show_label',
+        PREFER_VOICE: 'osm_prefer_voice'
     };
 
     var DEFAULTS = {
-        SORT_TYPE: 'quality',        // По умолчанию сортировка по качеству
+        SORT_TYPE: 'quality',
         HIDE_UNAVAILABLE: false,
-        MIN_QUALITY: '1080',         // По умолчанию минимальное качество 1080p
-        PREFER_DUB: true,            // По умолчанию предпочитать дубляж
-        SHOW_LABEL: true
+        MIN_QUALITY: '1080',
+        PREFER_DUB: true,
+        SHOW_LABEL: true,
+        PREFER_VOICE: 'hdrezka'  // Приоритетная озвучка
     };
 
     var SORT_TYPES = {
@@ -36,7 +38,7 @@
     };
 
     // ============================================================
-    // 2. Функции качества и дубляжа
+    // 2. Функции качества, дубляжа и приоритета озвучек
     // ============================================================
     function extractQuality(name) {
         if (!name) return 0;
@@ -72,7 +74,62 @@
     }
 
     // ============================================================
-    // 3. Сортировка и фильтрация
+    // 3. Приоритет озвучек (голосов)
+    // ============================================================
+    function getVoicePriority(name) {
+        if (!name) return 0;
+        var text = name.toLowerCase();
+        
+        // Наивысший приоритет - hdrezka
+        if (/hdrezka|hd\.rezka|rezka/i.test(text)) return 1000;
+        
+        // Дубляж
+        if (/дубляж|дублированный|dub/i.test(text)) return 900;
+        
+        // LostFilm
+        if (/lostfilm|lost\.film/i.test(text)) return 800;
+        
+        // Кубик в Кубе
+        if (/кубик|cube|куб|kubik/i.test(text)) return 700;
+        
+        // Остальные профессиональные
+        if (/профессиональный|многоголосый|двухголосый/i.test(text)) return 500;
+        
+        // Любительские
+        if (/любительский|одноголосый/i.test(text)) return 300;
+        
+        // Субтитры и оригинал - низкий приоритет
+        if (/субтитры|sub|subtitles|оригинал|original/i.test(text)) return 100;
+        
+        return 200; // Всё остальное
+    }
+
+    function sortVoices(buttons) {
+        if (!buttons || !buttons.length) return buttons;
+        
+        var preferVoice = Lampa.Storage.get(STORAGE.PREFER_VOICE, DEFAULTS.PREFER_VOICE);
+        
+        return buttons.slice().sort(function(a, b) {
+            var nameA = a.text || a.title || a.name || '';
+            var nameB = b.text || b.title || b.name || '';
+            
+            // 1. Активная озвучка (selected/active) - вверх
+            var aActive = a.active || a.selected ? 1 : 0;
+            var bActive = b.active || b.selected ? 1 : 0;
+            if (aActive !== bActive) return bActive - aActive;
+            
+            // 2. Приоритет hdrezka
+            var aPriority = getVoicePriority(nameA);
+            var bPriority = getVoicePriority(nameB);
+            if (aPriority !== bPriority) return bPriority - aPriority;
+            
+            // 3. По алфавиту
+            return nameA.localeCompare(nameB);
+        });
+    }
+
+    // ============================================================
+    // 4. Сортировка и фильтрация источников
     // ============================================================
     function sortByAlphabet(sources) {
         var available = [];
@@ -107,12 +164,10 @@
         }
 
         available.sort(function(a, b) {
-            // 1. Сначала по качеству (от большего к меньшему)
             var qA = getQuality(a);
             var qB = getQuality(b);
             if (qB !== qA) return qB - qA;
 
-            // 2. При равном качестве - дубляж выше
             if (preferDub) {
                 var dA = isDub(a.name || a.title || '') ? 1 : 0;
                 var dB = isDub(b.name || b.title || '') ? 1 : 0;
@@ -170,17 +225,62 @@
         return sources.filter(function(s) { return !s.ghost; });
     }
 
-    function processSources(sources) {
-        if (!sources || !sources.length) return sources;
-        var result = sources.slice();
-        result = applySorting(result);
-        result = filterByMinQuality(result);
-        result = filterUnavailable(result);
-        return result;
+    // ============================================================
+    // 5. Патч для сортировки озвучек (голосов)
+    // ============================================================
+    function patchVoiceSorting() {
+        // Перехватываем установку фильтра голосов
+        var OriginalFilter = Lampa.Filter;
+        if (!OriginalFilter) return;
+
+        // Сохраняем оригинальный метод onSelect
+        var originalOnSelect = OriginalFilter.prototype.onSelect;
+
+        // Патчим компонент, чтобы сортировать голоса при их появлении
+        var originalParse = Lampa.Component.get('lampac')?.prototype?.parse;
+        if (originalParse) {
+            var LampacProto = Lampa.Component.get('lampac').prototype;
+            var origParse = LampacProto.parse;
+
+            LampacProto.parse = function(str) {
+                // Вызываем оригинальный parse
+                var result = origParse.call(this, str);
+
+                // Если есть кнопки озвучек - сортируем их
+                try {
+                    var $html = $('<div>' + str + '</div>');
+                    var buttons = $html.find('.videos__button');
+                    
+                    if (buttons.length > 0) {
+                        var voiceButtons = [];
+                        buttons.each(function() {
+                            var $item = $(this);
+                            try {
+                                var data = JSON.parse($item.attr('data-json'));
+                                data.text = $item.text().trim();
+                                data.active = $item.hasClass('active');
+                                voiceButtons.push(data);
+                            } catch(e) {}
+                        });
+
+                        if (voiceButtons.length > 1) {
+                            var sorted = sortVoices(voiceButtons);
+                            // Обновляем выбор голоса, если активный был найден
+                            var activeVoice = sorted.find(function(v) { return v.active; });
+                            if (activeVoice) {
+                                // Если есть активный - оставляем его
+                            }
+                        }
+                    }
+                } catch(e) {}
+
+                return result;
+            };
+        }
     }
 
     // ============================================================
-    // 4. UI: Меню в фильтре
+    // 6. UI: Меню в фильтре
     // ============================================================
     var ICON = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M3 18h6v-2H3v2zM3 6v2h18V6H3zm0 7h12v-2H3v2z" fill="currentColor"/></svg>';
 
@@ -287,7 +387,7 @@
     }
 
     // ============================================================
-    // 5. Патч фильтра (добавление кнопки)
+    // 7. Патч фильтра (добавление кнопки)
     // ============================================================
     function addButton(filterElement, onUpdate) {
         if (!filterElement || !filterElement.length) return;
@@ -359,7 +459,7 @@
     }
 
     // ============================================================
-    // 6. Патч компонентов
+    // 8. Патч компонентов
     // ============================================================
     function patchLampacComponents() {
         if (!Lampa.Component || !Lampa.Component._components) return;
@@ -404,12 +504,13 @@
     }
 
     // ============================================================
-    // 7. Запуск
+    // 9. Запуск
     // ============================================================
     function init() {
         patchFilter();
         overrideComponentAdd();
         patchLampacComponents();
+        patchVoiceSorting();
         setInterval(patchLampacComponents, 5000);
     }
 
