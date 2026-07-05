@@ -1,7 +1,7 @@
 /**
  * Online Source Manager - Data Hook
- * Версия: 11.4.0
- * Автоматический вывод в консоль, однократная сортировка
+ * Версия: 11.5.0
+ * Простой вывод в консоль, однократная сортировка
  */
 
 (function() {
@@ -43,67 +43,7 @@
     };
 
     // ============================================================
-    // 2. Детальный вывод в консоль (автоматический)
-    // ============================================================
-    function printDataToConsole(data) {
-        console.log('');
-        console.log('╔══════════════════════════════════════════════════════════╗');
-        console.log('║              OSM DATA (перехваченные данные)            ║');
-        console.log('╠══════════════════════════════════════════════════════════╣');
-        console.log('║                                                          ║');
-        console.log('  📺 НАЗВАНИЕ:  ' + (data.movieTitle || 'Неизвестно'));
-        console.log('  📡 ИСТОЧНИК: ' + (data.currentSource || 'Неизвестно'));
-        console.log('  📅 ТИП:      ' + (data.isSerial ? 'СЕРИАЛ' : 'ФИЛЬМ'));
-        console.log('  ⏱️ ОБНОВЛЕНО: ' + new Date(data.lastUpdate).toLocaleTimeString());
-        console.log('  ═════════════════════════════════════════════════════════');
-        
-        if (data.seasons && data.seasons.length > 0) {
-            console.log('  📅 СЕЗОНЫ (' + data.seasons.length + ' шт.):');
-            data.seasons.forEach(function(s) {
-                console.log('     ' + s.num + ' сезон' + (s.active ? ' ◀ АКТИВНЫЙ' : ''));
-            });
-        } else {
-            console.log('  📅 Сезоны: не найдены');
-        }
-        
-        console.log('  ═════════════════════════════════════════════════════════');
-        
-        if (data.voices && data.voices.length > 0) {
-            console.log('  🎤 ПЕРЕВОДЫ (' + data.voices.length + ' шт.):');
-            data.voices.forEach(function(v) {
-                console.log('     ' + v.text + (v.active ? ' ◀ АКТИВНЫЙ' : ''));
-            });
-        } else {
-            console.log('  🎤 Переводы: не найдены');
-        }
-        
-        console.log('  ═════════════════════════════════════════════════════════');
-        
-        if (data.videos && data.videos.length > 0) {
-            console.log('  🎬 ВИДЕО (' + data.videos.length + ' шт.):');
-            data.videos.forEach(function(v, i) {
-                if (i < 5) {
-                    console.log('     ' + (i+1) + '. ' + v.text);
-                }
-            });
-            if (data.videos.length > 5) {
-                console.log('     ... и ещё ' + (data.videos.length - 5) + ' шт.');
-            }
-        } else {
-            console.log('  🎬 Видео: не найдены');
-        }
-        
-        console.log('  ═════════════════════════════════════════════════════════');
-        console.log('  📌 ТЕКУЩИЙ СЕЗОН:  ' + (data.currentSeason || 'Не выбран'));
-        console.log('  📌 ТЕКУЩИЙ ПЕРЕВОД: ' + (data.currentVoice || 'Не выбран'));
-        console.log('  ═════════════════════════════════════════════════════════');
-        console.log('  ✅ СТАТУС: ' + (data.isReady ? 'Данные готовы' : 'Ожидание данных'));
-        console.log('╚══════════════════════════════════════════════════════════╝');
-        console.log('');
-    }
-
-    // ============================================================
-    // 3. Обновление данных с автоматическим выводом
+    // 2. Обновление данных с выводом в консоль
     // ============================================================
     function updateOsmData(data) {
         var updated = false;
@@ -150,9 +90,18 @@
             window._osm_data.isReady = true;
             dataCaptured = true;
             
-            log('✅ Данные обновлены');
-            // Автоматический вывод в консоль
-            printDataToConsole(window._osm_data);
+            log('✅ Данные обновлены:');
+            log('  📺 ' + window._osm_data.movieTitle + (window._osm_data.isSerial ? ' (сериал)' : ' (фильм)'));
+            log('  📡 Источник: ' + window._osm_data.currentSource);
+            log('  📅 Сезоны: ' + window._osm_data.seasons.length + ' шт. ' + JSON.stringify(window._osm_data.seasons.map(function(s) { return s.num + (s.active ? ' [A]' : ''); })));
+            log('  🎤 Переводы: ' + window._osm_data.voices.length + ' шт. ' + JSON.stringify(window._osm_data.voices.map(function(v) { return v.text + (v.active ? ' [A]' : ''); })));
+            log('  🎬 Видео: ' + window._osm_data.videos.length + ' шт.');
+            if (window._osm_data.currentSeason) {
+                log('  📌 Текущий сезон: ' + window._osm_data.currentSeason);
+            }
+            if (window._osm_data.currentVoice) {
+                log('  📌 Текущий перевод: ' + window._osm_data.currentVoice);
+            }
         }
         
         return updated;
@@ -199,7 +148,7 @@
     }
 
     // ============================================================
-    // 4. Сбор данных из DOM (однократный)
+    // 3. Сбор данных из DOM (однократный)
     // ============================================================
     function captureDataFromDOM() {
         if (isProcessing || dataCaptured) return false;
@@ -221,7 +170,7 @@
             };
 
             // ============================================================
-            // 4.1 Сбор сезонов
+            // 3.1 Сбор сезонов
             // ============================================================
             var seasonSet = new Set();
             var seasonSelect = $('.selectbox');
@@ -249,7 +198,6 @@
                 }
             });
 
-            // Если не нашли через selectbox, ищем через videos__item
             if (data.seasons.length === 0) {
                 var seasonItems = $('.videos__item[method="link"]');
                 seasonItems.each(function() {
@@ -274,7 +222,7 @@
             }
 
             // ============================================================
-            // 4.2 Сбор переводов
+            // 3.2 Сбор переводов
             // ============================================================
             var voiceSet = new Set();
             var voiceSelect = $('.selectbox');
@@ -302,7 +250,6 @@
                 }
             });
 
-            // Если не нашли через selectbox, ищем через videos__button
             if (data.voices.length === 0) {
                 var voiceButtons = $('.videos__button');
                 voiceButtons.each(function() {
@@ -323,7 +270,7 @@
             }
 
             // ============================================================
-            // 4.3 Сбор видео (для фильмов)
+            // 3.3 Сбор видео
             // ============================================================
             var videoItems = $('.online-prestige--full');
             if (videoItems.length > 0) {
@@ -341,7 +288,7 @@
             }
 
             // ============================================================
-            // 4.4 Сбор источников
+            // 3.4 Сбор источников
             // ============================================================
             var sourceSelect = $('.selectbox');
             sourceSelect.each(function() {
@@ -365,7 +312,7 @@
             });
 
             // ============================================================
-            // 4.5 Определяем текущие значения
+            // 3.5 Определяем текущие значения
             // ============================================================
             if (data.seasons.length > 0 && !data.currentSeason) {
                 var activeSeason = data.seasons.filter(function(s) { return s.active; });
@@ -395,14 +342,7 @@
                 updateOsmData(data);
                 log('✅ Сбор данных завершён');
             } else {
-                log('⏳ Данные не найдены, ожидание...');
-                // Пробуем ещё раз через 2 секунды
-                setTimeout(function() {
-                    if (!dataCaptured) {
-                        isProcessing = false;
-                        captureDataFromDOM();
-                    }
-                }, 2000);
+                log('⏳ Данные не найдены');
             }
 
         } catch(e) {
@@ -414,7 +354,7 @@
     }
 
     // ============================================================
-    // 5. Перехват методов компонента
+    // 4. Перехват методов компонента
     // ============================================================
     function hookComponentMethods() {
         var Lampac = Lampa.Component.get('lampac');
@@ -436,7 +376,6 @@
                 log('📥 Получен ответ от сервера');
                 if (!dataCaptured) {
                     setTimeout(function() { captureDataFromDOM(); }, 300);
-                    setTimeout(function() { captureDataFromDOM(); }, 600);
                 }
                 return result;
             };
@@ -455,7 +394,6 @@
                 window._osm_data.isReady = false;
                 var result = originalChange.call(this, balanser_name);
                 setTimeout(function() { captureDataFromDOM(); }, 500);
-                setTimeout(function() { captureDataFromDOM(); }, 1000);
                 return result;
             };
             log('✅ changeBalanser перехвачен');
@@ -473,7 +411,6 @@
                 window._osm_data.isReady = false;
                 var result = originalInit.call(this);
                 setTimeout(function() { captureDataFromDOM(); }, 1000);
-                setTimeout(function() { captureDataFromDOM(); }, 2000);
                 return result;
             };
             log('✅ initialize перехвачен');
@@ -501,7 +438,7 @@
     }
 
     // ============================================================
-    // 6. Мониторинг DOM (только для активации сбора)
+    // 5. Мониторинг DOM
     // ============================================================
     function startDOMWatcher() {
         log('Запуск мониторинга DOM...');
@@ -549,11 +486,11 @@
     }
 
     // ============================================================
-    // 7. ЗАПУСК
+    // 6. ЗАПУСК
     // ============================================================
     function init() {
         log('========================================');
-        log('Инициализация Data Hook v11.4.0...');
+        log('Инициализация Data Hook v11.5.0...');
         log('========================================');
 
         if (!window.Lampa || !Lampa.Component) {
@@ -564,13 +501,9 @@
 
         log('Lampa готова');
 
-        // Перехватываем методы
         hookComponentMethods();
-
-        // Запускаем мониторинг DOM
         startDOMWatcher();
 
-        // Первичный сбор
         setTimeout(function() { captureDataFromDOM(); }, 1000);
         setTimeout(function() { captureDataFromDOM(); }, 3000);
         setTimeout(function() { captureDataFromDOM(); }, 5000);
@@ -583,9 +516,6 @@
         log('========================================');
     }
 
-    // ============================================================
-    // 8. Принудительный вызов (из консоли)
-    // ============================================================
     window.forceOsmCapture = function() {
         log('🔧 Принудительный сбор данных');
         dataCaptured = false;
