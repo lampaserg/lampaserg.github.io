@@ -1,11 +1,11 @@
 (function() {
     'use strict';
 
-    if (window.quality_sorter_plugin_loaded) return;
-    window.quality_sorter_plugin_loaded = true;
+    if (window.smart_online_sorter_loaded) return;
+    window.smart_online_sorter_loaded = true;
 
     // ============================================================
-    // 1. Определение качества
+    // 1. Функции определения качества и дубляжа
     // ============================================================
     function qualityWeight(label) {
         if (label === undefined || label === null) return 0;
@@ -43,26 +43,56 @@
         return name + ' (' + q + 'p)';
     }
 
-    function sortSourcesByQuality(sources) {
+    function sortAndFilterSources(sources) {
         if (!sources || !sources.length) return sources;
-        var sorted = sources.slice();
-        sorted.sort(function(a, b) {
-            // 1. Активные (show: true) выше
+
+        // Чтение настроек
+        var enabled = Lampa.Storage.get('qs_enabled', true);
+        if (!enabled) return sources;
+
+        var minQuality = parseInt(Lampa.Storage.get('qs_min_quality', '0'), 10);
+        var preferDub = Lampa.Storage.get('qs_prefer_dub', false);
+        var showLabel = Lampa.Storage.get('qs_show_label', true);
+
+        // 1. Фильтр по минимальному качеству
+        var filtered = sources.filter(function(s) {
+            if (minQuality > 0) {
+                var q = getQualityFromSource(s);
+                return q >= minQuality;
+            }
+            return true;
+        });
+
+        // 2. Сортировка: активные → качество → дубляж → алфавит
+        filtered.sort(function(a, b) {
             var aShow = a.show !== undefined ? a.show : true;
             var bShow = b.show !== undefined ? b.show : true;
             if (aShow && !bShow) return -1;
             if (!aShow && bShow) return 1;
-            // 2. Качество (от большего к меньшему)
-            var aQuality = getQualityFromSource(a);
-            var bQuality = getQualityFromSource(b);
-            if (aQuality !== bQuality) return bQuality - aQuality;
-            // 3. Приоритет дубляжа (если включено в настройках – будет применено отдельно)
-            // 4. Алфавит
+
+            var aQ = getQualityFromSource(a);
+            var bQ = getQualityFromSource(b);
+            if (aQ !== bQ) return bQ - aQ;
+
+            if (preferDub) {
+                var aDub = isDub(a.name) ? 1 : 0;
+                var bDub = isDub(b.name) ? 1 : 0;
+                if (aDub !== bDub) return bDub - aDub;
+            }
+
             var aName = (a.name || a.title || '').toLowerCase();
             var bName = (b.name || b.title || '').toLowerCase();
             return aName.localeCompare(bName);
         });
-        return sorted;
+
+        // 3. Добавление меток качества
+        if (showLabel) {
+            filtered.forEach(function(s) {
+                if (s.name) s.name = addQualityLabel(s);
+            });
+        }
+
+        return filtered;
     }
 
     // ============================================================
@@ -71,17 +101,17 @@
     function registerSettings() {
         if (!Lampa.SettingsApi) return;
         Lampa.SettingsApi.addComponent({
-            component: 'quality_sorter',
-            name: 'Сортировка Онлайн',
+            component: 'smart_online_sorter',
+            name: 'Умная сортировка',
             icon: '<svg viewBox="0 0 24 24" fill="none"><path d="M3 4h18v2H3V4zm0 7h12v2H3v-2zm0 7h18v2H3v-2z" fill="white"/></svg>'
         });
         Lampa.SettingsApi.addParam({
-            component: 'quality_sorter',
+            component: 'smart_online_sorter',
             param: { name: 'qs_enabled', type: 'trigger', default: true },
-            field: { name: 'Сортировать источники по качеству' }
+            field: { name: 'Включить сортировку' }
         });
         Lampa.SettingsApi.addParam({
-            component: 'quality_sorter',
+            component: 'smart_online_sorter',
             param: {
                 name: 'qs_min_quality',
                 type: 'select',
@@ -91,88 +121,91 @@
             field: { name: 'Минимальное качество' }
         });
         Lampa.SettingsApi.addParam({
-            component: 'quality_sorter',
+            component: 'smart_online_sorter',
             param: { name: 'qs_prefer_dub', type: 'trigger', default: false },
             field: { name: 'Предпочитать дубляж' }
         });
         Lampa.SettingsApi.addParam({
-            component: 'quality_sorter',
+            component: 'smart_online_sorter',
             param: { name: 'qs_show_label', type: 'trigger', default: true },
-            field: { name: 'Показывать качество в названии источника' }
+            field: { name: 'Показывать качество в названии' }
         });
     }
 
     // ============================================================
-    // 3. Патч компонента lampac
+    // 3. Патч компонентов (универсальный)
     // ============================================================
-    function patchLampac() {
-        if (!Lampa.Component || !Lampa.Component.get) {
-            setTimeout(patchLampac, 1000);
-            return;
-        }
-        var Lampac = Lampa.Component.get('lampac');
-        if (!Lampac) {
-            setTimeout(patchLampac, 1000);
-            return;
-        }
-        if (Lampac._qualitySorterPatched) return;
-        Lampac._qualitySorterPatched = true;
+    var patchedComponents = {};
 
-        var origStartSource = Lampac.prototype.startSource;
+    function patchComponent(ComponentConstructor, componentName) {
+        if (!ComponentConstructor || !ComponentConstructor.prototype) return;
+        if (patchedComponents[componentName]) return;
+        if (typeof ComponentConstructor.prototype.startSource !== 'function') return;
 
-        Lampac.prototype.startSource = function(json) {
-            var enabled = Lampa.Storage.get('qs_enabled', true);
-            if (!enabled) {
-                return origStartSource.call(this, json);
-            }
-            var minQuality = parseInt(Lampa.Storage.get('qs_min_quality', '0'), 10);
-            var preferDub = Lampa.Storage.get('qs_prefer_dub', false);
-            var showLabel = Lampa.Storage.get('qs_show_label', true);
+        var originalStartSource = ComponentConstructor.prototype.startSource;
 
-            // Фильтр по минимальному качеству
-            var filtered = json.filter(function(s) {
-                if (minQuality > 0) {
-                    var q = getQualityFromSource(s);
-                    return q >= minQuality;
-                }
-                return true;
-            });
-
-            // Сортировка
-            var sorted = sortSourcesByQuality(filtered);
-
-            // Дополнительный приоритет дубляжа (если включено)
-            if (preferDub) {
-                sorted.sort(function(a, b) {
-                    var aDub = isDub(a.name) ? 1 : 0;
-                    var bDub = isDub(b.name) ? 1 : 0;
-                    if (aDub !== bDub) return bDub - aDub;
-                    return 0;
-                });
-            }
-
-            // Добавление меток качества
-            if (showLabel) {
-                sorted.forEach(function(s) {
-                    if (s.name) s.name = addQualityLabel(s);
-                });
-            }
-
-            return origStartSource.call(this, sorted);
+        ComponentConstructor.prototype.startSource = function(json) {
+            // Применяем сортировку и фильтрацию
+            var sorted = sortAndFilterSources(json);
+            return originalStartSource.call(this, sorted);
         };
-        console.log('[Quality Sorter] Компонент "lampac" пропатчен');
+
+        patchedComponents[componentName] = true;
+        console.log('[Sorter] Patched component:', componentName);
+    }
+
+    // Список имён компонентов, которые нужно патчить (можно дополнять)
+    var TARGET_COMPONENTS = ['lampac', 'lampacskaz', 'online', 'lampac_online'];
+
+    // Патчим уже зарегистрированные компоненты
+    function patchExistingComponents() {
+        if (!Lampa.Component || !Lampa.Component._components) return;
+        var components = Lampa.Component._components;
+        for (var name in components) {
+            if (TARGET_COMPONENTS.indexOf(name) !== -1) {
+                patchComponent(components[name], name);
+            }
+        }
+    }
+
+    // Переопределяем Lampa.Component.add для перехвата новых компонентов
+    function overrideComponentAdd() {
+        if (typeof Lampa.Component.add !== 'function') return;
+        var originalAdd = Lampa.Component.add;
+
+        Lampa.Component.add = function(name, component) {
+            // Вызываем оригинальный метод
+            originalAdd.call(this, name, component);
+            // Если компонент в списке — патчим его
+            if (TARGET_COMPONENTS.indexOf(name) !== -1) {
+                // Получаем добавленный компонент (он уже зарегистрирован)
+                var comp = Lampa.Component.get(name);
+                if (comp) {
+                    patchComponent(comp, name);
+                }
+            }
+        };
+        console.log('[Sorter] Lampa.Component.add переопределён');
     }
 
     // ============================================================
     // 4. Запуск
     // ============================================================
     registerSettings();
+
     if (window.Lampa && Lampa.Component) {
-        patchLampac();
+        overrideComponentAdd();
+        patchExistingComponents();
+        // Дополнительная проверка через таймер (компоненты могут добавиться позже)
+        setInterval(function() {
+            patchExistingComponents();
+        }, 3000);
     } else {
         (function wait() {
             if (window.Lampa && Lampa.Component) {
-                patchLampac();
+                overrideComponentAdd();
+                patchExistingComponents();
+                setInterval(patchExistingComponents, 3000);
             } else {
                 setTimeout(wait, 500);
             }
