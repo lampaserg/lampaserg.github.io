@@ -1,7 +1,7 @@
 /**
  * Online Source Manager - Data Hook
- * Версия: 11.5.0
- * Простой вывод в консоль, однократная сортировка
+ * Версия: 11.6.0
+ * Перехват фильтров "Переводы" и "Сезон"
  */
 
 (function() {
@@ -148,7 +148,7 @@
     }
 
     // ============================================================
-    // 3. Сбор данных из DOM (однократный)
+    // 3. Сбор данных из DOM
     // ============================================================
     function captureDataFromDOM() {
         if (isProcessing || dataCaptured) return false;
@@ -336,7 +336,6 @@
                 data.isSerial = true;
             }
 
-            // Обновляем данные
             var hasData = data.seasons.length > 0 || data.voices.length > 0 || data.videos.length > 0;
             if (hasData) {
                 updateOsmData(data);
@@ -354,7 +353,138 @@
     }
 
     // ============================================================
-    // 4. Перехват методов компонента
+    // 4. ПЕРЕХВАТ ФИЛЬТРОВ "Переводы" и "Сезон"
+    // ============================================================
+    function hookFilters() {
+        if (!Lampa.Filter || !Lampa.Filter.prototype) {
+            log('Lampa.Filter не найден');
+            return false;
+        }
+
+        var proto = Lampa.Filter.prototype;
+        var hooked = 0;
+
+        // ============================================================
+        // 4.1 Перехват filter.set - создание фильтров
+        // ============================================================
+        if (typeof proto.set === 'function' && !proto._osm_filter_set_hooked) {
+            proto._osm_filter_set_hooked = true;
+            var originalSet = proto.set;
+
+            proto.set = function(type, items) {
+                var result = originalSet.call(this, type, items);
+
+                // Если это фильтр (не сортировка)
+                if (type === 'filter' && items && items.length > 0) {
+                    log('📋 Создан фильтр');
+                    
+                    // Ищем среди элементов фильтры "Переводы" и "Сезон"
+                    for (var i = 0; i < items.length; i++) {
+                        var item = items[i];
+                        if (item && item.title) {
+                            var title = item.title.toLowerCase();
+                            
+                            if (title.indexOf('перевод') !== -1 || 
+                                title.indexOf('voice') !== -1 || 
+                                title.indexOf('озвучка') !== -1) {
+                                log('  🎤 Найден фильтр: "' + item.title + '"');
+                                
+                                // Сортируем озвучки
+                                if (item.items && item.items.length > 1) {
+                                    var sorted = item.items.slice().sort(function(a, b) {
+                                        var scoreA = voiceWeight(a.title);
+                                        var scoreB = voiceWeight(b.title);
+                                        if (scoreA !== scoreB) return scoreB - scoreA;
+                                        return a.title.localeCompare(b.title);
+                                    });
+                                    item.items = sorted;
+                                    if (sorted.length > 0) {
+                                        item.subtitle = sorted[0].title;
+                                    }
+                                    log('  ✅ Переводы отсортированы');
+                                }
+                            }
+                            
+                            if (title.indexOf('сезон') !== -1 || 
+                                title.indexOf('season') !== -1) {
+                                log('  📅 Найден фильтр: "' + item.title + '"');
+                                
+                                // Сортируем сезоны от большего к меньшему
+                                if (item.items && item.items.length > 1) {
+                                    var sorted = item.items.slice().sort(function(a, b) {
+                                        var numA = parseInt(a.title.match(/(\d+)/) || [0, 0], 10);
+                                        var numB = parseInt(b.title.match(/(\d+)/) || [0, 0], 10);
+                                        return numB - numA;
+                                    });
+                                    item.items = sorted;
+                                    if (sorted.length > 0) {
+                                        item.subtitle = sorted[0].title;
+                                    }
+                                    log('  ✅ Сезоны отсортированы');
+                                }
+                            }
+                        }
+                    }
+                    
+                    // После сортировки обновляем данные
+                    setTimeout(function() {
+                        captureDataFromDOM();
+                    }, 200);
+                }
+
+                return result;
+            };
+            log('✅ filter.set перехвачен');
+            hooked++;
+        }
+
+        // ============================================================
+        // 4.2 Перехват filter.onSelect - выбор в фильтре
+        // ============================================================
+        if (typeof proto.onSelect === 'function' && !proto._osm_filter_select_hooked) {
+            proto._osm_filter_select_hooked = true;
+            var originalOnSelect = proto.onSelect;
+
+            proto.onSelect = function(type, a, b) {
+                var result = originalOnSelect.call(this, type, a, b);
+
+                // Если выбрали что-то в фильтре
+                if (type === 'filter' && a) {
+                    var filterName = a.title || a.stype || 'unknown';
+                    log('🔄 Выбор в фильтре: ' + filterName);
+                    
+                    // Обновляем данные
+                    setTimeout(function() {
+                        captureDataFromDOM();
+                    }, 300);
+                }
+
+                return result;
+            };
+            log('✅ filter.onSelect перехвачен');
+            hooked++;
+        }
+
+        return hooked > 0;
+    }
+
+    // ============================================================
+    // 5. Приоритет озвучек (для сортировки)
+    // ============================================================
+    function voiceWeight(name) {
+        if (!name) return 0;
+        var text = name.toLowerCase();
+        if (/hdrezka|hd\.rezka|rezka/.test(text)) return 20;
+        if (/дубляж|дублированный|дубликация|dub\b/.test(text)) return 15;
+        if (/кубик|cube|куб|kubik/.test(text)) return 13;
+        if (/lostfilm|lost\.film/.test(text)) return 10;
+        if (/субтитры|sub\b|subtitles|original|оригинал|orig/.test(text)) return -10;
+        if (/english|eng|en\b/.test(text) && !/russian|rus/.test(text)) return -100;
+        return 0;
+    }
+
+    // ============================================================
+    // 6. Перехват методов компонента
     // ============================================================
     function hookComponentMethods() {
         var Lampac = Lampa.Component.get('lampac');
@@ -438,7 +568,7 @@
     }
 
     // ============================================================
-    // 5. Мониторинг DOM
+    // 7. Мониторинг DOM
     // ============================================================
     function startDOMWatcher() {
         log('Запуск мониторинга DOM...');
@@ -486,11 +616,11 @@
     }
 
     // ============================================================
-    // 6. ЗАПУСК
+    // 8. ЗАПУСК
     // ============================================================
     function init() {
         log('========================================');
-        log('Инициализация Data Hook v11.5.0...');
+        log('Инициализация Data Hook v11.6.0...');
         log('========================================');
 
         if (!window.Lampa || !Lampa.Component) {
@@ -501,9 +631,16 @@
 
         log('Lampa готова');
 
+        // Перехватываем компонент
         hookComponentMethods();
+        
+        // Перехватываем фильтры
+        hookFilters();
+
+        // Запускаем мониторинг DOM
         startDOMWatcher();
 
+        // Первичный сбор
         setTimeout(function() { captureDataFromDOM(); }, 1000);
         setTimeout(function() { captureDataFromDOM(); }, 3000);
         setTimeout(function() { captureDataFromDOM(); }, 5000);
