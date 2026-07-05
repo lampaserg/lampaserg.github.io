@@ -1,7 +1,7 @@
 /**
  * Online Source Manager
- * Версия: 2.3.1
- * Исправлена ошибка processSources is not defined
+ * Версия: 2.4.0
+ * Исправлена сортировка для сериалов и фильмов
  */
 
 (function() {
@@ -36,7 +36,7 @@
     };
 
     // ============================================================
-    // 2. Функции качества и дубляжа
+    // 2. Функции качества
     // ============================================================
     function extractQuality(name) {
         if (!name) return 0;
@@ -51,7 +51,7 @@
     }
 
     function getQuality(source) {
-        var name = source.name || source.title || '';
+        var name = source.name || source.title || source.text || '';
         var quality = extractQuality(name);
         if (source.quality) {
             var q = extractQuality(source.quality);
@@ -66,13 +66,13 @@
 
     function addQualityLabel(source) {
         var q = getQuality(source);
-        if (!q) return source.name || source.title || '';
-        var name = (source.name || source.title || '').replace(/\s*\(\d{3,4}p\)\s*/g, '').trim();
+        if (!q) return source.name || source.title || source.text || '';
+        var name = (source.name || source.title || source.text || '').replace(/\s*\(\d{3,4}p\)\s*/g, '').trim();
         return name + ' (' + q + 'p)';
     }
 
     // ============================================================
-    // 3. Приоритет озвучек
+    // 3. Приоритет озвучек (голосов)
     // ============================================================
     function getVoicePriority(name) {
         if (!name) return 0;
@@ -103,7 +103,32 @@
     }
 
     // ============================================================
-    // 4. Основные функции сортировки (вынесены в глобальную область)
+    // 4. Сортировка видео (для сериалов)
+    // ============================================================
+    function sortVideosByQuality(videos) {
+        if (!videos || !videos.length) return videos;
+
+        var preferDub = Lampa.Storage.get(STORAGE.PREFER_DUB, DEFAULTS.PREFER_DUB);
+
+        return videos.slice().sort(function(a, b) {
+            // Сначала по качеству
+            var qA = getQuality(a);
+            var qB = getQuality(b);
+            if (qB !== qA) return qB - qA;
+
+            // При равном качестве - дубляж выше
+            if (preferDub) {
+                var dA = isDub(a.text || a.voice_name || '') ? 1 : 0;
+                var dB = isDub(b.text || b.voice_name || '') ? 1 : 0;
+                if (dA !== dB) return dB - dA;
+            }
+
+            return 0;
+        });
+    }
+
+    // ============================================================
+    // 5. Сортировка источников
     // ============================================================
     function sortByAlphabet(sources) {
         var available = [];
@@ -199,7 +224,6 @@
         return sources.filter(function(s) { return !s.ghost; });
     }
 
-    // ГЛАВНАЯ ФУНКЦИЯ - теперь доступна глобально
     window.processSources = function(sources) {
         if (!sources || !sources.length) return sources;
         var result = sources.slice();
@@ -210,7 +234,7 @@
     };
 
     // ============================================================
-    // 5. UI: Меню в фильтре
+    // 6. UI: Меню в фильтре
     // ============================================================
     var ICON = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M3 18h6v-2H3v2zM3 6v2h18V6H3zm0 7h12v-2H3v2z" fill="currentColor"/></svg>';
 
@@ -317,7 +341,7 @@
     }
 
     // ============================================================
-    // 6. Патч фильтра
+    // 7. Патч фильтра
     // ============================================================
     function addButton(filterElement, onUpdate) {
         if (!filterElement || !filterElement.length) return;
@@ -358,7 +382,6 @@
                         lastLen = items.length;
                     }
 
-                    // Используем глобальную функцию
                     var processed = window.processSources(items.slice());
                     originalSet.call(this, type, processed);
 
@@ -390,7 +413,7 @@
     }
 
     // ============================================================
-    // 7. Патч компонентов
+    // 8. Патч компонентов (главный патч)
     // ============================================================
     function patchLampacComponents() {
         if (!Lampa.Component || !Lampa.Component._components) return;
@@ -398,16 +421,96 @@
         var comps = Lampa.Component._components;
         for (var name in comps) {
             var comp = comps[name];
-            if (comp && comp.prototype && typeof comp.prototype.startSource === 'function') {
-                if (comp._osm_patched) continue;
-                comp._osm_patched = true;
+            if (!comp || !comp.prototype) continue;
 
-                var original = comp.prototype.startSource;
-                comp.prototype.startSource = function(json) {
+            var proto = comp.prototype;
+
+            // Патчим startSource для сортировки источников
+            if (typeof proto.startSource === 'function' && !comp._osm_patched) {
+                comp._osm_patched = true;
+                var originalStart = proto.startSource;
+                proto.startSource = function(json) {
                     var processed = window.processSources(json);
-                    return original.call(this, processed);
+                    return originalStart.call(this, processed);
                 };
-                console.log('[OSM] Patched component:', name);
+                console.log('[OSM] Patched startSource:', name);
+            }
+
+            // Патчим parse для сортировки видео и озвучек
+            if (typeof proto.parse === 'function' && !comp._osm_parse_patched) {
+                comp._osm_parse_patched = true;
+                var originalParse = proto.parse;
+
+                proto.parse = function(str) {
+                    var result = originalParse.call(this, str);
+
+                    try {
+                        var $html = $('<div>' + str + '</div>');
+
+                        // Сортировка озвучек (кнопки)
+                        var buttons = $html.find('.videos__button');
+                        if (buttons.length > 1) {
+                            var voiceButtons = [];
+                            buttons.each(function() {
+                                var $item = $(this);
+                                try {
+                                    var data = JSON.parse($item.attr('data-json'));
+                                    data.text = $item.text().trim();
+                                    data.active = $item.hasClass('active');
+                                    voiceButtons.push(data);
+                                } catch(e) {}
+                            });
+
+                            if (voiceButtons.length > 1) {
+                                var sortedVoices = sortVoices(voiceButtons);
+                                // Сохраняем отсортированные кнопки для дальнейшего использования
+                                if (window._osm_sorted_voices) {
+                                    window._osm_sorted_voices[name] = sortedVoices;
+                                } else {
+                                    window._osm_sorted_voices = {};
+                                    window._osm_sorted_voices[name] = sortedVoices;
+                                }
+                            }
+                        }
+
+                        // Сортировка видео (серии)
+                        var videos = $html.find('.videos__item');
+                        if (videos.length > 1) {
+                            var videoItems = [];
+                            var isSerial = false;
+                            videos.each(function() {
+                                var $item = $(this);
+                                try {
+                                    var data = JSON.parse($item.attr('data-json'));
+                                    var season = $item.attr('s');
+                                    var episode = $item.attr('e');
+                                    var text = $item.text().trim();
+                                    if (season || episode) isSerial = true;
+                                    data.text = text;
+                                    if (season) data.season = parseInt(season);
+                                    if (episode) data.episode = parseInt(episode);
+                                    data.active = $item.hasClass('active');
+                                    videoItems.push(data);
+                                } catch(e) {}
+                            });
+
+                            // Для сериалов сортируем видео по качеству
+                            if (isSerial && videoItems.length > 1) {
+                                var sortedVideos = sortVideosByQuality(videoItems);
+                                // Сохраняем отсортированные видео
+                                if (window._osm_sorted_videos) {
+                                    window._osm_sorted_videos[name] = sortedVideos;
+                                } else {
+                                    window._osm_sorted_videos = {};
+                                    window._osm_sorted_videos[name] = sortedVideos;
+                                }
+                            }
+                        }
+                    } catch(e) {}
+
+                    return result;
+                };
+                console.log('[OSM] Patched parse:', name);
             }
         }
     }
@@ -420,61 +523,47 @@
             originalAdd.call(this, name, comp);
 
             var instance = Lampa.Component.get(name);
-            if (instance && instance.prototype && typeof instance.prototype.startSource === 'function') {
-                if (!instance._osm_patched) {
+            if (instance && instance.prototype) {
+                var proto = instance.prototype;
+
+                if (typeof proto.startSource === 'function' && !instance._osm_patched) {
                     instance._osm_patched = true;
-                    var original = instance.prototype.startSource;
-                    instance.prototype.startSource = function(json) {
+                    var originalStart = proto.startSource;
+                    proto.startSource = function(json) {
                         var processed = window.processSources(json);
-                        return original.call(this, processed);
+                        return originalStart.call(this, processed);
                     };
-                    console.log('[OSM] Patched component on add:', name);
+                }
+
+                if (typeof proto.parse === 'function' && !instance._osm_parse_patched) {
+                    instance._osm_parse_patched = true;
+                    var originalParse = proto.parse;
+                    proto.parse = function(str) {
+                        var result = originalParse.call(this, str);
+                        // Сортировка озвучек и видео
+                        try {
+                            var $html = $('<div>' + str + '</div>');
+                            var buttons = $html.find('.videos__button');
+                            if (buttons.length > 1) {
+                                var voiceButtons = [];
+                                buttons.each(function() {
+                                    var $item = $(this);
+                                    try {
+                                        var data = JSON.parse($item.attr('data-json'));
+                                        data.text = $item.text().trim();
+                                        data.active = $item.hasClass('active');
+                                        voiceButtons.push(data);
+                                    } catch(e) {}
+                                });
+                                if (voiceButtons.length > 1) {
+                                    sortVoices(voiceButtons);
+                                }
+                            }
+                        } catch(e) {}
+                        return result;
+                    };
                 }
             }
-        };
-    }
-
-    // ============================================================
-    // 8. Патч для сортировки озвучек
-    // ============================================================
-    function patchVoiceSorting() {
-        // Перехватываем парсинг ответа для сортировки озвучек
-        var Lampac = Lampa.Component.get('lampac');
-        if (!Lampac) return;
-
-        var proto = Lampac.prototype;
-        if (!proto || typeof proto.parse !== 'function') return;
-        if (proto._voicePatched) return;
-        proto._voicePatched = true;
-
-        var origParse = proto.parse;
-        proto.parse = function(str) {
-            var result = origParse.call(this, str);
-
-            try {
-                var $html = $('<div>' + str + '</div>');
-                var buttons = $html.find('.videos__button');
-
-                if (buttons.length > 1) {
-                    var voiceButtons = [];
-                    buttons.each(function() {
-                        var $item = $(this);
-                        try {
-                            var data = JSON.parse($item.attr('data-json'));
-                            data.text = $item.text().trim();
-                            data.active = $item.hasClass('active');
-                            voiceButtons.push(data);
-                        } catch(e) {}
-                    });
-
-                    if (voiceButtons.length > 1) {
-                        var sorted = sortVoices(voiceButtons);
-                        // Можно обновить данные, если нужно
-                    }
-                }
-            } catch(e) {}
-
-            return result;
         };
     }
 
@@ -486,7 +575,6 @@
         patchFilter();
         overrideComponentAdd();
         patchLampacComponents();
-        patchVoiceSorting();
         setInterval(patchLampacComponents, 5000);
         console.log('[OSM] Готово!');
     }
