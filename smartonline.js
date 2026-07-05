@@ -1,12 +1,7 @@
 /**
  * Online Source Manager
- * Версия: 2.0.0
- * 
- * Объединяет:
- * - Сортировку источников по качеству, алфавиту или стандартную
- * - Фильтрацию недоступных источников
- * - Удобную кнопку управления в интерфейсе
- * - Настройки в меню Lampa
+ * Версия: 2.2.0
+ * По умолчанию: сортировка по качеству, минимальное качество 1080p, приоритет дубляжа
  */
 
 (function() {
@@ -16,23 +11,21 @@
     window.online_source_manager_loaded = true;
 
     // ============================================================
-    // 1. Хранилище настроек
+    // 1. Хранилище настроек (с новыми дефолтами)
     // ============================================================
     var STORAGE = {
         SORT_TYPE: 'osm_sort_type',
         HIDE_UNAVAILABLE: 'osm_hide_unavailable',
-        BUTTON_ENABLED: 'osm_button_enabled',
         MIN_QUALITY: 'osm_min_quality',
         PREFER_DUB: 'osm_prefer_dub',
         SHOW_LABEL: 'osm_show_label'
     };
 
     var DEFAULTS = {
-        SORT_TYPE: 'default',
+        SORT_TYPE: 'quality',        // По умолчанию сортировка по качеству
         HIDE_UNAVAILABLE: false,
-        BUTTON_ENABLED: true,
-        MIN_QUALITY: '0',
-        PREFER_DUB: false,
+        MIN_QUALITY: '1080',         // По умолчанию минимальное качество 1080p
+        PREFER_DUB: true,            // По умолчанию предпочитать дубляж
         SHOW_LABEL: true
     };
 
@@ -68,7 +61,7 @@
     }
 
     function isDub(name) {
-        return /дубляж|dub/i.test(name);
+        return /дубляж|дублированный|dub/i.test(name);
     }
 
     function addQualityLabel(source) {
@@ -114,10 +107,12 @@
         }
 
         available.sort(function(a, b) {
+            // 1. Сначала по качеству (от большего к меньшему)
             var qA = getQuality(a);
             var qB = getQuality(b);
             if (qB !== qA) return qB - qA;
 
+            // 2. При равном качестве - дубляж выше
             if (preferDub) {
                 var dA = isDub(a.name || a.title || '') ? 1 : 0;
                 var dB = isDub(b.name || b.title || '') ? 1 : 0;
@@ -131,7 +126,6 @@
             delete available[k]._idx;
         }
 
-        // Добавляем метки качества
         if (showLabel) {
             available.forEach(function(s) {
                 if (s.name) s.name = addQualityLabel(s);
@@ -154,7 +148,6 @@
         if (sortType === SORT_TYPES.ALPHABET) return sortByAlphabet(sorted);
         if (sortType === SORT_TYPES.QUALITY) return sortByQuality(sorted);
 
-        // Стандартная: активные сначала
         var available = [];
         var unavailable = [];
         for (var i = 0; i < sorted.length; i++) {
@@ -187,7 +180,7 @@
     }
 
     // ============================================================
-    // 4. UI: Кнопка управления
+    // 4. UI: Меню в фильтре
     // ============================================================
     var ICON = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M3 18h6v-2H3v2zM3 6v2h18V6H3zm0 7h12v-2H3v2z" fill="currentColor"/></svg>';
 
@@ -205,21 +198,21 @@
             '1080': '≥1080p'
         };
 
-        var sortTitle = sortType === SORT_TYPES.ALPHABET ? Lampa.Lang.translate('source_sort_alphabet') :
-                       sortType === SORT_TYPES.QUALITY ? Lampa.Lang.translate('source_sort_quality') :
-                       Lampa.Lang.translate('source_sort_default');
+        var sortTitle = sortType === SORT_TYPES.ALPHABET ? 'По алфавиту' :
+                       sortType === SORT_TYPES.QUALITY ? 'По качеству' :
+                       'Стандартная';
 
-        var hideTitle = hideEnabled ? Lampa.Lang.translate('source_sort_yes') : Lampa.Lang.translate('source_sort_no');
+        var hideTitle = hideEnabled ? 'Да' : 'Нет';
         var qualityTitle = qualityLabels[String(minQuality)] || 'Все';
-        var dubTitle = preferDub ? Lampa.Lang.translate('source_sort_yes') : Lampa.Lang.translate('source_sort_no');
-        var labelTitle = showLabel ? Lampa.Lang.translate('source_sort_yes') : Lampa.Lang.translate('source_sort_no');
+        var dubTitle = preferDub ? 'Да' : 'Нет';
+        var labelTitle = showLabel ? 'Да' : 'Нет';
 
         Lampa.Select.show({
-            title: Lampa.Lang.translate('source_sort_title') || 'Управление источниками',
+            title: 'Управление источниками',
             items: [
-                {title: Lampa.Lang.translate('source_sort_sorting') || 'Сортировка', subtitle: sortTitle, value: 'sorting'},
+                {title: 'Сортировка', subtitle: sortTitle, value: 'sorting'},
                 {title: 'Минимальное качество', subtitle: qualityTitle, value: 'min_quality'},
-                {title: Lampa.Lang.translate('source_sort_hide_unavailable') || 'Скрывать недоступные', subtitle: hideTitle, value: 'hide'},
+                {title: 'Скрывать недоступные', subtitle: hideTitle, value: 'hide'},
                 {title: 'Предпочитать дубляж', subtitle: dubTitle, value: 'dub'},
                 {title: 'Показывать качество в названии', subtitle: labelTitle, value: 'label'}
             ],
@@ -254,11 +247,11 @@
         var current = Lampa.Storage.get(STORAGE.SORT_TYPE, DEFAULTS.SORT_TYPE);
 
         Lampa.Select.show({
-            title: Lampa.Lang.translate('source_sort_sorting') || 'Сортировка',
+            title: 'Сортировка',
             items: [
-                {title: Lampa.Lang.translate('source_sort_default') || 'Стандартная', subtitle: Lampa.Lang.translate('source_sort_default_desc') || 'Порядок от сервера', value: SORT_TYPES.DEFAULT, selected: current === SORT_TYPES.DEFAULT},
-                {title: Lampa.Lang.translate('source_sort_alphabet') || 'По алфавиту', subtitle: Lampa.Lang.translate('source_sort_alphabet_desc') || 'От А до Я', value: SORT_TYPES.ALPHABET, selected: current === SORT_TYPES.ALPHABET},
-                {title: Lampa.Lang.translate('source_sort_quality') || 'По качеству', subtitle: Lampa.Lang.translate('source_sort_quality_desc') || 'От лучшего к худшему', value: SORT_TYPES.QUALITY, selected: current === SORT_TYPES.QUALITY}
+                {title: 'Стандартная', subtitle: 'Порядок от сервера', value: SORT_TYPES.DEFAULT, selected: current === SORT_TYPES.DEFAULT},
+                {title: 'По алфавиту', subtitle: 'От А до Я', value: SORT_TYPES.ALPHABET, selected: current === SORT_TYPES.ALPHABET},
+                {title: 'По качеству', subtitle: 'От лучшего к худшему', value: SORT_TYPES.QUALITY, selected: current === SORT_TYPES.QUALITY}
             ],
             onSelect: function(item) {
                 Lampa.Storage.set(STORAGE.SORT_TYPE, item.value);
@@ -294,12 +287,12 @@
     }
 
     // ============================================================
-    // 5. Патч компонентов
+    // 5. Патч фильтра (добавление кнопки)
     // ============================================================
     function addButton(filterElement, onUpdate) {
         if (!filterElement || !filterElement.length) return;
         var sortBtn = filterElement.find('.filter--sort');
-        if (!sortBtn.length || !Lampa.Storage.get(STORAGE.BUTTON_ENABLED, DEFAULTS.BUTTON_ENABLED)) return;
+        if (!sortBtn.length) return;
         if (filterElement.find('.source-sort-button').length) return;
 
         var btn = $('<div class="simple-button selector source-sort-button" style="padding:0;width:3em;display:flex;align-items:center;justify-content:center">' + ICON + '</div>');
@@ -309,10 +302,6 @@
         btn.on('hover:blur', function() { btn.removeClass('focus'); });
 
         sortBtn.after(btn);
-
-        setTimeout(function() {
-            try { Lampa.Controller.toggle('content'); } catch(e) {}
-        }, 100);
     }
 
     function patchFilter() {
@@ -340,7 +329,6 @@
                     }
 
                     var processed = processSources(items.slice());
-
                     originalSet.call(this, type, processed);
 
                     var self = this;
@@ -350,10 +338,6 @@
                                 var current = originalSrc.slice();
                                 var processedNew = processSources(current);
                                 originalSet.call(self, type, processedNew);
-
-                                setTimeout(function() {
-                                    try { Lampa.Controller.toggle('content'); } catch(e) {}
-                                }, 100);
                             });
                         }
                     }, 100);
@@ -375,7 +359,7 @@
     }
 
     // ============================================================
-    // 6. Патч компонентов lampac
+    // 6. Патч компонентов
     // ============================================================
     function patchLampacComponents() {
         if (!Lampa.Component || !Lampa.Component._components) return;
@@ -420,94 +404,12 @@
     }
 
     // ============================================================
-    // 7. Настройки
-    // ============================================================
-    function registerSettings() {
-        if (!Lampa.SettingsApi) return;
-
-        Lampa.SettingsApi.addComponent({
-            component: 'online_source_manager',
-            name: 'Управление источниками',
-            icon: '<svg viewBox="0 0 24 24" fill="none"><path d="M3 18h6v-2H3v2zM3 6v2h18V6H3zm0 7h12v-2H3v2z" fill="white"/></svg>'
-        });
-
-        Lampa.SettingsApi.addParam({
-            component: 'online_source_manager',
-            param: {
-                name: STORAGE.BUTTON_ENABLED,
-                type: 'trigger',
-                default: DEFAULTS.BUTTON_ENABLED
-            },
-            field: {
-                name: 'Кнопка управления источниками'
-            },
-            onChange: function() {
-                var enabled = Lampa.Storage.get(STORAGE.BUTTON_ENABLED, DEFAULTS.BUTTON_ENABLED);
-                if (enabled) {
-                    $('.source-sort-button').show();
-                    Lampa.Noty.show('Кнопка показана');
-                } else {
-                    $('.source-sort-button').hide();
-                    Lampa.Noty.show('Кнопка скрыта');
-                }
-            }
-        });
-
-        Lampa.SettingsApi.addParam({
-            component: 'online_source_manager',
-            param: {
-                name: STORAGE.SHOW_LABEL,
-                type: 'trigger',
-                default: DEFAULTS.SHOW_LABEL
-            },
-            field: {
-                name: 'Показывать качество в названии источника'
-            }
-        });
-
-        Lampa.SettingsApi.addParam({
-            component: 'online_source_manager',
-            param: {
-                name: STORAGE.PREFER_DUB,
-                type: 'trigger',
-                default: DEFAULTS.PREFER_DUB
-            },
-            field: {
-                name: 'Предпочитать дубляж'
-            }
-        });
-    }
-
-    // ============================================================
-    // 8. Локализация
-    // ============================================================
-    function addLang() {
-        Lampa.Lang.add({
-            source_sort_title: {ru: 'Управление источниками', uk: 'Керування джерелами', en: 'Source management'},
-            source_sort_sorting: {ru: 'Сортировка', uk: 'Сортування', en: 'Sorting'},
-            source_sort_hide_unavailable: {ru: 'Скрывать недоступные', uk: 'Приховувати недоступні', en: 'Hide unavailable'},
-            source_sort_default: {ru: 'Стандартная', uk: 'Стандартна', en: 'Default'},
-            source_sort_default_desc: {ru: 'Порядок от сервера', uk: 'Порядок від сервера', en: 'Server order'},
-            source_sort_alphabet: {ru: 'По алфавиту', uk: 'За алфавітом', en: 'Alphabetical'},
-            source_sort_alphabet_desc: {ru: 'От А до Я', uk: 'Від А до Я', en: 'A to Z'},
-            source_sort_quality: {ru: 'По качеству', uk: 'За якістю', en: 'By quality'},
-            source_sort_quality_desc: {ru: 'От лучшего к худшему', uk: 'Від кращого до гіршого', en: 'Best to worst'},
-            source_sort_yes: {ru: 'Да', uk: 'Так', en: 'Yes'},
-            source_sort_no: {ru: 'Нет', uk: 'Ні', en: 'No'}
-        });
-    }
-
-    // ============================================================
-    // 9. Запуск
+    // 7. Запуск
     // ============================================================
     function init() {
-        addLang();
-        registerSettings();
         patchFilter();
         overrideComponentAdd();
         patchLampacComponents();
-
-        // Периодическая проверка новых компонентов
         setInterval(patchLampacComponents, 5000);
     }
 
