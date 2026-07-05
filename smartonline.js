@@ -91,14 +91,12 @@
     function getAllBalansers(callback) {
         var allBalansers = [];
 
-        // Получаем из хранилища Lampa
         var activeBalanser = Lampa.Storage.get('active_balanser', '');
         var onlineBalanser = Lampa.Storage.get('online_balanser', '');
 
         if (activeBalanser) allBalansers.push(activeBalanser);
         if (onlineBalanser && onlineBalanser !== activeBalanser) allBalansers.push(onlineBalanser);
 
-        // Добавляем основные балансеры
         var mainBalansers = ['phantom', 'fxapi', 'filmix', 'alloha', 'kinopub', 'rezka', 'kodik'];
         mainBalansers.forEach(function(name) {
             if (!allBalansers.some(function(s) { return s.toLowerCase() === name; })) {
@@ -106,7 +104,6 @@
             }
         });
 
-        // Убираем дубликаты
         var unique = [];
         allBalansers.forEach(function(s) {
             var lower = s.toLowerCase();
@@ -128,6 +125,7 @@
             logLines.push('═══════════════════════════════════════════════════════════');
             logLines.push('🔍 ПОИСК ЛУЧШЕГО БАЛАНСЕРА ДЛЯ: ' + (movie.title || movie.name));
             logLines.push('📋 Балансеров: ' + balansers.length + ' (' + balansers.join(', ') + ')');
+            logLines.push('📺 Тип: ' + (movie.name ? 'СЕРИАЛ' : 'ФИЛЬМ'));
             logLines.push('═══════════════════════════════════════════════════════════');
 
             var results = [];
@@ -147,12 +145,14 @@
                 if (movie.tmdb_id) query.push('tmdb_id=' + (movie.tmdb_id || ''));
                 query.push('title=' + encodeURIComponent(movie.title || movie.name));
                 query.push('original_title=' + encodeURIComponent(movie.original_title || movie.original_name));
-                query.push('serial=' + (movie.name ? 1 : 0));
+                query.push('serial=' + (movie.name ? 1 : 0)); // Для сериалов = 1
                 query.push('original_language=' + (movie.original_language || ''));
                 query.push('year=' + ((movie.release_date || movie.first_air_date || '0000') + '').slice(0, 4));
                 query.push('source=' + (movie.source || 'tmdb'));
 
                 var url = AB_HOST + '/lite/' + sourceName + '?' + query.join('&');
+
+                console.log('📡 Запрос к ' + sourceName + ': ' + url);
 
                 var network = new Lampa.Reguest();
                 network.timeout(10000);
@@ -206,7 +206,6 @@
                                 }
                             });
 
-                            // Сортируем озвучки для фильмов
                             if (!movie.name && buttons.length > 0) {
                                 buttons = sortVoicesByPriority(buttons);
                             }
@@ -226,7 +225,7 @@
                             logLines.push('  ⚠️ ' + sourceName + ': видео не найдены');
                         }
                     } catch (e) {
-                        logLines.push('  ❌ ' + sourceName + ': ошибка');
+                        logLines.push('  ❌ ' + sourceName + ': ошибка парсинга');
                     }
 
                     if (completed === total) {
@@ -284,13 +283,11 @@
     }
 
     // ============================================================
-    // ПЕРЕКЛЮЧЕНИЕ НА БАЛАНСЕР И ОТКРЫТИЕ ОНЛАЙН
+    // ПЕРЕКЛЮЧЕНИЕ НА БАЛАНСЕР
     // ============================================================
 
-    function switchToBalanserAndOpen(sourceName, movie, buttons) {
+    function switchToBalanserAndOpen(sourceName, movie) {
         if (!sourceName) return;
-
-        console.log('🔄 Переключение на балансер:', sourceName);
 
         Lampa.Storage.set('active_balanser', sourceName);
         Lampa.Storage.set('online_balanser', sourceName);
@@ -301,7 +298,6 @@
             Lampa.Storage.set('online_last_balanser', lastSelect);
         }
 
-        // Открываем онлайн с новым балансером
         var id = Lampa.Utils.hash(movie.number_of_seasons ? movie.original_name : movie.original_title);
         var all = Lampa.Storage.get('clarification_search', {});
 
@@ -324,7 +320,7 @@
     }
 
     // ============================================================
-    // ДОБАВЛЕНИЕ КНОПКИ "ЛУЧШИЙ ПОТОК"
+    // ДОБАВЛЕНИЕ КНОПКИ
     // ============================================================
 
     function addBestButton() {
@@ -355,7 +351,7 @@
                         }
 
                         if (best) {
-                            switchToBalanserAndOpen(best.source, movie, best.buttons);
+                            switchToBalanserAndOpen(best.source, movie);
                         } else {
                             Lampa.Noty.show('❌ Подходящий балансер не найден');
                         }
