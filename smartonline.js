@@ -1,7 +1,6 @@
 /**
  * Online Source Manager
- * Версия: 9.0.0
- * Исправлена сортировка озвучек с сохранением активной
+ * Version: 9.0.0
  */
 
 (function() {
@@ -19,12 +18,9 @@
 
     log('========================================');
     log('Online Source Manager v9.0.0');
-    log('Приоритет: hdrezka → Дубляж → LostFilm → Кубик → Остальные');
+    log('Priority: hdrezka -> Dub -> LostFilm -> Cube -> Others');
     log('========================================');
 
-    // ============================================================
-    // 1. Приоритет озвучек
-    // ============================================================
     function voiceWeight(name) {
         if (!name) return 0;
         var text = name.toLowerCase();
@@ -54,14 +50,9 @@
         return /hdrezka|hd\.rezka|rezka/i.test(name);
     }
 
-    // ============================================================
-    // 2. Сортировка элементов (с сохранением активного)
-    // ============================================================
     function sortItems(selector, scoreFn, preserveActive) {
         var items = $(selector);
         if (items.length < 2) return false;
-
-        log('Сортировка ' + items.length + ' элементов по селектору: ' + selector);
 
         var data = [];
         var activeText = '';
@@ -79,12 +70,7 @@
             data.push({ $el: $el, text: text, active: isActive, score: score });
         });
 
-        log('  Активная: "' + activeText + '"');
-        log('  Есть HDrezka: ' + hasHdrezka);
-
-        // Сортируем
         data.sort(function(a, b) {
-            // Если есть HDrezka и она не активна — ставим её первой
             if (hasHdrezka) {
                 var aIsHdrezka = isHdrezka(a.text);
                 var bIsHdrezka = isHdrezka(b.text);
@@ -92,20 +78,15 @@
                 if (!aIsHdrezka && bIsHdrezka) return 1;
             }
 
-            // Активная — наверх (если preserveActive = true)
             if (preserveActive !== false) {
                 if (a.active && !b.active) return -1;
                 if (!a.active && b.active) return 1;
             }
 
-            // По скору
             if (a.score !== b.score) return b.score - a.score;
-
-            // По тексту
             return a.text.localeCompare(b.text);
         });
 
-        // Переставляем в DOM
         var parent = items.first().parent();
         if (parent && parent.length) {
             var container = $('<div>');
@@ -114,28 +95,22 @@
             }
             parent.html(container.html());
 
-            // Восстанавливаем активный элемент
             if (activeText) {
                 var newItems = parent.find(selector);
                 for (var i = 0; i < newItems.length; i++) {
                     if ($(newItems[i]).text().trim() === activeText) {
                         $(newItems[i]).addClass('focus');
-                        log('  Восстановлен активный: "' + activeText + '"');
                         break;
                     }
                 }
             }
 
-            log('  Переупорядочено ' + data.length + ' элементов');
             return true;
         }
 
         return false;
     }
 
-    // ============================================================
-    // 3. Сортировка сезонов (от последнего к первому)
-    // ============================================================
     function sortSeasons() {
         var items = $('.selectbox-item');
         if (items.length < 2) return false;
@@ -144,8 +119,6 @@
         var title = parentContainer.find('.selectbox__title').text().trim();
 
         if (title.indexOf('Сезон') === -1 && title.indexOf('Season') === -1) return false;
-
-        log('Сортировка сезонов: от последнего к первому');
 
         var data = [];
         var activeText = '';
@@ -185,16 +158,12 @@
                 }
             }
 
-            log('  Сезоны отсортированы: ' + data.map(function(i) { return i.num; }).join(' → '));
             return true;
         }
 
         return false;
     }
 
-    // ============================================================
-    // 4. Сортировка видео в фильмах
-    // ============================================================
     function sortMovies() {
         var videos = $('.online-prestige--full');
         if (videos.length < 2) return false;
@@ -208,8 +177,6 @@
         });
 
         if (!hasVariants) return false;
-
-        log('Сортировка видео в фильме');
 
         var data = [];
         videos.each(function() {
@@ -231,26 +198,16 @@
                 container.append(data[i].$el);
             }
             parent.html(container.html());
-            log('  Видео отсортированы');
             return true;
         }
 
         return false;
     }
 
-    // ============================================================
-    // 5. Основная функция
-    // ============================================================
     function sortAll() {
         try {
-            log('--- Сортировка ---');
+            sortSeasons();
 
-            var sorted = false;
-
-            // 5.1 Сезоны
-            if (sortSeasons()) sorted = true;
-
-            // 5.2 Переводы в сериалах (ищем по заголовку)
             var containers = $('.selectbox');
             containers.each(function() {
                 var $container = $(this);
@@ -259,19 +216,16 @@
                 if (title.indexOf('Перевод') !== -1 || 
                     title.indexOf('Voice') !== -1 || 
                     title.indexOf('Озвучка') !== -1) {
-                    log('Найден фильтр переводов: "' + title + '"');
-                    if (sortItems('.selectbox-item', voiceWeight, true)) sorted = true;
+                    sortItems('.selectbox-item', voiceWeight, true);
                 }
 
                 if (title.indexOf('Источник') !== -1 || 
                     title.indexOf('Source') !== -1 || 
                     title.indexOf('Сортировать') !== -1) {
-                    log('Найден фильтр источников: "' + title + '"');
-                    if (sortItems('.selectbox-item', qualityScore, true)) sorted = true;
+                    sortItems('.selectbox-item', qualityScore, true);
                 }
             });
 
-            // 5.3 Кнопки озвучек (videos__button)
             var voiceBtns = $('.videos__button');
             if (voiceBtns.length > 1) {
                 var hasVoice = false;
@@ -282,40 +236,26 @@
                     }
                 });
                 if (hasVoice) {
-                    log('Найдены кнопки озвучек');
-                    if (sortItems('.videos__button', voiceWeight, true)) sorted = true;
+                    sortItems('.videos__button', voiceWeight, true);
                 }
             }
 
-            // 5.4 Видео в фильмах
-            if (sortMovies()) sorted = true;
-
-            if (!sorted) {
-                log('  Изменений не было');
-            }
-
+            sortMovies();
         } catch(e) {
-            log('Ошибка:', e);
+            // ignore
         }
     }
 
-    // ============================================================
-    // 6. Запуск
-    // ============================================================
     function init() {
-        log('Инициализация...');
-
         if (!window.Lampa) {
             setTimeout(init, 500);
             return;
         }
 
-        // Первичная сортировка
         setTimeout(sortAll, 1000);
         setTimeout(sortAll, 3000);
         setTimeout(sortAll, 5000);
 
-        // Следим за изменениями в DOM
         var observer = new MutationObserver(function() {
             clearTimeout(window._sortTimer);
             window._sortTimer = setTimeout(sortAll, 300);
@@ -326,16 +266,9 @@
             subtree: true
         });
 
-        // Периодическая проверка (каждые 3 секунды)
         setInterval(sortAll, 3000);
-
-        log('========================================');
-        log('ГОТОВО!');
-        log('Для ручной сортировки вызовите: sortAll()');
-        log('========================================');
     }
 
-    // Делаем функцию доступной в консоли
     window.sortAll = sortAll;
 
     if (window.Lampa && Lampa.Listener) {
