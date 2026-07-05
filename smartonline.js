@@ -1,14 +1,13 @@
 /**
- * Voice Sorter for Lampac
+ * Voice Sorter for akter.black (lampac component)
  * Версия: 1.0.0
- * Сортировка озвучек для компонента lampac
  */
 
 (function() {
     'use strict';
 
-    if (window.lampac_voice_sorter_loaded) return;
-    window.lampac_voice_sorter_loaded = true;
+    if (window.akter_voice_sorter_loaded) return;
+    window.akter_voice_sorter_loaded = true;
 
     var DEBUG = true;
 
@@ -20,21 +19,33 @@
     // ============================================================
     // Приоритет озвучек (как в Smart Online)
     // ============================================================
-    function getVoiceScore(name) {
+    function voiceWeight(name) {
         if (!name) return 0;
         var text = name.toLowerCase();
+        var score = 0;
 
-        if (/hdrezka|hd\.rezka|rezka/.test(text)) return 1000;
-        if (/дубляж|дублированный|дубликация|dub\b/.test(text)) return 900;
-        if (/кубик|cube|куб|kubik/.test(text)) return 800;
-        if (/lostfilm|lost\.film/.test(text)) return 700;
-        if (/профессиональный|многоголосый|двухголосый/.test(text)) return 500;
-        if (/любительский|одноголосый/.test(text)) return 300;
-        if (/субтитры|sub|subtitles|оригинал|original/.test(text)) return 100;
-        return 200;
+        // hdrezka - наивысший приоритет
+        if (/hdrezka|hd\.rezka|rezka/.test(text)) score += 20;
+
+        // Дубляж
+        if (/дубляж|дублированный|дубликация|dub\b/.test(text)) score += 15;
+
+        // Кубик в Кубе
+        if (/кубик|cube|куб|kubik/.test(text)) score += 13;
+
+        // LostFilm
+        if (/lostfilm|lost\.film/.test(text)) score += 10;
+
+        // Субтитры и оригинал - низкий приоритет
+        if (/субтитры|sub\b|subtitles|original|оригинал|orig/.test(text)) score -= 10;
+
+        // Английская озвучка - исключаем
+        if (/english|eng|en\b/.test(text) && !/russian|rus/.test(text)) score -= 100;
+
+        return score;
     }
 
-    function sortVoiceButtons(buttons) {
+    function sortVoices(buttons) {
         if (!buttons || buttons.length < 2) return buttons;
 
         return buttons.slice().sort(function(a, b) {
@@ -47,8 +58,8 @@
             if (aActive !== bActive) return bActive - aActive;
 
             // Приоритет
-            var scoreA = getVoiceScore(nameA);
-            var scoreB = getVoiceScore(nameB);
+            var scoreA = voiceWeight(nameA);
+            var scoreB = voiceWeight(nameB);
             if (scoreA !== scoreB) return scoreB - scoreA;
 
             return nameA.localeCompare(nameB);
@@ -56,31 +67,72 @@
     }
 
     // ============================================================
-    // Главный патч
+    // Сортировка видео для фильмов
     // ============================================================
-    function patchLampac() {
-        log('Патчим компонент lampac...');
+    function extractQuality(name) {
+        if (!name) return 0;
+        var upper = name.toUpperCase();
+        if (upper.indexOf('4K') !== -1 || upper.indexOf('UHD') !== -1 || upper.indexOf('2160') !== -1) return 2160;
+        if (upper.indexOf('FULLHD') !== -1 || upper.indexOf('FHD') !== -1 || upper.indexOf('1080') !== -1) return 1080;
+        if (upper.indexOf('HD') !== -1 && upper.indexOf('FULL') === -1 || upper.indexOf('720') !== -1) return 720;
+        if (upper.indexOf('SD') !== -1 || upper.indexOf('480') !== -1) return 480;
+        var match = name.match(/(\d{3,4})\s*[pP]?/);
+        if (match) return parseInt(match[1], 10);
+        return 0;
+    }
 
-        // Получаем компонент lampac
+    function sortVideos(videos) {
+        if (!videos || videos.length < 2) return videos;
+
+        return videos.slice().sort(function(a, b) {
+            var nameA = a.text || a.title || a.name || '';
+            var nameB = b.text || b.title || b.name || '';
+
+            // 1. По приоритету перевода
+            var scoreA = voiceWeight(nameA);
+            var scoreB = voiceWeight(nameB);
+            if (scoreA !== scoreB) return scoreB - scoreA;
+
+            // 2. По качеству
+            var qualityA = extractQuality(nameA);
+            var qualityB = extractQuality(nameB);
+            if (qualityA !== qualityB) return qualityB - qualityA;
+
+            return 0;
+        });
+    }
+
+    // ============================================================
+    // ПАТЧИМ КОМПОНЕНТ
+    // ============================================================
+    function patchLampacComponent() {
+        log('Поиск компонента lampac...');
+
+        // Получаем компонент
         var Lampac = Lampa.Component.get('lampac');
         if (!Lampac) {
             log('Компонент lampac не найден, ждём...');
-            setTimeout(patchLampac, 1000);
+            setTimeout(patchLampacComponent, 1000);
             return;
         }
 
-        var proto = Lampac.prototype;
+        log('Компонент lampac найден!');
 
-        // Патчим метод parse — здесь приходят кнопки озвучек
-        if (typeof proto.parse === 'function' && !proto._voicePatched) {
-            proto._voicePatched = true;
+        var proto = Lampac.prototype;
+        var patched = false;
+
+        // ============================================================
+        // Патчим parse - здесь приходят кнопки озвучек
+        // ============================================================
+        if (typeof proto.parse === 'function' && !proto._voiceParsePatched) {
+            proto._voiceParsePatched = true;
             var originalParse = proto.parse;
 
             proto.parse = function(str) {
                 var result = originalParse.call(this, str);
 
                 try {
-                    // Ищем кнопки озвучек в ответе
+                    // Ищем кнопки озвучек
                     var $html = $('<div>' + str + '</div>');
                     var buttons = $html.find('.videos__button');
 
@@ -97,21 +149,28 @@
                         });
 
                         if (voiceButtons.length > 1) {
-                            var sorted = sortVoiceButtons(voiceButtons);
+                            var sorted = sortVoices(voiceButtons);
                             log('Озвучки отсортированы:', sorted.map(function(v) { return v.text; }));
+                            // Сохраняем в глобальную переменную для доступа
+                            window._sortedVoices = sorted;
                         }
                     }
-                } catch(e) {}
+                } catch(e) {
+                    logError('Ошибка в parse:', e);
+                }
 
                 return result;
             };
 
             log('✅ parse пропатчен');
+            patched = true;
         }
 
-        // Патчим display — здесь отображаются видео (для фильмов)
-        if (typeof proto.display === 'function' && !proto._displayPatched) {
-            proto._displayPatched = true;
+        // ============================================================
+        // Патчим display - здесь отображаются видео в фильмах
+        // ============================================================
+        if (typeof proto.display === 'function' && !proto._voiceDisplayPatched) {
+            proto._voiceDisplayPatched = true;
             var originalDisplay = proto.display;
 
             proto.display = function(videos) {
@@ -122,22 +181,7 @@
                     });
 
                     if (hasVoices) {
-                        var sorted = videos.slice().sort(function(a, b) {
-                            var nameA = a.text || a.voice_name || a.title || '';
-                            var nameB = b.text || b.voice_name || b.title || '';
-
-                            var scoreA = getVoiceScore(nameA);
-                            var scoreB = getVoiceScore(nameB);
-                            if (scoreA !== scoreB) return scoreB - scoreA;
-
-                            // По качеству
-                            var qualityA = extractQuality(nameA);
-                            var qualityB = extractQuality(nameB);
-                            if (qualityA !== qualityB) return qualityB - qualityA;
-
-                            return 0;
-                        });
-
+                        var sorted = sortVideos(videos);
                         log('Видео отсортированы');
                         return originalDisplay.call(this, sorted);
                     }
@@ -147,28 +191,70 @@
             };
 
             log('✅ display пропатчен');
+            patched = true;
         }
 
-        log('Патчинг lampac завершён');
-    }
+        // ============================================================
+        // Патчим filter - для сортировки озвучек в фильтре
+        // ============================================================
+        if (typeof proto.filter === 'function' && !proto._voiceFilterPatched) {
+            proto._voiceFilterPatched = true;
+            var originalFilter = proto.filter;
 
-    function extractQuality(name) {
-        if (!name) return 0;
-        var upper = name.toUpperCase();
-        if (upper.indexOf('4K') !== -1 || upper.indexOf('UHD') !== -1 || upper.indexOf('2160') !== -1) return 2160;
-        if (upper.indexOf('FULLHD') !== -1 || upper.indexOf('FHD') !== -1 || upper.indexOf('1080') !== -1) return 1080;
-        if (upper.indexOf('HD') !== -1 && upper.indexOf('FULL') === -1 || upper.indexOf('720') !== -1) return 720;
-        if (upper.indexOf('SD') !== -1 || upper.indexOf('480') !== -1) return 480;
-        var match = name.match(/(\d{3,4})\s*[pP]?/);
-        if (match) return parseInt(match[1], 10);
-        return 0;
+            proto.filter = function(filter_items, choice) {
+                // Сортируем озвучки в фильтре
+                if (filter_items && filter_items.voice && filter_items.voice.length > 1) {
+                    var voiceItems = filter_items.voice.slice();
+                    var voiceScores = voiceItems.map(function(name, index) {
+                        return { name: name, index: index, score: voiceWeight(name) };
+                    });
+                    voiceScores.sort(function(a, b) {
+                        if (a.score !== b.score) return b.score - a.score;
+                        return a.name.localeCompare(b.name);
+                    });
+                    filter_items.voice = voiceScores.map(function(item) { return item.name; });
+                    log('Фильтр озвучек отсортирован:', filter_items.voice);
+                }
+
+                return originalFilter.call(this, filter_items, choice);
+            };
+
+            log('✅ filter пропатчен');
+            patched = true;
+        }
+
+        if (patched) {
+            log('Патчинг lampac завершён!');
+        } else {
+            log('Ничего не пропатчено, возможно методы уже есть');
+        }
     }
 
     // ============================================================
-    // Запуск
+    // Перехват добавления компонента
+    // ============================================================
+    function overrideComponentAdd() {
+        if (typeof Lampa.Component.add !== 'function') return;
+
+        var originalAdd = Lampa.Component.add;
+        Lampa.Component.add = function(name, comp) {
+            originalAdd.call(this, name, comp);
+            if (name === 'lampac') {
+                log('Компонент lampac добавлен, патчим...');
+                setTimeout(patchLampacComponent, 100);
+            }
+        };
+        log('✅ Component.add перехвачен');
+    }
+
+    // ============================================================
+    // ЗАПУСК
     // ============================================================
     function init() {
-        log('Инициализация...');
+        log('========================================');
+        log('Voice Sorter для akter.black');
+        log('Приоритет: hdrezka → Дубляж → LostFilm → Кубик → Остальные');
+        log('========================================');
 
         if (!window.Lampa) {
             log('Lampa не найдена, ждём...');
@@ -176,21 +262,24 @@
             return;
         }
 
-        patchLampac();
-
-        // Патчим при добавлении нового компонента
-        if (Lampa.Component && Lampa.Component.add) {
-            var originalAdd = Lampa.Component.add;
-            Lampa.Component.add = function(name, comp) {
-                originalAdd.call(this, name, comp);
-                if (name === 'lampac') {
-                    log('Компонент lampac добавлен, патчим...');
-                    setTimeout(patchLampac, 100);
-                }
-            };
+        if (!Lampa.Component) {
+            log('Lampa.Component не найден, ждём...');
+            setTimeout(init, 500);
+            return;
         }
 
-        log('Готово!');
+        // Патчим компонент
+        patchLampacComponent();
+
+        // Перехватываем добавление компонента
+        overrideComponentAdd();
+
+        // Периодическая проверка
+        setInterval(patchLampacComponent, 5000);
+
+        log('========================================');
+        log('ГОТОВО!');
+        log('========================================');
     }
 
     // Ждём app:ready
