@@ -2,15 +2,57 @@
     'use strict';
 
     // =============================================
-    // Serial Info Card - Точная копия Modss
+    // Serial Info Card - Точная копия Modss с русификацией
     // Версия: 1.0.0
-    // Полностью повторяет логику Modss.serialInfo()
+    // Полностью повторяет логику Modss.serialInfo() с русскими переводами
     // =============================================
 
     const PLUGIN_NAME = 'serial_info_card';
     const VERSION = '1.0.0';
 
+    // =============================================
+    // РУССКИЕ ПЕРЕВОДЫ (как в MODS's)
+    // =============================================
+    
+    function addTranslations() {
+        Lampa.Lang.add({
+            'season_new': {
+                ru: 'Новая'
+            },
+            'season_ended': {
+                ru: 'сезон завершён'
+            },
+            'season_from': {
+                ru: 'из'
+            },
+            'torrent_serial_episode': {
+                ru: 'серия'
+            },
+            'torrent_serial_season': {
+                ru: 'Сезон'
+            },
+            'torrent_parser_voice': {
+                ru: 'Озвучка'
+            },
+            'title_continue': {
+                ru: 'Продолжить'
+            },
+            'title_watched': {
+                ru: 'Просмотрено'
+            },
+            'empty_text': {
+                ru: 'Нет данных'
+            },
+            'empty_title_two': {
+                ru: 'Информация не найдена'
+            }
+        });
+    }
+
+    // =============================================
     // Настройки
+    // =============================================
+    
     const DEFAULTS = {
         enabled: true
     };
@@ -33,7 +75,7 @@
     }
 
     // =============================================
-    // Ключевые функции из Modss
+    // Ключевые функции из Modss (полная копия)
     // =============================================
 
     // Функция last_view из Modss
@@ -45,7 +87,7 @@
             episodes.forEach(function (ep) {
                 var hash = Lampa.Utils.hash([ep.season_number, ep.episode_number, card.original_title].join(''));
                 var view = Lampa.Timeline.view(hash);
-                if (view.percent) {
+                if (view && view.percent) {
                     viewed = {
                         ep: ep,
                         view: view
@@ -64,10 +106,12 @@
                 // Добавляем на постер
                 var poster = $('.full-start__poster, .full-start-new__poster');
                 if (poster.length) {
-                    poster.append("<div class='card--last_view' style='top:0.6em;right: -.5em;position: absolute;background: #168FDF;color: #fff;padding: 0.4em 0.4em;font-size: 1.2em;-webkit-border-radius: 0.3em;-moz-border-radius: 0.3em;border-radius: 0.3em;z-index:10;'>" +
+                    poster.append(
+                        "<div class='card--last_view' style='top:0.6em;right: -.5em;position: absolute;background: #168FDF;color: #fff;padding: 0.4em 0.4em;font-size: 1.2em;-webkit-border-radius: 0.3em;-moz-border-radius: 0.3em;border-radius: 0.3em;z-index:10;'>" +
                         "<div style='float:left;margin:-5px 0 -4px -4px' class='card__icon icon--history'></div>" + 
                         last_view + 
-                        "</div>");
+                        "</div>"
+                    );
                     
                     // Добавляем таймлайн
                     poster.parent().append('<div class="timeline"></div>');
@@ -101,7 +145,7 @@
             });
             var count_eps_last_seas = seasonData ? seasonData.episode_count : 0;
 
-            // Формируем текст
+            // Формируем текст (с русскими переводами)
             if (card.next_episode_to_air) {
                 var add_ = '<b>' + last_seria;
                 var notices = Lampa.Storage.get('account_notice', []).filter(function (n) {
@@ -183,29 +227,11 @@
     }
 
     // =============================================
-    // Поиск и обработка карточек
+    // Обработка карточек в ленте (упрощенная версия)
     // =============================================
-
-    function processCurrentCard() {
-        try {
-            var active = Lampa.Activity.active();
-            if (!active) return;
-            
-            var card = active.card;
-            if (!card) return;
-            
-            // Проверяем, подходит ли карточка
-            if (card.source === 'tmdb' && card.seasons && card.last_episode_to_air) {
-                serialInfo(card);
-            }
-        } catch (e) {
-            console.error('[SerialInfo] processCurrentCard error:', e);
-        }
-    }
 
     function processCardsInLine() {
         try {
-            // Ищем карточки в лентах
             $('.card:not(.serial-info-checked)').each(function() {
                 var card = $(this);
                 card.addClass('serial-info-checked');
@@ -218,8 +244,6 @@
                               null;
                 
                 if (cardData && cardData.source === 'tmdb' && cardData.seasons && cardData.last_episode_to_air) {
-                    // Добавляем информацию для карточек в ленте
-                    // (упрощенная версия для ленты)
                     var view = card.find('.card__view');
                     if (view.length) {
                         var info = cardData.number_of_seasons + ' сез' + 
@@ -239,7 +263,27 @@
     }
 
     // =============================================
-    // Добавление стилей (как в Modss)
+    // Обработка текущей карточки
+    // =============================================
+
+    function processCurrentCard() {
+        try {
+            var active = Lampa.Activity.active();
+            if (!active) return;
+            
+            var card = active.card;
+            if (!card) return;
+            
+            if (card.source === 'tmdb' && card.seasons && card.last_episode_to_air) {
+                serialInfo(card);
+            }
+        } catch (e) {
+            console.error('[SerialInfo] processCurrentCard error:', e);
+        }
+    }
+
+    // =============================================
+    // Стили
     // =============================================
 
     function addStyles() {
@@ -247,7 +291,6 @@
 
         var css = `
             <style id="serial-info-styles">
-                /* Стили как в Modss */
                 .card--new_seria {
                     background: #168FDF;
                     color: #fff;
@@ -295,6 +338,27 @@
                     border-radius: 2px;
                 }
 
+                .full-start__tag.card--new_seria {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 0.3em;
+                    background: #168FDF;
+                    color: #fff;
+                    padding: 0.2em 0.5em;
+                    border-radius: 0.3em;
+                    font-size: 0.8em;
+                    margin-left: 0.5em;
+                }
+
+                .full-start-new__details .card--new_seria {
+                    background: #168FDF;
+                    color: #fff;
+                    padding: 0.2em 0.5em;
+                    border-radius: 0.3em;
+                    font-size: 0.8em;
+                    display: inline-block;
+                }
+
                 @media (max-width: 585px) {
                     .card--new_seria,
                     .card--last_view {
@@ -307,7 +371,6 @@
                     }
                 }
 
-                /* Для карточек без постера */
                 .card:not(.card--loaded) .card--new_seria,
                 .card:not(.card--loaded) .card--last_view {
                     display: none;
@@ -319,7 +382,7 @@
     }
 
     // =============================================
-    // Настройки
+    // Настройки плагина
     // =============================================
 
     function addSettings() {
@@ -338,7 +401,7 @@
             },
             field: {
                 name: 'Включить информацию о сериале',
-                description: 'Отображать информацию о сезонах и сериях на карточках (как в MODS\'s)'
+                description: 'Отображает информацию о количестве серий в карточке, в том числе последнюю серию на постере'
             },
             onChange: function(value) {
                 var settings = getSettings();
@@ -365,6 +428,9 @@
 
     function init() {
         console.log('[SerialInfo] Plugin v' + VERSION + ' loaded');
+
+        // Добавляем русские переводы
+        addTranslations();
 
         var settings = getSettings();
         if (!settings.enabled) return;
@@ -408,7 +474,7 @@
             processCardsInLine();
         }, 5000);
 
-        console.log('[SerialInfo] Plugin ready');
+        console.log('[SerialInfo] Plugin ready with Russian translations');
     }
 
     // =============================================
