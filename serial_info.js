@@ -2,11 +2,12 @@
     'use strict';
 
     // =============================================
-    // Serial Info + Next Episode - Объединенный плагин
-    // Версия: 2.3.0 - С правильным определением last_view как в MODS's
+    // Serial Info + Next Episode - ТОЧНАЯ КОПИЯ MODS's
+    // Версия: 2.4.0
+    // Полностью копирует поведение MODS's
     // =============================================
 
-    const VERSION = '2.3.0';
+    const VERSION = '2.4.0';
 
     // =============================================
     // ПРАВИЛЬНЫЕ РУССКИЕ СКЛОНЕНИЯ
@@ -69,11 +70,8 @@
             'canceled': 'Отменён',
             'in production': 'В производстве',
             'planned': 'Запланирован',
-            'released': 'Выпущен',
-            'pilot': 'Пилот',
-            'to be determined': 'Не определен'
+            'released': 'Выпущен'
         };
-        
         var key = (status || '').toLowerCase();
         return statusMap[key] || status || '';
     }
@@ -101,19 +99,7 @@
             'torrent_serial_episode': { ru: 'серия' },
             'torrent_serial_season': { ru: 'Сезон' },
             'title_continue': { ru: 'Продолжить' },
-            'title_watched': { ru: 'Просмотрено' },
-            'serial_info_ongoing': { ru: 'Онгоинг' },
-            'serial_info_ended': { ru: 'Завершён' },
-            'serial_info_canceled': { ru: 'Отменён' },
-            'serial_info_in_production': { ru: 'В производстве' },
-            'serial_info_planned': { ru: 'Запланирован' },
-            'serial_info_next_episode': { ru: 'Следующая серия' },
-            'serial_info_settings': { ru: 'Информация о сериале' },
-            'serial_info_enabled_desc': { ru: 'Отображает информацию о сезонах, сериях и дате выхода следующей серии' },
-            'serial_info_badge_desc': { ru: 'Показывает информацию о сезонах/сериях и дате выхода следующей серии внизу карточки' },
-            'serial_info_poster_desc': { ru: 'Показывает на постере: статус сериала, номер последней серии, новую серию' },
-            'serial_info_next_desc': { ru: 'Показывает через сколько дней выйдет следующая серия' },
-            'serial_info_last_desc': { ru: 'Показывает на постере последнюю просмотренную серию' }
+            'title_watched': { ru: 'Просмотрено' }
         });
     }
 
@@ -132,10 +118,6 @@
     function getSettings() {
         try {
             var settings = Lampa.Storage.get('serial_info_settings', {});
-            var oldKeys = ['show_seasons', 'show_episodes', 'show_status', 'show_episode_number', 'show_new_episode'];
-            oldKeys.forEach(function(key) {
-                if (settings[key] !== undefined) delete settings[key];
-            });
             return Object.assign({}, DEFAULTS, settings);
         } catch (e) {
             return DEFAULTS;
@@ -201,43 +183,33 @@
     }
 
     // =============================================
-    // ПОСЛЕДНИЙ ПРОСМОТР - ТОЧНО КАК В MODS's
+    // ПОСЛЕДНИЙ ПРОСМОТР - ТОЧНАЯ КОПИЯ MODS's
     // =============================================
     
-    function getLastView(card) {
+    function getLastViewData(card) {
         try {
             if (!card) return null;
             
-            // === 1. Получаем эпизоды через Lampa.TimeTable.get() (как в MODS's) ===
+            // ТОЧНО КАК В MODS's - используем Lampa.TimeTable.get()
             var episodes = Lampa.TimeTable.get(card);
-            if (!episodes || !episodes.length) {
-                // Пробуем альтернативный способ
-                episodes = getEpisodesFromTimeline(card);
-            }
-            
             var viewed = null;
             
-            // Перебираем все эпизоды (как в MODS's)
             if (episodes && episodes.length) {
                 for (var i = 0; i < episodes.length; i++) {
                     var ep = episodes[i];
-                    // Хеш как в MODS's
+                    // ТОЧНО КАК В MODS's - хеш с season_number, episode_number и original_title
                     var hash = Lampa.Utils.hash([
                         ep.season_number, 
-                        ep.season_number > 10 ? ':' : '', 
                         ep.episode_number, 
                         card.original_title || card.original_name || ''
                     ].join(''));
                     
                     var view = Lampa.Timeline.view(hash);
-                    if (view && view.percent && view.percent > 0) {
-                        // Находим последний просмотренный эпизод
-                        if (!viewed || view.time > viewed.view.time) {
-                            viewed = {
-                                ep: ep,
-                                view: view
-                            };
-                        }
+                    if (view && view.percent) {
+                        viewed = {
+                            ep: ep,
+                            view: view
+                        };
                     }
                 }
             }
@@ -246,81 +218,72 @@
                 return {
                     season: viewed.ep.season_number,
                     episode: viewed.ep.episode_number,
-                    view: viewed.view,
-                    source: 'timeline'
+                    view: viewed.view
                 };
             }
             
-            // === 2. Если не нашли через TimeTable, пробуем другие источники ===
+            // Если не нашли через TimeTable, пробуем другие источники
+            var title = card.original_title || card.original_name || card.title || card.name || '';
+            var file_id = Lampa.Utils.hash(title);
             
             // Проверяем online_watched_last
             var watched = Lampa.Storage.cache('online_watched_last', 5000, {});
-            if (watched) {
-                var title = card.original_title || card.original_name || card.title || card.name || '';
-                var file_id = Lampa.Utils.hash(title);
-                if (watched[file_id] && watched[file_id].season && watched[file_id].episode) {
-                    return {
-                        season: watched[file_id].season,
-                        episode: watched[file_id].episode,
-                        source: 'online_watched_last'
-                    };
-                }
-            }
-            
-            // Проверяем file_view + resume_file
-            var views = Lampa.Storage.get('file_view', {});
-            var files = Lampa.Storage.get('resume_file', {});
-            var title = card.original_title || card.original_name || card.title || card.name || '';
-            var hash = Lampa.Utils.hash(title);
-            
-            if (views[hash] && files[hash]) {
-                var resume = views[hash];
-                var fileData = files[hash];
-                
-                if (fileData.season !== undefined && fileData.episode !== undefined) {
-                    return {
-                        season: parseInt(fileData.season),
-                        episode: parseInt(fileData.episode),
-                        source: 'resume_file'
-                    };
-                }
+            if (watched && watched[file_id] && watched[file_id].season && watched[file_id].episode) {
+                var hash2 = Lampa.Utils.hash([
+                    watched[file_id].season, 
+                    watched[file_id].episode, 
+                    title
+                ].join(''));
+                var view2 = Lampa.Timeline.view(hash2);
+                return {
+                    season: watched[file_id].season,
+                    episode: watched[file_id].episode,
+                    view: view2 || null
+                };
             }
             
         } catch (e) {
-            console.error('[SerialInfo] getLastView error:', e);
+            console.error('[SerialInfo] getLastViewData error:', e);
         }
         return null;
     }
 
-    // Альтернативный способ получения эпизодов (если TimeTable не работает)
-    function getEpisodesFromTimeline(card) {
+    // =============================================
+    // ОТОБРАЖЕНИЕ ПОСЛЕДНЕГО ПРОСМОТРА - ТОЧНАЯ КОПИЯ MODS's
+    // =============================================
+    
+    function showLastView(card) {
         try {
-            var episodes = [];
-            var timelineData = Lampa.Storage.get('timeline', {});
-            var title = card.original_title || card.original_name || card.title || card.name || '';
+            var lastViewData = getLastViewData(card);
+            if (!lastViewData) return;
             
-            for (var key in timelineData) {
-                if (timelineData.hasOwnProperty(key)) {
-                    var item = timelineData[key];
-                    if (item && item.title) {
-                        // Пытаемся извлечь сезон и серию из названия
-                        var match = item.title.match(/S(\d+):?E(\d+)/i);
-                        if (match && item.title.indexOf(title) !== -1) {
-                            var season = parseInt(match[1]);
-                            var episode = parseInt(match[2]);
-                            if (season > 0 && episode > 0) {
-                                episodes.push({
-                                    season_number: season,
-                                    episode_number: episode
-                                });
-                            }
-                        }
-                    }
+            var ep = lastViewData.episode;
+            var se = lastViewData.season;
+            var last_view = 'S' + se + ':E' + ep;
+            
+            // Удаляем старые элементы
+            $('.timeline, .card--last_view').remove();
+            
+            // ТОЧНО КАК В MODS's - добавляем на постер с иконкой
+            var poster = $('.full-start__poster, .full-start-new__poster');
+            if (poster.length) {
+                // Добавляем бейдж с иконкой истории
+                poster.append(
+                    "<div class='card--last_view' style='top:0.6em;right: -.5em;position: absolute;background: #168FDF;color: #fff;padding: 0.4em 0.4em;font-size: 1.2em;-webkit-border-radius: 0.3em;-moz-border-radius: 0.3em;border-radius: 0.3em;z-index:10;'>" +
+                    "<div style='float:left;margin:-5px 0 -4px -4px' class='card__icon icon--history'></div>" + 
+                    last_view + 
+                    "</div>"
+                );
+                
+                // ТОЧНО КАК В MODS's - добавляем таймлайн
+                if (lastViewData.view) {
+                    poster.parent().append('<div class="timeline"></div>');
+                    $('body').find('.timeline').append(Lampa.Timeline.render(lastViewData.view));
                 }
             }
-            return episodes;
+            
         } catch (e) {
-            return [];
+            console.error('[SerialInfo] showLastView error:', e);
         }
     }
 
@@ -441,48 +404,13 @@
                 }
             }
 
-            // --- 3. Последний просмотр (как в MODS's) ---
+            // --- 3. Последний просмотр - ТОЧНО КАК В MODS's ---
+            // Это работает ТОЛЬКО для активной карточки (full)
             if (settings.show_last_view) {
-                var lastView = getLastView(cardData);
-                if (lastView) {
-                    var viewText = 'S' + lastView.season + ':E' + lastView.episode;
-                    
-                    // Добавляем на постер (как в MODS's)
-                    cardElement.find('.card--last_view').remove();
-                    view.append(
-                        "<div class='card--last_view' style='top:0.6em;right:-0.5em;position:absolute;background:#168FDF;color:#fff;padding:0.2em 0.4em;font-size:0.75em;border-radius:0.3em;z-index:10;display:flex;align-items:center;gap:0.3em;'>" +
-                        "<div style='width:0.8em;height:0.8em;background-image:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-.5-13v4l-2.5 1.5 1 1.5 3.5-2V7h-2z'/%3E%3C/svg%3E\");background-size:contain;background-repeat:no-repeat;background-position:center;'></div>" + 
-                        viewText +
-                        "</div>"
-                    );
-
-                    // Добавляем таймлайн (как в MODS's)
-                    if (lastView.view) {
-                        cardElement.find('.timeline').remove();
-                        view.append(
-                            '<div class="timeline" style="margin:0.3em 0;padding:0 0.5em;">' +
-                            Lampa.Timeline.render(lastView.view) +
-                            '</div>'
-                        );
-                    } else {
-                        // Пробуем получить таймлайн по хешу
-                        var hash = Lampa.Utils.hash([
-                            lastView.season,
-                            lastView.season > 10 ? ':' : '',
-                            lastView.episode,
-                            cardData.original_title || cardData.original_name || ''
-                        ].join(''));
-                        
-                        var tl = Lampa.Timeline.view(hash);
-                        if (tl && tl.percent > 0 && tl.percent < 100) {
-                            cardElement.find('.timeline').remove();
-                            view.append(
-                                '<div class="timeline" style="margin:0.3em 0;padding:0 0.5em;">' +
-                                Lampa.Timeline.render(tl) +
-                                '</div>'
-                            );
-                        }
-                    }
+                // Проверяем, активная ли это карточка
+                var isActive = cardElement.closest('.activity--active').length > 0;
+                if (isActive) {
+                    showLastView(cardData);
                 }
             }
 
@@ -563,6 +491,7 @@
             var activityRender = Lampa.Activity.active().activity.render();
             if (!activityRender) return;
 
+            // Удаляем старые элементы
             activityRender.find('.card--info-badge, .card--last_view, .timeline, .serial-episode-number, .serial-new-badge, .serial-status').remove();
 
             getTvInfo(card, function(tvInfo) {
@@ -668,42 +597,9 @@
                     }
                 }
 
-                // --- Последний просмотр (как в MODS's) ---
+                // --- Последний просмотр - ТОЧНО КАК В MODS's ---
                 if (settings.show_last_view) {
-                    var lastView = getLastView(card);
-                    if (lastView) {
-                        var viewText = 'S' + lastView.season + ':E' + lastView.episode;
-                        var poster = $('.full-start__poster, .full-start-new__poster', activityRender);
-                        if (poster.length) {
-                            poster.append(
-                                "<div class='card--last_view' style='top:0.6em;right:-0.5em;position:absolute;background:#168FDF;color:#fff;padding:0.2em 0.4em;font-size:0.8em;border-radius:0.3em;z-index:10;display:flex;align-items:center;gap:0.3em;'>" +
-                                "<div style='width:0.8em;height:0.8em;background-image:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-.5-13v4l-2.5 1.5 1 1.5 3.5-2V7h-2z'/%3E%3C/svg%3E\");background-size:contain;background-repeat:no-repeat;background-position:center;'></div>" + 
-                                viewText +
-                                "</div>"
-                            );
-                            
-                            // Таймлайн как в MODS's
-                            if (lastView.view) {
-                                poster.parent().find('.timeline').remove();
-                                poster.parent().append('<div class="timeline" style="margin:0.5em 0;padding:0 0.5em;"></div>');
-                                $('.timeline').append(Lampa.Timeline.render(lastView.view));
-                            } else {
-                                var hash = Lampa.Utils.hash([
-                                    lastView.season,
-                                    lastView.season > 10 ? ':' : '',
-                                    lastView.episode,
-                                    card.original_title || card.original_name || ''
-                                ].join(''));
-                                
-                                var tl = Lampa.Timeline.view(hash);
-                                if (tl && tl.percent > 0 && tl.percent < 100) {
-                                    poster.parent().find('.timeline').remove();
-                                    poster.parent().append('<div class="timeline" style="margin:0.5em 0;padding:0 0.5em;"></div>');
-                                    $('.timeline').append(Lampa.Timeline.render(tl));
-                                }
-                            }
-                        }
-                    }
+                    showLastView(card);
                 }
             });
         } catch (e) {
@@ -731,11 +627,17 @@
                     text-shadow: 0 1px 2px rgba(0,0,0,0.5);
                 }
 
+                /* ТОЧНЫЙ СТИЛЬ КАК В MODS's */
                 .card--last_view {
+                    top: 0.6em;
+                    right: -0.5em;
+                    position: absolute;
                     background: #168FDF;
                     color: #fff;
-                    padding: 0.2em 0.4em;
-                    font-size: 0.8em;
+                    padding: 0.4em 0.4em;
+                    font-size: 1.2em;
+                    -webkit-border-radius: 0.3em;
+                    -moz-border-radius: 0.3em;
                     border-radius: 0.3em;
                     z-index: 10;
                     display: flex;
@@ -744,13 +646,26 @@
                     box-shadow: 0 2px 8px rgba(0,0,0,0.3);
                 }
 
+                .card--last_view .card__icon.icon--history {
+                    display: inline-block;
+                    width: 1.2em;
+                    height: 1.2em;
+                    margin: -5px 0 -4px -4px;
+                    float: left;
+                    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-.5-13v4l-2.5 1.5 1 1.5 3.5-2V7h-2z'/%3E%3C/svg%3E");
+                    background-size: contain;
+                    background-repeat: no-repeat;
+                    background-position: center;
+                }
+
+                /* ТОЧНЫЙ СТИЛЬ ТАЙМЛАЙНА КАК В MODS's */
                 .timeline {
-                    margin: 0.3em 0;
+                    margin: 0.5em 0;
                     padding: 0 0.5em;
                 }
 
                 .timeline .time-line__bar {
-                    height: 3px;
+                    height: 4px;
                     border-radius: 2px;
                 }
 
@@ -822,8 +737,13 @@
                         padding: 0.15em 0.3em;
                     }
                     .card--last_view {
-                        font-size: 0.6em;
-                        padding: 0.15em 0.3em;
+                        font-size: 0.9em;
+                        padding: 0.25em 0.3em;
+                    }
+                    .card--last_view .card__icon.icon--history {
+                        width: 0.9em;
+                        height: 0.9em;
+                        margin: -3px 0 -3px -3px;
                     }
                     .serial-episode-number,
                     .serial-new-badge,
@@ -899,8 +819,7 @@
                 default: true
             },
             field: {
-                name: 'Включить информацию о сериале',
-                description: 'Отображает информацию о сезонах, сериях и дате выхода следующей серии'
+                name: 'Включить информацию о сериале'
             },
             onChange: function(value) {
                 var settings = getSettings();
@@ -918,8 +837,7 @@
                 default: true
             },
             field: {
-                name: 'Бейдж на карточке',
-                description: 'Показывает информацию о сезонах/сериях и дате выхода следующей серии внизу карточки'
+                name: 'Бейдж на карточке (сезоны/серии/дата)'
             },
             onChange: function(value) {
                 var settings = getSettings();
@@ -937,8 +855,7 @@
                 default: true
             },
             field: {
-                name: 'Информация на постере',
-                description: 'Показывает на постере: статус сериала, номер последней серии, новую серию'
+                name: 'Информация на постере (статус, номер серии)'
             },
             onChange: function(value) {
                 var settings = getSettings();
@@ -956,8 +873,7 @@
                 default: true
             },
             field: {
-                name: 'Дата следующей серии',
-                description: 'Показывает через сколько дней выйдет следующая серия'
+                name: 'Дата следующей серии'
             },
             onChange: function(value) {
                 var settings = getSettings();
@@ -975,8 +891,7 @@
                 default: true
             },
             field: {
-                name: 'Последний просмотр',
-                description: 'Показывает на постере последнюю просмотренную серию'
+                name: 'Последний просмотр (как в MODS\'s)'
             },
             onChange: function(value) {
                 var settings = getSettings();
