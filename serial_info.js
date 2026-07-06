@@ -3,11 +3,10 @@
 
     // =============================================
     // Serial Info + Next Episode - Объединенный плагин
-    // Версия: 2.0.0
-    // Показывает информацию о сериалах на карточках
+    // Версия: 2.1.0
     // =============================================
 
-    const VERSION = '2.0.0';
+    const VERSION = '2.1.0';
 
     // =============================================
     // ПРАВИЛЬНЫЕ РУССКИЕ СКЛОНЕНИЯ
@@ -33,7 +32,7 @@
     }
 
     // =============================================
-    // ФОРМАТИРОВАНИЕ ДАТЫ (как в Next Episode)
+    // ФОРМАТИРОВАНИЕ ДАТЫ
     // =============================================
     
     function formatDaysUntil(airDateStr) {
@@ -50,10 +49,7 @@
         if (diffDays < 0) return null;
         if (diffDays === 0) return 'Сегодня';
         if (diffDays === 1) return 'Завтра';
-        if (diffDays <= 7) return 'Через ' + diffDays + ' дн.';
-        if (diffDays <= 30) return 'Через ' + diffDays + ' дн.';
-        if (diffDays <= 365) return 'Через ' + Math.round(diffDays / 30) + ' мес.';
-        return 'Через ' + Math.round(diffDays / 365) + ' г.';
+        return 'Через ' + diffDays + ' дн.';
     }
 
     function getSeasonEpisodeText(season, episode) {
@@ -79,7 +75,14 @@
             'serial_info_canceled': { ru: 'Отменён' },
             'serial_info_in_production': { ru: 'В производстве' },
             'serial_info_planned': { ru: 'Запланирован' },
-            'serial_info_next_episode': { ru: 'Следующая серия' }
+            'serial_info_next_episode': { ru: 'Следующая серия' },
+            // Настройки
+            'serial_info_settings': { ru: 'Информация о сериале' },
+            'serial_info_enabled_desc': { ru: 'Отображает информацию о сезонах, сериях и дате выхода следующей серии' },
+            'serial_info_badge_desc': { ru: 'Показывает информацию о сезонах/сериях и дате выхода следующей серии внизу карточки' },
+            'serial_info_poster_desc': { ru: 'Показывает на постере: статус сериала, номер последней серии, новую серию' },
+            'serial_info_next_desc': { ru: 'Показывает через сколько дней выйдет следующая серия' },
+            'serial_info_last_desc': { ru: 'Показывает на постере последнюю просмотренную серию (только для просмотренных)' }
         });
     }
 
@@ -89,15 +92,22 @@
     
     const DEFAULTS = {
         enabled: true,
-        show_badge: true,        // Бейдж внизу карточки (сезоны/серии)
-        show_poster: true,       // Информация на постере (S1:E2, статус, новая серия)
-        show_next_episode: true, // Дата следующей серии
-        show_last_view: true     // Последний просмотр
+        show_badge: true,
+        show_poster: true,
+        show_next_episode: true,
+        show_last_view: true
     };
 
     function getSettings() {
         try {
-            const settings = Lampa.Storage.get('serial_info_settings', {});
+            var settings = Lampa.Storage.get('serial_info_settings', {});
+            // Обновляем старые настройки
+            if (settings.show_seasons !== undefined) delete settings.show_seasons;
+            if (settings.show_episodes !== undefined) delete settings.show_episodes;
+            if (settings.show_status !== undefined) delete settings.show_status;
+            if (settings.show_episode_number !== undefined) delete settings.show_episode_number;
+            if (settings.show_new_episode !== undefined) delete settings.show_new_episode;
+            
             return Object.assign({}, DEFAULTS, settings);
         } catch (e) {
             return DEFAULTS;
@@ -163,16 +173,20 @@
     }
 
     // =============================================
-    // Получение последнего просмотра
+    // Получение последнего просмотра (из разных источников)
     // =============================================
     
     function getLastView(card) {
         try {
             var title = card.original_title || card.original_name || card.title || card.name || '';
+            if (!title) return null;
+            
             var file_id = Lampa.Utils.hash(title);
+            
+            // Проверяем в online_watched_last
             var watched = Lampa.Storage.cache('online_watched_last', 5000, {});
             var data = watched[file_id];
-
+            
             if (data && data.season && data.episode) {
                 return {
                     season: data.season,
@@ -180,7 +194,51 @@
                     balanser_name: data.balanser_name || ''
                 };
             }
-        } catch (e) {}
+            
+            // Проверяем в file_view (стандартное хранилище Lampa)
+            var views = Lampa.Storage.get('file_view', {});
+            var files = Lampa.Storage.get('resume_file', {});
+            
+            // Пробуем разные варианты хеша
+            var hashes = [
+                Lampa.Utils.hash(title),
+                Lampa.Utils.hash(card.original_title || ''),
+                Lampa.Utils.hash(card.original_name || '')
+            ];
+            
+            for (var i = 0; i < hashes.length; i++) {
+                var hash = hashes[i];
+                if (views[hash] && files[hash]) {
+                    var resume = views[hash];
+                    var fileData = files[hash];
+                    
+                    // Пытаемся извлечь сезон и серию из данных
+                    if (fileData.season !== undefined && fileData.episode !== undefined) {
+                        return {
+                            season: fileData.season,
+                            episode: fileData.episode,
+                            balanser_name: ''
+                        };
+                    }
+                    
+                    // Пытаемся извлечь из timeline
+                    if (fileData.timeline && fileData.timeline.hash) {
+                        // Здесь можно попробовать восстановить данные
+                    }
+                }
+            }
+            
+            // Проверяем Timeline напрямую
+            var tlHash = Lampa.Utils.hash(title);
+            var tl = Lampa.Timeline.view(tlHash);
+            if (tl && tl.percent > 0 && tl.percent < 100) {
+                // Пытаемся определить сезон и серию
+                // Это сложно, так как в Timeline нет прямой информации о сезоне/серии
+            }
+            
+        } catch (e) {
+            console.error('[SerialInfo] getLastView error:', e);
+        }
         return null;
     }
 
@@ -223,6 +281,31 @@
     }
 
     // =============================================
+    // Получение статуса на русском
+    // =============================================
+    
+    function getStatusText(status) {
+        var statusMap = {
+            'returning series': 'Онгоинг',
+            'ended': 'Завершён',
+            'canceled': 'Отменён',
+            'in production': 'В производстве',
+            'planned': 'Запланирован',
+            'released': 'Выпущен'
+        };
+        return statusMap[status] || status || '';
+    }
+
+    function getStatusColor(status) {
+        if (status === 'returning series') return '#4CAF50';
+        if (status === 'ended') return '#666';
+        if (status === 'canceled') return '#f44336';
+        if (status === 'in production') return '#FF9800';
+        if (status === 'planned') return '#2196F3';
+        return '#888';
+    }
+
+    // =============================================
     // Инъекция на карточку
     // =============================================
     
@@ -235,7 +318,7 @@
 
             var settings = getSettings();
             
-            // --- 1. Бейдж внизу карточки (сезоны/серии/дата) ---
+            // --- 1. Бейдж внизу карточки ---
             if (settings.show_badge) {
                 var text = getBadgeText(cardData, tvInfo);
                 if (text) {
@@ -252,19 +335,10 @@
             // --- 2. Информация на постере ---
             if (settings.show_poster) {
                 
-                // Статус сериала
+                // Статус сериала (на русском)
                 if (tvInfo.status) {
-                    var statusMap = {
-                        'returning series': 'Онгоинг',
-                        'ended': 'Завершён',
-                        'canceled': 'Отменён',
-                        'in production': 'В производстве',
-                        'planned': 'Запланирован'
-                    };
-                    var statusText = statusMap[tvInfo.status] || tvInfo.status;
-                    var statusColor = tvInfo.status === 'returning series' ? '#4CAF50' : 
-                                     tvInfo.status === 'ended' ? '#666' :
-                                     tvInfo.status === 'canceled' ? '#f44336' : '#FF9800';
+                    var statusText = getStatusText(tvInfo.status);
+                    var statusColor = getStatusColor(tvInfo.status);
                     
                     cardElement.find('.serial-status').remove();
                     view.append(
@@ -388,7 +462,6 @@
                     if (tvInfo) {
                         injectSerialInfo(card, cardData, tvInfo);
                     } else if (cardData.number_of_seasons) {
-                        // Базовый вариант без TMDB
                         var view = card.find('.card__view');
                         if (view.length && settings.show_badge) {
                             var info = getSeasonsText(cardData.number_of_seasons);
@@ -474,19 +547,10 @@
                 // --- Информация на постере ---
                 if (settings.show_poster) {
                     
-                    // Статус
+                    // Статус (на русском)
                     if (tvInfo.status) {
-                        var statusMap = {
-                            'returning series': 'Онгоинг',
-                            'ended': 'Завершён',
-                            'canceled': 'Отменён',
-                            'in production': 'В производстве',
-                            'planned': 'Запланирован'
-                        };
-                        var statusText = statusMap[tvInfo.status] || tvInfo.status;
-                        var statusColor = tvInfo.status === 'returning series' ? '#4CAF50' : 
-                                         tvInfo.status === 'ended' ? '#666' :
-                                         tvInfo.status === 'canceled' ? '#f44336' : '#FF9800';
+                        var statusText = getStatusText(tvInfo.status);
+                        var statusColor = getStatusColor(tvInfo.status);
                         
                         var poster = $('.full-start__poster, .full-start-new__poster', activityRender);
                         if (poster.length) {
@@ -750,17 +814,18 @@
     }
 
     // =============================================
-    // Настройки
+    // Структурированные настройки
     // =============================================
 
     function addSettings() {
+        // Компонент настроек
         Lampa.SettingsApi.addComponent({
             component: 'serial_info',
-            name: 'Информация о сериале',
+            name: Lampa.Lang.translate('serial_info_settings'),
             icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M8 4v16"/><path d="M16 4v16"/><path d="M2 10h20"/></svg>'
         });
 
-        // Основной включатель
+        // -------- ОСНОВНЫЕ НАСТРОЙКИ --------
         Lampa.SettingsApi.addParam({
             component: 'serial_info',
             param: {
@@ -770,7 +835,7 @@
             },
             field: {
                 name: 'Включить информацию о сериале',
-                description: 'Отображает информацию о сезонах, сериях и дате выхода следующей серии'
+                description: Lampa.Lang.translate('serial_info_enabled_desc')
             },
             onChange: function(value) {
                 var settings = getSettings();
@@ -780,7 +845,7 @@
             }
         });
 
-        // Бейдж внизу карточки
+        // -------- ОТОБРАЖЕНИЕ НА КАРТОЧКЕ --------
         Lampa.SettingsApi.addParam({
             component: 'serial_info',
             param: {
@@ -790,7 +855,7 @@
             },
             field: {
                 name: 'Бейдж на карточке',
-                description: 'Показывает информацию о сезонах/сериях и дате выхода следующей серии внизу карточки'
+                description: Lampa.Lang.translate('serial_info_badge_desc')
             },
             onChange: function(value) {
                 var settings = getSettings();
@@ -800,7 +865,7 @@
             }
         });
 
-        // Информация на постере
+        // -------- ОТОБРАЖЕНИЕ НА ПОСТЕРЕ --------
         Lampa.SettingsApi.addParam({
             component: 'serial_info',
             param: {
@@ -810,7 +875,7 @@
             },
             field: {
                 name: 'Информация на постере',
-                description: 'Показывает на постере: статус сериала, номер последней серии, новую серию'
+                description: Lampa.Lang.translate('serial_info_poster_desc')
             },
             onChange: function(value) {
                 var settings = getSettings();
@@ -820,7 +885,7 @@
             }
         });
 
-        // Дата следующей серии
+        // -------- ДАТА СЛЕДУЮЩЕЙ СЕРИИ --------
         Lampa.SettingsApi.addParam({
             component: 'serial_info',
             param: {
@@ -830,7 +895,7 @@
             },
             field: {
                 name: 'Дата следующей серии',
-                description: 'Показывает через сколько дней выйдет следующая серия (в бейдже и на постере)'
+                description: Lampa.Lang.translate('serial_info_next_desc')
             },
             onChange: function(value) {
                 var settings = getSettings();
@@ -840,7 +905,7 @@
             }
         });
 
-        // Последний просмотр
+        // -------- ПОСЛЕДНИЙ ПРОСМОТР --------
         Lampa.SettingsApi.addParam({
             component: 'serial_info',
             param: {
@@ -850,7 +915,7 @@
             },
             field: {
                 name: 'Последний просмотр',
-                description: 'Показывает на постере последнюю просмотренную серию (только для просмотренных)'
+                description: Lampa.Lang.translate('serial_info_last_desc')
             },
             onChange: function(value) {
                 var settings = getSettings();
