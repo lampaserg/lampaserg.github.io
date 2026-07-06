@@ -3,11 +3,10 @@
 
     // =============================================
     // Serial Info - ТОЧНАЯ КОПИЯ MODS's
-    // Версия: 2.6.0
-    // Полностью копирует логику MODS's
+    // Версия: 2.7.0
     // =============================================
 
-    const VERSION = '2.6.0';
+    const VERSION = '2.7.0';
 
     // =============================================
     // ПРАВИЛЬНЫЕ РУССКИЕ СКЛОНЕНИЯ
@@ -81,7 +80,6 @@
     const DEFAULTS = {
         enabled: true,
         show_badge: true,
-        show_poster: true,
         show_next_episode: true,
         show_last_view: true
     };
@@ -89,6 +87,11 @@
     function getSettings() {
         try {
             var settings = Lampa.Storage.get('serial_info_settings', {});
+            // Удаляем устаревшие настройки
+            var oldKeys = ['show_poster', 'show_seasons', 'show_episodes', 'show_status', 'show_episode_number', 'show_new_episode'];
+            oldKeys.forEach(function(key) {
+                if (settings[key] !== undefined) delete settings[key];
+            });
             return Object.assign({}, DEFAULTS, settings);
         } catch (e) {
             return DEFAULTS;
@@ -318,12 +321,11 @@
                 new_ser = last_seria_inseason + ' ' + Lampa.Lang.translate('season_ended');
             }
 
-            // Добавляем дату следующей серии если включено
+            // Добавляем дату следующей серии с новой строки
             if (settings.show_next_episode && next_episode) {
                 var dateText = formatDaysUntil(next_episode.air_date);
                 if (dateText) {
-                    var epText = getSeasonEpisodeText(next_episode.season_number, next_episode.episode_number);
-                    new_ser += ' • 📅 ' + epText + ' — ' + dateText;
+                    new_ser += '<br>📅 ' + dateText;
                 }
             }
 
@@ -347,35 +349,21 @@
 
             var settings = getSettings();
             
-            // --- 1. Бейдж внизу карточки ---
+            // --- Бейдж внизу карточки ---
             if (settings.show_badge) {
                 var text = getBadgeText(cardData, tvInfo);
                 if (text) {
                     cardElement.find('.card--info-badge').remove();
                     view.append(
                         '<div class="card--info-badge" style="position:absolute;bottom:0.3em;left:50%;transform:translateX(-50%);' +
-                        'background:rgba(0,0,0,0.75);color:#fff;padding:0.2em 0.6em;font-size:0.55em;border-radius:0.3em;z-index:10;white-space:nowrap;text-shadow:0 1px 2px rgba(0,0,0,0.8);">' +
+                        'background:rgba(0,0,0,0.75);color:#fff;padding:0.2em 0.6em;font-size:0.5em;border-radius:0.3em;z-index:10;white-space:nowrap;text-shadow:0 1px 2px rgba(0,0,0,0.8);text-align:center;line-height:1.4;">' +
                         text +
                         '</div>'
                     );
                 }
             }
 
-            // --- 2. Информация на постере (только номер последней серии) ---
-            if (settings.show_poster && tvInfo.last_episode_to_air) {
-                var lastEp = tvInfo.last_episode_to_air;
-                cardElement.find('.serial-episode-number').remove();
-                view.append(
-                    '<div class="serial-episode-number" style="position:absolute;bottom:2.5em;left:0.5em;' +
-                    'padding:0.12em 0.4em;font-size:0.5em;font-weight:bold;color:#fff;' +
-                    'background:rgba(22,143,223,0.85);border-radius:0.3em;z-index:10;text-shadow:0 1px 2px rgba(0,0,0,0.5);display:flex;align-items:center;gap:0.3em;">' +
-                    '<svg width="0.8em" height="0.8em" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M21 6h-2v2h-2V6h-2V4h2V2h2v2h2v2zm-10 3c1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3 1.34 3 3 3zm0 4c-2.33 0-7 1.17-7 3.5V17h14v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>' +
-                    getSeasonEpisodeText(lastEp.season_number, lastEp.episode_number) +
-                    '</div>'
-                );
-            }
-
-            // --- 3. Последний просмотр ---
+            // --- Последний просмотр ---
             if (settings.show_last_view) {
                 var isActive = cardElement.closest('.activity--active').length > 0;
                 if (isActive) {
@@ -431,7 +419,7 @@
                             }
                             view.append(
                                 '<div class="card--info-badge" style="position:absolute;bottom:0.3em;left:50%;transform:translateX(-50%);' +
-                                'background:rgba(0,0,0,0.7);color:#fff;padding:0.15em 0.5em;font-size:0.5em;border-radius:0.3em;z-index:10;white-space:nowrap;">' +
+                                'background:rgba(0,0,0,0.7);color:#fff;padding:0.15em 0.5em;font-size:0.45em;border-radius:0.3em;z-index:10;white-space:nowrap;text-align:center;">' +
                                 info +
                                 '</div>'
                             );
@@ -461,7 +449,7 @@
             if (!activityRender) return;
 
             // Удаляем старые элементы
-            activityRender.find('.card--info-badge, .card--last_view, .timeline, .serial-episode-number').remove();
+            activityRender.find('.card--info-badge, .card--last_view, .timeline').remove();
 
             getTvInfo(card, function(tvInfo) {
                 if (!tvInfo) return;
@@ -473,11 +461,14 @@
                 if (settings.show_badge) {
                     var text = getBadgeText(card, tvInfo);
                     if (text) {
+                        // Заменяем <br> на перевод строки для отображения
+                        var displayText = text.replace(/<br>/g, '\n');
+                        
                         if (!isMobile) {
                             var poster = $('.full-start__poster, .full-start-new__poster', activityRender);
                             if (poster.length) {
                                 poster.append(
-                                    "<div class='card--info-badge' style='right:-0.6em!important;position:absolute;background:#168FDF;color:#fff;bottom:0.6em!important;padding:0.3em 0.5em;font-size:1em;border-radius:0.3em;z-index:10;'>" + 
+                                    "<div class='card--info-badge' style='right:-0.6em!important;position:absolute;background:#168FDF;color:#fff;bottom:0.6em!important;padding:0.3em 0.5em;font-size:0.9em;border-radius:0.3em;z-index:10;text-align:center;line-height:1.4;'>" + 
                                     text + 
                                     "</div>"
                                 );
@@ -488,36 +479,20 @@
                             
                             if (tags.length) {
                                 tags.append(
-                                    '<div class="full-start__tag card--info-badge" style="display:inline-flex;align-items:center;gap:0.3em;background:#168FDF;color:#fff;padding:0.15em 0.5em;border-radius:0.3em;font-size:0.75em;margin-left:0.5em;">' +
+                                    '<div class="full-start__tag card--info-badge" style="display:inline-flex;align-items:center;gap:0.3em;background:#168FDF;color:#fff;padding:0.15em 0.5em;border-radius:0.3em;font-size:0.7em;margin-left:0.5em;text-align:center;line-height:1.3;flex-direction:column;">' +
                                     '<img src="./img/icons/menu/movie.svg" style="width:0.9em;height:0.9em;" />' +
-                                    '<div>' + text + '</div>' +
+                                    '<div style="text-align:center;">' + displayText + '</div>' +
                                     '</div>'
                                 );
                             } else if (details.length) {
                                 details.append(
                                     '<span class="full-start-new__split">●</span>' +
-                                    '<div class="card--info-badge" style="display:inline-block;background:#168FDF;color:#fff;padding:0.15em 0.5em;border-radius:0.3em;font-size:0.75em;">' +
-                                    text +
+                                    '<div class="card--info-badge" style="display:inline-block;background:#168FDF;color:#fff;padding:0.15em 0.5em;border-radius:0.3em;font-size:0.7em;text-align:center;line-height:1.3;">' +
+                                    displayText +
                                     '</div>'
                                 );
                             }
                         }
-                    }
-                }
-
-                // --- Номер последней серии на постере ---
-                if (settings.show_poster && tvInfo.last_episode_to_air) {
-                    var lastEp = tvInfo.last_episode_to_air;
-                    var poster = $('.full-start__poster, .full-start-new__poster', activityRender);
-                    if (poster.length) {
-                        poster.append(
-                            '<div class="serial-episode-number" style="position:absolute;bottom:3.5em;left:0.5em;' +
-                            'padding:0.12em 0.4em;font-size:0.65em;font-weight:bold;color:#fff;' +
-                            'background:rgba(22,143,223,0.85);border-radius:0.3em;z-index:10;text-shadow:0 1px 2px rgba(0,0,0,0.5);display:flex;align-items:center;gap:0.3em;">' +
-                            '<svg width="0.8em" height="0.8em" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M21 6h-2v2h-2V6h-2V4h2V2h2v2h2v2zm-10 3c1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3 1.34 3 3 3zm0 4c-2.33 0-7 1.17-7 3.5V17h14v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>' +
-                            getSeasonEpisodeText(lastEp.season_number, lastEp.episode_number) +
-                            '</div>'
-                        );
                     }
                 }
 
@@ -544,11 +519,13 @@
                     background: #168FDF;
                     color: #fff;
                     padding: 0.3em 0.5em;
-                    font-size: 1em;
+                    font-size: 0.9em;
                     border-radius: 0.3em;
                     z-index: 10;
                     box-shadow: 0 2px 8px rgba(0,0,0,0.3);
                     text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+                    text-align: center;
+                    line-height: 1.4;
                 }
 
                 .card--last_view {
@@ -591,29 +568,6 @@
                     border-radius: 2px;
                 }
 
-                .serial-episode-number {
-                    position: absolute;
-                    bottom: 3.5em;
-                    left: 0.5em;
-                    padding: 0.12em 0.4em;
-                    font-size: 0.65em;
-                    font-weight: bold;
-                    color: #fff;
-                    background: rgba(22, 143, 223, 0.85);
-                    border-radius: 0.3em;
-                    z-index: 10;
-                    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
-                    display: flex;
-                    align-items: center;
-                    gap: 0.3em;
-                }
-
-                .serial-episode-number svg {
-                    width: 0.8em;
-                    height: 0.8em;
-                    flex-shrink: 0;
-                }
-
                 .full-start__tag.card--info-badge {
                     display: inline-flex;
                     align-items: center;
@@ -622,8 +576,16 @@
                     color: #fff;
                     padding: 0.15em 0.5em;
                     border-radius: 0.3em;
-                    font-size: 0.75em;
+                    font-size: 0.7em;
                     margin-left: 0.5em;
+                    text-align: center;
+                    line-height: 1.3;
+                    flex-direction: column;
+                }
+
+                .full-start__tag.card--info-badge img {
+                    width: 0.9em;
+                    height: 0.9em;
                 }
 
                 .full-start-new__details .card--info-badge {
@@ -632,7 +594,9 @@
                     color: #fff;
                     padding: 0.15em 0.5em;
                     border-radius: 0.3em;
-                    font-size: 0.75em;
+                    font-size: 0.7em;
+                    text-align: center;
+                    line-height: 1.3;
                 }
 
                 @media (max-width: 585px) {
@@ -649,20 +613,10 @@
                         height: 0.9em;
                         margin: -3px 0 -3px -3px;
                     }
-                    .serial-episode-number {
-                        font-size: 0.5em;
-                        padding: 0.1em 0.3em;
-                        bottom: 3em;
-                    }
-                    .serial-episode-number svg {
-                        width: 0.6em;
-                        height: 0.6em;
-                    }
                 }
 
                 .card:not(.card--loaded) .card--info-badge,
-                .card:not(.card--loaded) .card--last_view,
-                .card:not(.card--loaded) .serial-episode-number {
+                .card:not(.card--loaded) .card--last_view {
                     display: none;
                 }
             </style>
@@ -742,29 +696,11 @@
                 default: true
             },
             field: {
-                name: 'Бейдж на карточке (сезоны/серии/дата)'
+                name: 'Бейдж на карточке'
             },
             onChange: function(value) {
                 var settings = getSettings();
                 settings.show_badge = value === 'true' || value === true;
-                setSettings(settings);
-                refreshCards();
-            }
-        });
-
-        Lampa.SettingsApi.addParam({
-            component: 'serial_info',
-            param: {
-                name: 'serial_info_poster',
-                type: 'trigger',
-                default: true
-            },
-            field: {
-                name: 'Номер серии на постере'
-            },
-            onChange: function(value) {
-                var settings = getSettings();
-                settings.show_poster = value === 'true' || value === true;
                 setSettings(settings);
                 refreshCards();
             }
@@ -809,7 +745,7 @@
 
     function refreshCards() {
         $('.serial-info-checked').removeClass('serial-info-checked');
-        $('.card--info-badge, .card--last_view, .timeline, .serial-episode-number').remove();
+        $('.card--info-badge, .card--last_view, .timeline').remove();
         $('.full-start__tag.card--info-badge').remove();
         setTimeout(function() {
             processAllCards();
