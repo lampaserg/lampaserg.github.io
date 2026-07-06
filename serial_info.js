@@ -2,12 +2,11 @@
     'use strict';
 
     // =============================================
-    // Serial Info + Next Episode - ТОЧНАЯ КОПИЯ MODS's
-    // Версия: 2.4.0
-    // Полностью копирует поведение MODS's
+    // Serial Info + Next Episode - Объединенный плагин
+    // Версия: 2.5.0
     // =============================================
 
-    const VERSION = '2.4.0';
+    const VERSION = '2.5.0';
 
     // =============================================
     // ПРАВИЛЬНЫЕ РУССКИЕ СКЛОНЕНИЯ
@@ -190,14 +189,12 @@
         try {
             if (!card) return null;
             
-            // ТОЧНО КАК В MODS's - используем Lampa.TimeTable.get()
             var episodes = Lampa.TimeTable.get(card);
             var viewed = null;
             
             if (episodes && episodes.length) {
                 for (var i = 0; i < episodes.length; i++) {
                     var ep = episodes[i];
-                    // ТОЧНО КАК В MODS's - хеш с season_number, episode_number и original_title
                     var hash = Lampa.Utils.hash([
                         ep.season_number, 
                         ep.episode_number, 
@@ -222,23 +219,15 @@
                 };
             }
             
-            // Если не нашли через TimeTable, пробуем другие источники
+            // Fallback: проверяем online_watched_last
             var title = card.original_title || card.original_name || card.title || card.name || '';
             var file_id = Lampa.Utils.hash(title);
-            
-            // Проверяем online_watched_last
             var watched = Lampa.Storage.cache('online_watched_last', 5000, {});
             if (watched && watched[file_id] && watched[file_id].season && watched[file_id].episode) {
-                var hash2 = Lampa.Utils.hash([
-                    watched[file_id].season, 
-                    watched[file_id].episode, 
-                    title
-                ].join(''));
-                var view2 = Lampa.Timeline.view(hash2);
                 return {
                     season: watched[file_id].season,
                     episode: watched[file_id].episode,
-                    view: view2 || null
+                    view: null
                 };
             }
             
@@ -249,7 +238,7 @@
     }
 
     // =============================================
-    // ОТОБРАЖЕНИЕ ПОСЛЕДНЕГО ПРОСМОТРА - ТОЧНАЯ КОПИЯ MODS's
+    // ОТОБРАЖЕНИЕ ПОСЛЕДНЕГО ПРОСМОТРА
     // =============================================
     
     function showLastView(card) {
@@ -264,18 +253,15 @@
             // Удаляем старые элементы
             $('.timeline, .card--last_view').remove();
             
-            // ТОЧНО КАК В MODS's - добавляем на постер с иконкой
             var poster = $('.full-start__poster, .full-start-new__poster');
             if (poster.length) {
-                // Добавляем бейдж с иконкой истории
                 poster.append(
-                    "<div class='card--last_view' style='top:0.6em;right: -.5em;position: absolute;background: #168FDF;color: #fff;padding: 0.4em 0.4em;font-size: 1.2em;-webkit-border-radius: 0.3em;-moz-border-radius: 0.3em;border-radius: 0.3em;z-index:10;'>" +
+                    "<div class='card--last_view' style='top:0.6em;right: -.5em;position: absolute;background: #168FDF;color: #fff;padding: 0.4em 0.4em;font-size: 1.2em;-webkit-border-radius: 0.3em;-moz-border-radius: 0.3em;border-radius: 0.3em;z-index:10;display:flex;align-items:center;gap:0.3em;'>" +
                     "<div style='float:left;margin:-5px 0 -4px -4px' class='card__icon icon--history'></div>" + 
                     last_view + 
                     "</div>"
                 );
                 
-                // ТОЧНО КАК В MODS's - добавляем таймлайн
                 if (lastViewData.view) {
                     poster.parent().append('<div class="timeline"></div>');
                     $('body').find('.timeline').append(Lampa.Timeline.render(lastViewData.view));
@@ -288,7 +274,7 @@
     }
 
     // =============================================
-    // Формирование текста для бейджа
+    // ФОРМИРОВАНИЕ ТЕКСТА ДЛЯ БЕЙДЖА
     // =============================================
     
     function getBadgeText(card, tvInfo) {
@@ -298,14 +284,22 @@
             var parts = [];
             var settings = getSettings();
 
-            if (tvInfo.number_of_seasons) {
-                parts.push(getSeasonsText(tvInfo.number_of_seasons));
+            // Если сериал завершен - показываем "4 сезон завершён"
+            if (tvInfo.status && tvInfo.status.toLowerCase() === 'ended') {
+                var seasonNum = tvInfo.number_of_seasons || 1;
+                parts.push(seasonNum + ' ' + declension(seasonNum, ['сезон', 'сезона', 'сезонов']) + ' завершён');
+            } else {
+                // Иначе показываем количество сезонов
+                if (tvInfo.number_of_seasons) {
+                    parts.push(getSeasonsText(tvInfo.number_of_seasons));
+                }
+                // И количество серий
+                if (tvInfo.number_of_episodes) {
+                    parts.push(getEpisodesText(tvInfo.number_of_episodes));
+                }
             }
 
-            if (tvInfo.number_of_episodes) {
-                parts.push(getEpisodesText(tvInfo.number_of_episodes));
-            }
-
+            // Следующая серия (дата)
             if (settings.show_next_episode && tvInfo.next_episode_to_air) {
                 var nextEp = tvInfo.next_episode_to_air;
                 var dateText = formatDaysUntil(nextEp.air_date);
@@ -323,7 +317,7 @@
     }
 
     // =============================================
-    // Инъекция на карточку
+    // ИНЪЕКЦИЯ НА КАРТОЧКУ
     // =============================================
     
     function injectSerialInfo(cardElement, cardData, tvInfo) {
@@ -352,6 +346,7 @@
             // --- 2. Информация на постере ---
             if (settings.show_poster) {
                 
+                // Статус сериала (на русском)
                 if (tvInfo.status) {
                     var statusText = getStatusText(tvInfo.status);
                     var statusColor = getStatusColor(tvInfo.status);
@@ -366,48 +361,23 @@
                     );
                 }
 
+                // Номер последней серии на постере (с иконкой)
                 if (tvInfo.last_episode_to_air) {
                     var lastEp = tvInfo.last_episode_to_air;
                     cardElement.find('.serial-episode-number').remove();
                     view.append(
                         '<div class="serial-episode-number" style="position:absolute;bottom:2.5em;left:0.5em;' +
                         'padding:0.12em 0.4em;font-size:0.5em;font-weight:bold;color:#fff;' +
-                        'background:rgba(22,143,223,0.85);border-radius:0.3em;z-index:10;text-shadow:0 1px 2px rgba(0,0,0,0.5);">' +
+                        'background:rgba(22,143,223,0.85);border-radius:0.3em;z-index:10;text-shadow:0 1px 2px rgba(0,0,0,0.5);display:flex;align-items:center;gap:0.3em;">' +
+                        '<svg width="0.8em" height="0.8em" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M21 6h-2v2h-2V6h-2V4h2V2h2v2h2v2zm-10 3c1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3 1.34 3 3 3zm0 4c-2.33 0-7 1.17-7 3.5V17h14v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>' +
                         getSeasonEpisodeText(lastEp.season_number, lastEp.episode_number) +
                         '</div>'
                     );
                 }
-
-                if (settings.show_next_episode && tvInfo.next_episode_to_air) {
-                    var nextEp = tvInfo.next_episode_to_air;
-                    var now = new Date();
-                    var airDate = new Date(nextEp.air_date);
-                    var diffDays = Math.ceil((airDate - now) / (1000 * 60 * 60 * 24));
-
-                    if (diffDays >= -7 && diffDays <= 30) {
-                        var label = '';
-                        if (diffDays === 0) label = 'Сегодня';
-                        else if (diffDays === 1) label = 'Завтра';
-                        else if (diffDays > 1 && diffDays <= 7) label = 'Через ' + diffDays + ' дн.';
-                        else if (diffDays > 7) label = 'Скоро';
-                        else label = 'Новая';
-                        
-                        cardElement.find('.serial-new-badge').remove();
-                        view.append(
-                            '<div class="serial-new-badge" style="position:absolute;top:0.5em;left:0.5em;' +
-                            'padding:0.12em 0.4em;font-size:0.5em;font-weight:bold;color:#fff;' +
-                            'background:#FF6B35;border-radius:0.3em;z-index:10;text-shadow:0 1px 2px rgba(0,0,0,0.5);">' +
-                            '🆕 ' + label +
-                            '</div>'
-                        );
-                    }
-                }
             }
 
-            // --- 3. Последний просмотр - ТОЧНО КАК В MODS's ---
-            // Это работает ТОЛЬКО для активной карточки (full)
+            // --- 3. Последний просмотр ---
             if (settings.show_last_view) {
-                // Проверяем, активная ли это карточка
                 var isActive = cardElement.closest('.activity--active').length > 0;
                 if (isActive) {
                     showLastView(cardData);
@@ -492,7 +462,7 @@
             if (!activityRender) return;
 
             // Удаляем старые элементы
-            activityRender.find('.card--info-badge, .card--last_view, .timeline, .serial-episode-number, .serial-new-badge, .serial-status').remove();
+            activityRender.find('.card--info-badge, .card--last_view, .timeline, .serial-episode-number, .serial-status').remove();
 
             getTvInfo(card, function(tvInfo) {
                 if (!tvInfo) return;
@@ -539,6 +509,7 @@
                 // --- Информация на постере ---
                 if (settings.show_poster) {
                     
+                    // Статус
                     if (tvInfo.status) {
                         var statusText = getStatusText(tvInfo.status);
                         var statusColor = getStatusColor(tvInfo.status);
@@ -555,6 +526,7 @@
                         }
                     }
 
+                    // Номер последней серии (с иконкой)
                     if (tvInfo.last_episode_to_air) {
                         var lastEp = tvInfo.last_episode_to_air;
                         var poster = $('.full-start__poster, .full-start-new__poster', activityRender);
@@ -562,42 +534,16 @@
                             poster.append(
                                 '<div class="serial-episode-number" style="position:absolute;bottom:3.5em;left:0.5em;' +
                                 'padding:0.12em 0.4em;font-size:0.65em;font-weight:bold;color:#fff;' +
-                                'background:rgba(22,143,223,0.85);border-radius:0.3em;z-index:10;text-shadow:0 1px 2px rgba(0,0,0,0.5);">' +
+                                'background:rgba(22,143,223,0.85);border-radius:0.3em;z-index:10;text-shadow:0 1px 2px rgba(0,0,0,0.5);display:flex;align-items:center;gap:0.3em;">' +
+                                '<svg width="0.8em" height="0.8em" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M21 6h-2v2h-2V6h-2V4h2V2h2v2h2v2zm-10 3c1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3 1.34 3 3 3zm0 4c-2.33 0-7 1.17-7 3.5V17h14v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>' +
                                 getSeasonEpisodeText(lastEp.season_number, lastEp.episode_number) +
                                 '</div>'
                             );
                         }
                     }
-
-                    if (settings.show_next_episode && tvInfo.next_episode_to_air) {
-                        var nextEp = tvInfo.next_episode_to_air;
-                        var now = new Date();
-                        var airDate = new Date(nextEp.air_date);
-                        var diffDays = Math.ceil((airDate - now) / (1000 * 60 * 60 * 24));
-
-                        if (diffDays >= -7 && diffDays <= 30) {
-                            var label = '';
-                            if (diffDays === 0) label = 'Сегодня';
-                            else if (diffDays === 1) label = 'Завтра';
-                            else if (diffDays > 1 && diffDays <= 7) label = 'Через ' + diffDays + ' дн.';
-                            else if (diffDays > 7) label = 'Скоро';
-                            else label = 'Новая';
-                            
-                            var poster = $('.full-start__poster, .full-start-new__poster', activityRender);
-                            if (poster.length) {
-                                poster.append(
-                                    '<div class="serial-new-badge" style="position:absolute;top:0.5em;left:0.5em;' +
-                                    'padding:0.12em 0.4em;font-size:0.65em;font-weight:bold;color:#fff;' +
-                                    'background:#FF6B35;border-radius:0.3em;z-index:10;text-shadow:0 1px 2px rgba(0,0,0,0.5);">' +
-                                    '🆕 ' + label +
-                                    '</div>'
-                                );
-                            }
-                        }
-                    }
                 }
 
-                // --- Последний просмотр - ТОЧНО КАК В MODS's ---
+                // --- Последний просмотр ---
                 if (settings.show_last_view) {
                     showLastView(card);
                 }
@@ -627,7 +573,6 @@
                     text-shadow: 0 1px 2px rgba(0,0,0,0.5);
                 }
 
-                /* ТОЧНЫЙ СТИЛЬ КАК В MODS's */
                 .card--last_view {
                     top: 0.6em;
                     right: -0.5em;
@@ -658,7 +603,6 @@
                     background-position: center;
                 }
 
-                /* ТОЧНЫЙ СТИЛЬ ТАЙМЛАЙНА КАК В MODS's */
                 .timeline {
                     margin: 0.5em 0;
                     padding: 0 0.5em;
@@ -681,20 +625,15 @@
                     border-radius: 0.3em;
                     z-index: 10;
                     text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+                    display: flex;
+                    align-items: center;
+                    gap: 0.3em;
                 }
 
-                .serial-new-badge {
-                    position: absolute;
-                    top: 0.5em;
-                    left: 0.5em;
-                    padding: 0.12em 0.4em;
-                    font-size: 0.65em;
-                    font-weight: bold;
-                    color: #fff;
-                    background: #FF6B35;
-                    border-radius: 0.3em;
-                    z-index: 10;
-                    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+                .serial-episode-number svg {
+                    width: 0.8em;
+                    height: 0.8em;
+                    flex-shrink: 0;
                 }
 
                 .serial-status {
@@ -745,8 +684,15 @@
                         height: 0.9em;
                         margin: -3px 0 -3px -3px;
                     }
-                    .serial-episode-number,
-                    .serial-new-badge,
+                    .serial-episode-number {
+                        font-size: 0.5em;
+                        padding: 0.1em 0.3em;
+                        bottom: 3em;
+                    }
+                    .serial-episode-number svg {
+                        width: 0.6em;
+                        height: 0.6em;
+                    }
                     .serial-status {
                         font-size: 0.5em;
                         padding: 0.1em 0.3em;
@@ -756,7 +702,6 @@
                 .card:not(.card--loaded) .card--info-badge,
                 .card:not(.card--loaded) .card--last_view,
                 .card:not(.card--loaded) .serial-episode-number,
-                .card:not(.card--loaded) .serial-new-badge,
                 .card:not(.card--loaded) .serial-status {
                     display: none;
                 }
@@ -904,7 +849,7 @@
 
     function refreshCards() {
         $('.serial-info-checked').removeClass('serial-info-checked');
-        $('.card--info-badge, .card--last_view, .timeline, .serial-episode-number, .serial-new-badge, .serial-status').remove();
+        $('.card--info-badge, .card--last_view, .timeline, .serial-episode-number, .serial-status').remove();
         $('.full-start__tag.card--info-badge').remove();
         setTimeout(function() {
             processAllCards();
