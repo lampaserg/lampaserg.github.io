@@ -3,10 +3,10 @@
 
     // =============================================
     // Serial Info - ТОЧНАЯ КОПИЯ MODS's
-    // Версия: 2.7.0
+    // Версия: 2.9.0
     // =============================================
 
-    const VERSION = '2.7.0';
+    const VERSION = '2.9.0';
 
     // =============================================
     // ПРАВИЛЬНЫЕ РУССКИЕ СКЛОНЕНИЯ
@@ -87,11 +87,6 @@
     function getSettings() {
         try {
             var settings = Lampa.Storage.get('serial_info_settings', {});
-            // Удаляем устаревшие настройки
-            var oldKeys = ['show_poster', 'show_seasons', 'show_episodes', 'show_status', 'show_episode_number', 'show_new_episode'];
-            oldKeys.forEach(function(key) {
-                if (settings[key] !== undefined) delete settings[key];
-            });
             return Object.assign({}, DEFAULTS, settings);
         } catch (e) {
             return DEFAULTS;
@@ -325,7 +320,8 @@
             if (settings.show_next_episode && next_episode) {
                 var dateText = formatDaysUntil(next_episode.air_date);
                 if (dateText) {
-                    new_ser += '<br>📅 ' + dateText;
+                    var epText = getSeasonEpisodeText(next_episode.season_number, next_episode.episode_number);
+                    new_ser += '<br>📅 ' + epText + ' - ' + dateText;
                 }
             }
 
@@ -461,15 +457,15 @@
                 if (settings.show_badge) {
                     var text = getBadgeText(card, tvInfo);
                     if (text) {
-                        // Заменяем <br> на перевод строки для отображения
-                        var displayText = text.replace(/<br>/g, '\n');
+                        // Заменяем <br> на перевод строки для отображения в HTML
+                        var displayText = text;
                         
                         if (!isMobile) {
                             var poster = $('.full-start__poster, .full-start-new__poster', activityRender);
                             if (poster.length) {
                                 poster.append(
-                                    "<div class='card--info-badge' style='right:-0.6em!important;position:absolute;background:#168FDF;color:#fff;bottom:0.6em!important;padding:0.3em 0.5em;font-size:0.9em;border-radius:0.3em;z-index:10;text-align:center;line-height:1.4;'>" + 
-                                    text + 
+                                    "<div class='card--info-badge' style='right:-0.6em!important;position:absolute;background:#168FDF;color:#fff;bottom:0.6em!important;padding:0.3em 0.5em;font-size:0.9em;border-radius:0.3em;z-index:10;text-align:center;line-height:1.5;'>" + 
+                                    displayText + 
                                     "</div>"
                                 );
                             }
@@ -479,7 +475,7 @@
                             
                             if (tags.length) {
                                 tags.append(
-                                    '<div class="full-start__tag card--info-badge" style="display:inline-flex;align-items:center;gap:0.3em;background:#168FDF;color:#fff;padding:0.15em 0.5em;border-radius:0.3em;font-size:0.7em;margin-left:0.5em;text-align:center;line-height:1.3;flex-direction:column;">' +
+                                    '<div class="full-start__tag card--info-badge" style="display:inline-flex;align-items:center;gap:0.3em;background:#168FDF;color:#fff;padding:0.15em 0.5em;border-radius:0.3em;font-size:0.7em;margin-left:0.5em;text-align:center;line-height:1.5;flex-direction:column;">' +
                                     '<img src="./img/icons/menu/movie.svg" style="width:0.9em;height:0.9em;" />' +
                                     '<div style="text-align:center;">' + displayText + '</div>' +
                                     '</div>'
@@ -487,7 +483,7 @@
                             } else if (details.length) {
                                 details.append(
                                     '<span class="full-start-new__split">●</span>' +
-                                    '<div class="card--info-badge" style="display:inline-block;background:#168FDF;color:#fff;padding:0.15em 0.5em;border-radius:0.3em;font-size:0.7em;text-align:center;line-height:1.3;">' +
+                                    '<div class="card--info-badge" style="display:inline-block;background:#168FDF;color:#fff;padding:0.15em 0.5em;border-radius:0.3em;font-size:0.7em;text-align:center;line-height:1.5;">' +
                                     displayText +
                                     '</div>'
                                 );
@@ -525,7 +521,7 @@
                     box-shadow: 0 2px 8px rgba(0,0,0,0.3);
                     text-shadow: 0 1px 2px rgba(0,0,0,0.5);
                     text-align: center;
-                    line-height: 1.4;
+                    line-height: 1.5;
                 }
 
                 .card--last_view {
@@ -579,7 +575,7 @@
                     font-size: 0.7em;
                     margin-left: 0.5em;
                     text-align: center;
-                    line-height: 1.3;
+                    line-height: 1.5;
                     flex-direction: column;
                 }
 
@@ -596,7 +592,7 @@
                     border-radius: 0.3em;
                     font-size: 0.7em;
                     text-align: center;
-                    line-height: 1.3;
+                    line-height: 1.5;
                 }
 
                 @media (max-width: 585px) {
