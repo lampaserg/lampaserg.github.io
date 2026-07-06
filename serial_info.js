@@ -3,16 +3,12 @@
 
     // =============================================
     // Serial Info Card Plugin for Lampa
-    // Версия: 1.0
-    // Отображает информацию о сериале на карточке:
-    // - Количество сезонов и эпизодов
-    // - Последнюю серию на постере
-    // - Статус сериала (онгоинг/завершен)
-    // - Информацию о новых сериях
+    // Версия: 1.0.0
+    // Автономный плагин без зависимостей от MODS's
+    // Отображает информацию о сериале на карточке
     // =============================================
 
     const PLUGIN_NAME = 'serial_info_card';
-    const STORAGE_KEY = 'serial_info_enabled';
     const VERSION = '1.0.0';
 
     // Настройки по умолчанию
@@ -21,7 +17,7 @@
         show_seasons: true,
         show_episodes: true,
         show_status: true,
-        show_new_episode: true,
+        show_new_series: true,
         show_last_view: true
     };
 
@@ -30,7 +26,7 @@
     // =============================================
     function getSettings() {
         try {
-            const settings = Lampa.Storage.get(STORAGE_KEY, {});
+            const settings = Lampa.Storage.get('serial_info_settings', {});
             return Object.assign({}, DEFAULTS, settings);
         } catch (e) {
             return DEFAULTS;
@@ -39,7 +35,7 @@
 
     function setSettings(settings) {
         try {
-            Lampa.Storage.set(STORAGE_KEY, settings);
+            Lampa.Storage.set('serial_info_settings', settings);
         } catch (e) {
             console.error('[SerialInfo] Save settings error:', e);
         }
@@ -49,7 +45,7 @@
     // Утилиты
     // =============================================
     function isSerial(card) {
-        return !!(card && (card.name || card.original_name || card.first_air_date));
+        return !!(card && (card.name || card.original_name || card.first_air_date || card.number_of_seasons));
     }
 
     function getCardTitle(card) {
@@ -69,7 +65,10 @@
         return words[2];
     }
 
-    function getLastView(card) {
+    // =============================================
+    // Получение последнего просмотра (как в Modss)
+    // =============================================
+    function getLastViewData(card) {
         try {
             const file_id = Lampa.Utils.hash(getCardTitle(card));
             const watched = Lampa.Storage.cache('online_watched_last', 5000, {});
@@ -79,7 +78,7 @@
                 return {
                     season: data.season,
                     episode: data.episode,
-                    balanser: data.balanser_name || ''
+                    balanser_name: data.balanser_name || ''
                 };
             }
         } catch (e) {}
@@ -99,7 +98,7 @@
         const lang = Lampa.Storage.get('language', 'ru');
         
         // Проверяем кеш
-        const cacheKey = 'serial_info_' + id;
+        const cacheKey = 'serial_info_tv_' + id;
         const cached = Lampa.Storage.cache(cacheKey, 100, null);
         if (cached) {
             callback(cached);
@@ -112,7 +111,7 @@
 
         network.timeout(10000);
         network.silent(url, function(data) {
-            if (data) {
+            if (data && data.id) {
                 // Кешируем на 1 час
                 Lampa.Storage.set(cacheKey, data);
                 callback(data);
@@ -125,135 +124,238 @@
     }
 
     // =============================================
-    // Создание бейджей и элементов интерфейса
+    // Создание элементов как в Modss
     // =============================================
-    function createSeasonBadge(seasonCount, episodeCount) {
+    function createModssStyleBadge(cardData, tvInfo, lastView) {
         const settings = getSettings();
-        let parts = [];
+        if (!settings.enabled) return '';
+        if (!isSerial(cardData) || !tvInfo) return '';
 
-        if (settings.show_seasons && seasonCount > 0) {
-            const word = numWord(seasonCount, ['', 'а', 'ов']);
-            parts.push(seasonCount + ' сез' + word);
+        let result = '';
+        const isMobile = window.innerWidth < 585;
+        
+        // --- 1. Информация о сезонах (как в Modss) ---
+        if (settings.show_seasons || settings.show_episodes) {
+            let parts = [];
+            
+            if (settings.show_seasons && tvInfo.number_of_seasons) {
+                const word = numWord(tvInfo.number_of_seasons, ['', 'а', 'ов']);
+                parts.push(tvInfo.number_of_seasons + ' сез' + word);
+            }
+            
+            if (settings.show_episodes && tvInfo.number_of_episodes) {
+                const word = numWord(tvInfo.number_of_episodes, ['', 'а', 'ов']);
+                parts.push(tvInfo.number_of_episodes + ' эпизод' + word);
+            }
+            
+            if (parts.length > 0) {
+                const text = parts.join(' • ');
+                if (isMobile) {
+                    // Для мобильных добавляем в теги
+                    result += '<span class="full-start__tag card--new_seria" style="margin-left: 0.5em;">' +
+                              '<img src="./img/icons/menu/movie.svg" style="width: 1em; height: 1em; margin-right: 0.3em;">' +
+                              '<div style="font-size: 0.9em;">' + text + '</div>' +
+                              '</span>';
+                } else {
+                    // Для десктопа - бейдж на постере
+                    result += '<div class="card--new_seria" style="' +
+                              'position: absolute;' +
+                              'right: -0.6em !important;' +
+                              'bottom: 0.6em !important;' +
+                              'background: #168FDF;' +
+                              'color: #fff;' +
+                              'padding: 0.3em 0.6em;' +
+                              'font-size: 1em;' +
+                              '-webkit-border-radius: 0.3em;' +
+                              '-moz-border-radius: 0.3em;' +
+                              'border-radius: 0.3em;' +
+                              'z-index: 10;' +
+                              '">' + text + '</div>';
+                }
+            }
         }
 
-        if (settings.show_episodes && episodeCount > 0) {
-            const word = numWord(episodeCount, ['', 'а', 'ов']);
-            parts.push(episodeCount + ' эпизод' + word);
+        // --- 2. Статус сериала (как в Modss) ---
+        if (settings.show_status && tvInfo.status) {
+            const statusMap = {
+                'returning series': 'Онгоинг',
+                'ended': 'Закончен',
+                'canceled': 'Отменен',
+                'in production': 'В производстве',
+                'planned': 'Запланирован',
+                'released': 'Выпущенный'
+            };
+            const statusText = statusMap[tvInfo.status] || tvInfo.status;
+            
+            if (!isMobile) {
+                result += '<div class="card--new_seria" style="' +
+                          'position: absolute;' +
+                          'right: -0.6em !important;' +
+                          'top: 0.6em !important;' +
+                          'background: ' + (tvInfo.status === 'returning series' ? '#4CAF50' : '#666') + ';' +
+                          'color: #fff;' +
+                          'padding: 0.2em 0.5em;' +
+                          'font-size: 0.8em;' +
+                          '-webkit-border-radius: 0.3em;' +
+                          '-moz-border-radius: 0.3em;' +
+                          'border-radius: 0.3em;' +
+                          'z-index: 10;' +
+                          '">' + statusText + '</div>';
+            }
         }
 
-        if (parts.length === 0) return '';
+        // --- 3. Номер последней серии на постере (как в Modss) ---
+        if (tvInfo.last_episode_to_air) {
+            const lastEp = tvInfo.last_episode_to_air;
+            const season = lastEp.season_number || 0;
+            const episode = lastEp.episode_number || 0;
+            
+            if (season > 0 && episode > 0) {
+                const epText = 'S' + season + ':E' + episode;
+                
+                // Как в Modss - на постере
+                result += '<div class="card--last_view" style="' +
+                          'position: absolute;' +
+                          'top: 0.6em;' +
+                          'right: -0.5em;' +
+                          'background: #168FDF;' +
+                          'color: #fff;' +
+                          'padding: 0.3em 0.5em;' +
+                          'font-size: 1em;' +
+                          '-webkit-border-radius: 0.3em;' +
+                          '-moz-border-radius: 0.3em;' +
+                          'border-radius: 0.3em;' +
+                          'z-index: 10;' +
+                          '">' +
+                          '<div style="float:left;margin:-3px 0 -3px -3px" class="card__icon icon--history"></div>' +
+                          epText +
+                          '</div>';
+            }
+        }
 
-        return '<div class="serial-info-badge">' + parts.join(' • ') + '</div>';
-    }
+        // --- 4. Новая серия (как в Modss) ---
+        if (settings.show_new_series && tvInfo.next_episode_to_air) {
+            const nextEp = tvInfo.next_episode_to_air;
+            const now = new Date();
+            const airDate = new Date(nextEp.air_date);
+            const diffDays = Math.ceil((airDate - now) / (1000 * 60 * 60 * 24));
 
-    function createStatusBadge(status) {
-        const statusMap = {
-            'returning series': '🔄 Онгоинг',
-            'ended': '✅ Завершен',
-            'canceled': '❌ Отменен',
-            'in production': '🎬 В производстве',
-            'planned': '📅 Запланирован',
-            'released': '📺 Выпущен'
-        };
+            // Показываем если серия выйдет в ближайшие 30 дней или вышла недавно
+            if (diffDays >= -7 && diffDays <= 30) {
+                let label = '';
+                if (diffDays === 0) label = 'Сегодня';
+                else if (diffDays === 1) label = 'Завтра';
+                else if (diffDays > 1 && diffDays <= 7) label = 'Через ' + diffDays + ' дн.';
+                else if (diffDays > 7) label = 'Скоро';
+                else label = 'Новая';
 
-        const text = statusMap[status] || status || '';
-        if (!text) return '';
+                if (isMobile) {
+                    result += '<span class="full-start__tag" style="margin-left: 0.5em; background: #FF6B35; color: #fff;">' +
+                              '<img src="./img/icons/menu/movie.svg" style="width: 1em; height: 1em; margin-right: 0.3em;">' +
+                              '<div style="font-size: 0.9em;">' + label + ' S' + nextEp.season_number + 'E' + nextEp.episode_number + '</div>' +
+                              '</span>';
+                } else {
+                    result += '<div class="card--new_seria" style="' +
+                              'position: absolute;' +
+                              'left: -0.6em !important;' +
+                              'top: 0.6em !important;' +
+                              'background: #FF6B35;' +
+                              'color: #fff;' +
+                              'padding: 0.2em 0.5em;' +
+                              'font-size: 0.8em;' +
+                              '-webkit-border-radius: 0.3em;' +
+                              '-moz-border-radius: 0.3em;' +
+                              'border-radius: 0.3em;' +
+                              'z-index: 10;' +
+                              '">' + label + '</div>';
+                }
+            }
+        }
 
-        return '<div class="serial-status-badge">' + text + '</div>';
-    }
+        // --- 5. Последний просмотр (как в Modss) ---
+        if (settings.show_last_view && lastView) {
+            const text = 'S' + lastView.season + ':E' + lastView.episode;
+            
+            if (isMobile) {
+                result += '<span class="full-start__tag" style="margin-left: 0.5em; background: #4CAF50; color: #fff;">' +
+                          '<img src="./img/icons/menu/movie.svg" style="width: 1em; height: 1em; margin-right: 0.3em;">' +
+                          '<div style="font-size: 0.9em;">Продолжить ' + text + '</div>' +
+                          '</span>';
+            } else {
+                result += '<div class="card--last_view" style="' +
+                          'position: absolute;' +
+                          'bottom: 0.6em;' +
+                          'right: -0.5em;' +
+                          'background: #4CAF50;' +
+                          'color: #fff;' +
+                          'padding: 0.2em 0.5em;' +
+                          'font-size: 0.8em;' +
+                          '-webkit-border-radius: 0.3em;' +
+                          '-moz-border-radius: 0.3em;' +
+                          'border-radius: 0.3em;' +
+                          'z-index: 10;' +
+                          '">▶ ' + text + '</div>';
+            }
+        }
 
-    function createNewEpisodeBadge(season, episode) {
-        return '<div class="serial-new-episode">' +
-               'Новая серия S' + season + 'E' + episode +
-               '</div>';
-    }
-
-    function createLastViewBadge(season, episode, balanser) {
-        return '<div class="serial-last-view">' +
-               '<span class="icon-viewed">▶</span> ' +
-               'S' + season + 'E' + episode +
-               (balanser ? ' (' + balanser + ')' : '') +
-               '</div>';
-    }
-
-    function createEpisodeNumberBadge(season, episode) {
-        return '<div class="serial-episode-number">S' + season + ':E' + episode + '</div>';
+        return result;
     }
 
     // =============================================
     // Инъекция информации в карточку
     // =============================================
-    function injectSerialInfo(cardElement, cardData, tvInfo) {
+    function injectSerialInfo(cardElement, cardData) {
         const settings = getSettings();
         if (!settings.enabled) return;
+        if (!isSerial(cardData)) return;
 
-        if (!isSerial(cardData) || !tvInfo) return;
-
-        // Удаляем старые бейджи
-        cardElement.find('.serial-info-badge, .serial-status-badge, .serial-new-episode, .serial-last-view, .serial-episode-number').remove();
+        // Проверяем, есть ли уже информация
+        if (cardElement.find('.card--new_seria, .card--last_view').length > 0) {
+            return;
+        }
 
         const view = cardElement.find('.card__view');
         if (!view.length) return;
 
-        // Информация о сезонах и эпизодах
-        const seasonCount = tvInfo.number_of_seasons || 0;
-        const episodeCount = tvInfo.number_of_episodes || 0;
-        const status = tvInfo.status || '';
+        // Получаем данные о сериале
+        getTvInfo(cardData, function(tvInfo) {
+            if (!tvInfo) return;
 
-        // Бейдж с сезонами/эпизодами
-        const badgeHtml = createSeasonBadge(seasonCount, episodeCount);
-        if (badgeHtml) {
-            view.append(badgeHtml);
-        }
-
-        // Бейдж со статусом
-        if (settings.show_status) {
-            const statusHtml = createStatusBadge(status);
-            if (statusHtml) {
-                view.append(statusHtml);
+            const lastView = getLastViewData(cardData);
+            const html = createModssStyleBadge(cardData, tvInfo, lastView);
+            
+            if (html) {
+                view.append(html);
+                
+                // Добавляем таймлайн если есть просмотр
+                if (lastView && settings.show_last_view) {
+                    const hash = Lampa.Utils.hash([
+                        lastView.season,
+                        lastView.season > 10 ? ':' : '',
+                        lastView.episode,
+                        getCardTitle(cardData)
+                    ].join(''));
+                    
+                    const tl = Lampa.Timeline.view(hash);
+                    if (tl && tl.percent > 0 && tl.percent < 100) {
+                        // Добавляем таймлайн в карточку
+                        const timelineHtml = '<div class="time-line" style="margin: 0.5em 0;">' +
+                                             Lampa.Timeline.render(tl) +
+                                             '</div>';
+                        
+                        // Ищем место для таймлайна
+                        const body = cardElement.find('.card__body, .card__view');
+                        if (body.length) {
+                            body.append(timelineHtml);
+                        }
+                    }
+                }
             }
-        }
-
-        // Новая серия (на постере)
-        if (settings.show_new_episode && tvInfo.next_episode_to_air) {
-            const nextEp = tvInfo.next_episode_to_air;
-            const now = new Date();
-            const airDate = new Date(nextEp.air_date);
-
-            // Показываем только если серия еще не вышла или вышла недавно
-            const diffDays = Math.ceil((airDate - now) / (1000 * 60 * 60 * 24));
-            if (diffDays >= -7 && diffDays <= 30) {
-                const epHtml = createNewEpisodeBadge(nextEp.season_number, nextEp.episode_number);
-                view.append(epHtml);
-            }
-        }
-
-        // Номер последней серии на постере
-        if (tvInfo.last_episode_to_air) {
-            const lastEp = tvInfo.last_episode_to_air;
-            const epNumHtml = createEpisodeNumberBadge(lastEp.season_number, lastEp.episode_number);
-            view.append(epNumHtml);
-        }
-
-        // Последний просмотр
-        if (settings.show_last_view) {
-            const lastView = getLastView(cardData);
-            if (lastView) {
-                const viewHtml = createLastViewBadge(
-                    lastView.season,
-                    lastView.episode,
-                    lastView.balanser
-                );
-                view.append(viewHtml);
-            }
-        }
-
-        // Добавляем стили, если их еще нет
-        addStyles();
+        });
     }
 
     // =============================================
-    // Обработка карточек в ленте
+    // Обработка карточек
     // =============================================
     function processCards() {
         const settings = getSettings();
@@ -261,10 +363,10 @@
 
         $('.card:not(.serial-info-processed)').each(function() {
             const card = $(this);
-            card.addClass('serial-info-processed');
-
+            
             // Пропускаем баннеры и карточки без сериалов
             if (card.hasClass('hero-banner')) return;
+            if (card.hasClass('card--category')) return;
             if (card.find('.card__view').length === 0) return;
 
             const cardData = card.data('item') || 
@@ -272,11 +374,8 @@
                            null;
 
             if (cardData && isSerial(cardData)) {
-                getTvInfo(cardData, function(tvInfo) {
-                    if (tvInfo) {
-                        injectSerialInfo(card, cardData, tvInfo);
-                    }
-                });
+                card.addClass('serial-info-processed');
+                injectSerialInfo(card, cardData);
             }
         });
     }
@@ -289,121 +388,78 @@
 
         const css = `
             <style id="serial-info-styles">
-                /* Основной бейдж с информацией о сезонах */
-                .serial-info-badge {
+                /* Стили для бейджей как в Modss */
+                .card--new_seria {
                     position: absolute;
-                    bottom: 0.3em;
-                    left: 50%;
-                    transform: translateX(-50%);
-                    padding: 0.2em 0.6em;
-                    font-size: 0.65em;
-                    font-weight: bold;
+                    background: #168FDF;
                     color: #fff;
-                    background: rgba(0, 0, 0, 0.75);
+                    padding: 0.3em 0.6em;
+                    font-size: 1em;
+                    -webkit-border-radius: 0.3em;
+                    -moz-border-radius: 0.3em;
                     border-radius: 0.3em;
-                    text-align: center;
-                    pointer-events: none;
-                    white-space: nowrap;
                     z-index: 10;
-                    text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+                    pointer-events: none;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
                 }
 
-                /* Бейдж со статусом сериала */
-                .serial-status-badge {
+                .card--last_view {
                     position: absolute;
-                    top: 0.5em;
-                    right: 0.5em;
-                    padding: 0.2em 0.5em;
-                    font-size: 0.55em;
-                    font-weight: bold;
+                    background: #168FDF;
                     color: #fff;
-                    background: rgba(0, 0, 0, 0.6);
+                    padding: 0.3em 0.5em;
+                    font-size: 1em;
+                    -webkit-border-radius: 0.3em;
+                    -moz-border-radius: 0.3em;
                     border-radius: 0.3em;
-                    pointer-events: none;
                     z-index: 10;
-                    border: 1px solid rgba(255,255,255,0.15);
-                }
-
-                /* Новая серия (на постере) */
-                .serial-new-episode {
-                    position: absolute;
-                    top: 0.5em;
-                    left: 0.5em;
-                    padding: 0.2em 0.5em;
-                    font-size: 0.55em;
-                    font-weight: bold;
-                    color: #fff;
-                    background: #FF6B35;
-                    border-radius: 0.3em;
                     pointer-events: none;
-                    z-index: 10;
-                    animation: pulse-new-episode 2s infinite;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+                    display: flex;
+                    align-items: center;
+                    gap: 0.3em;
                 }
 
-                @keyframes pulse-new-episode {
-                    0%, 100% { opacity: 1; }
-                    50% { opacity: 0.6; }
+                .card--last_view .card__icon {
+                    display: inline-block;
+                    width: 1.2em;
+                    height: 1.2em;
+                    background-size: contain;
+                    background-repeat: no-repeat;
+                    background-position: center;
                 }
 
-                /* Номер последней серии на постере */
-                .serial-episode-number {
-                    position: absolute;
-                    bottom: 2.5em;
-                    left: 0.5em;
-                    padding: 0.15em 0.4em;
-                    font-size: 0.6em;
-                    font-weight: bold;
-                    color: #fff;
-                    background: rgba(22, 143, 223, 0.85);
-                    border-radius: 0.3em;
-                    pointer-events: none;
-                    z-index: 10;
-                    text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+                .card--last_view .card__icon.icon--history {
+                    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-.5-13v4l-2.5 1.5 1 1.5 3.5-2V7h-2z'/%3E%3C/svg%3E");
                 }
 
-                /* Последний просмотр */
-                .serial-last-view {
-                    position: absolute;
-                    bottom: 2.5em;
-                    right: 0.5em;
-                    padding: 0.15em 0.5em;
-                    font-size: 0.55em;
-                    font-weight: bold;
-                    color: #fff;
-                    background: rgba(0, 0, 0, 0.7);
-                    border-radius: 0.3em;
-                    pointer-events: none;
-                    z-index: 10;
-                    border: 1px solid rgba(255, 255, 255, 0.2);
+                /* Таймлайн в карточке */
+                .card .time-line {
+                    margin: 0.5em 0;
+                    padding: 0 0.5em;
                 }
 
-                .serial-last-view .icon-viewed {
-                    color: #4CAF50;
-                    margin-right: 0.3em;
+                .card .time-line .time-line__bar {
+                    height: 4px;
+                    border-radius: 2px;
                 }
 
-                /* Для мобильных устройств */
-                @media (max-width: 480px) {
-                    .serial-info-badge {
-                        font-size: 0.5em;
+                /* Адаптация для мобильных */
+                @media (max-width: 585px) {
+                    .card--new_seria,
+                    .card--last_view {
+                        font-size: 0.7em;
                         padding: 0.15em 0.4em;
-                        bottom: 0.2em;
                     }
-                    .serial-status-badge,
-                    .serial-new-episode,
-                    .serial-episode-number,
-                    .serial-last-view {
-                        font-size: 0.45em;
-                        padding: 0.1em 0.3em;
-                    }
-                    .serial-episode-number {
-                        bottom: 2em;
+                    .card--last_view .card__icon {
+                        width: 0.8em;
+                        height: 0.8em;
                     }
                 }
 
                 /* Для карточек без постера */
-                .card:not(.card--loaded) .serial-episode-number,
-                .card:not(.card--loaded) .serial-new-episode {
+                .card:not(.card--loaded) .card--new_seria,
+                .card:not(.card--loaded) .card--last_view {
                     display: none;
                 }
             </style>
@@ -418,13 +474,14 @@
     function addSettings() {
         const settings = getSettings();
 
+        // Добавляем компонент в настройки
         Lampa.SettingsApi.addComponent({
             component: 'serial_info',
             name: 'Информация о сериале',
             icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M8 4v16"/><path d="M16 4v16"/><path d="M2 10h20"/></svg>'
         });
 
-        // Включить/выключить плагин
+        // Включить/выключить
         Lampa.SettingsApi.addParam({
             component: 'serial_info',
             param: {
@@ -440,12 +497,7 @@
                 const newSettings = getSettings();
                 newSettings.enabled = value === 'true' || value === true;
                 setSettings(newSettings);
-                
-                // Обновляем карточки
-                setTimeout(function() {
-                    $('.card.serial-info-processed').removeClass('serial-info-processed');
-                    processCards();
-                }, 500);
+                refreshCards();
             }
         });
 
@@ -513,9 +565,9 @@
         Lampa.SettingsApi.addParam({
             component: 'serial_info',
             param: {
-                name: 'serial_info_new_episode',
+                name: 'serial_info_new_series',
                 type: 'trigger',
-                default: settings.show_new_episode
+                default: settings.show_new_series
             },
             field: {
                 name: 'Показывать новые серии',
@@ -523,7 +575,7 @@
             },
             onChange: function(value) {
                 const newSettings = getSettings();
-                newSettings.show_new_episode = value === 'true' || value === true;
+                newSettings.show_new_series = value === 'true' || value === true;
                 setSettings(newSettings);
                 refreshCards();
             }
@@ -556,6 +608,7 @@
     function refreshCards() {
         setTimeout(function() {
             $('.card.serial-info-processed').removeClass('serial-info-processed');
+            $('.card .card--new_seria, .card .card--last_view, .card .time-line').remove();
             processCards();
         }, 300);
     }
@@ -564,7 +617,7 @@
     // Инициализация
     // =============================================
     function init() {
-        console.log('[SerialInfo] Plugin loaded v' + VERSION);
+        console.log('[SerialInfo] Plugin v' + VERSION + ' loaded');
 
         addStyles();
 
@@ -584,7 +637,7 @@
             if (e.items) {
                 setTimeout(function() {
                     processCards();
-                }, 200);
+                }, 300);
             }
         });
 
@@ -592,16 +645,16 @@
             if (e.type === 'start') {
                 setTimeout(function() {
                     processCards();
-                }, 300);
+                }, 500);
             }
         });
 
         // Первичная обработка
         setTimeout(function() {
             processCards();
-        }, 1000);
+        }, 1500);
 
-        // Периодическая проверка (для динамических карточек)
+        // Периодическая проверка
         setInterval(function() {
             processCards();
         }, 5000);
