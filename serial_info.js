@@ -3,10 +3,10 @@
 
     // =============================================
     // Serial Info + Next Episode - Объединенный плагин
-    // Версия: 2.1.0
+    // Версия: 2.2.0
     // =============================================
 
-    const VERSION = '2.1.0';
+    const VERSION = '2.2.0';
 
     // =============================================
     // ПРАВИЛЬНЫЕ РУССКИЕ СКЛОНЕНИЯ
@@ -58,6 +58,39 @@
     }
 
     // =============================================
+    // СТАТУСЫ НА РУССКОМ
+    // =============================================
+    
+    function getStatusText(status) {
+        var statusMap = {
+            'returning series': 'Онгоинг',
+            'returning': 'Онгоинг',
+            'ended': 'Завершён',
+            'canceled': 'Отменён',
+            'in production': 'В производстве',
+            'planned': 'Запланирован',
+            'released': 'Выпущен',
+            'pilot': 'Пилот',
+            'to be determined': 'Не определен'
+        };
+        
+        // Приводим к нижнему регистру для поиска
+        var key = (status || '').toLowerCase();
+        return statusMap[key] || status || '';
+    }
+
+    function getStatusColor(status) {
+        var key = (status || '').toLowerCase();
+        if (key === 'returning series' || key === 'returning') return '#4CAF50'; // зеленый - онгоинг
+        if (key === 'ended') return '#666'; // серый - завершен
+        if (key === 'canceled') return '#f44336'; // красный - отменен
+        if (key === 'in production') return '#FF9800'; // оранжевый - в производстве
+        if (key === 'planned') return '#2196F3'; // синий - запланирован
+        if (key === 'released') return '#8BC34A'; // салатовый - выпущен
+        return '#888'; // серый по умолчанию
+    }
+
+    // =============================================
     // РУССКИЕ ПЕРЕВОДЫ
     // =============================================
     
@@ -76,7 +109,6 @@
             'serial_info_in_production': { ru: 'В производстве' },
             'serial_info_planned': { ru: 'Запланирован' },
             'serial_info_next_episode': { ru: 'Следующая серия' },
-            // Настройки
             'serial_info_settings': { ru: 'Информация о сериале' },
             'serial_info_enabled_desc': { ru: 'Отображает информацию о сезонах, сериях и дате выхода следующей серии' },
             'serial_info_badge_desc': { ru: 'Показывает информацию о сезонах/сериях и дате выхода следующей серии внизу карточки' },
@@ -101,13 +133,11 @@
     function getSettings() {
         try {
             var settings = Lampa.Storage.get('serial_info_settings', {});
-            // Обновляем старые настройки
-            if (settings.show_seasons !== undefined) delete settings.show_seasons;
-            if (settings.show_episodes !== undefined) delete settings.show_episodes;
-            if (settings.show_status !== undefined) delete settings.show_status;
-            if (settings.show_episode_number !== undefined) delete settings.show_episode_number;
-            if (settings.show_new_episode !== undefined) delete settings.show_new_episode;
-            
+            // Удаляем устаревшие настройки
+            var oldKeys = ['show_seasons', 'show_episodes', 'show_status', 'show_episode_number', 'show_new_episode'];
+            oldKeys.forEach(function(key) {
+                if (settings[key] !== undefined) delete settings[key];
+            });
             return Object.assign({}, DEFAULTS, settings);
         } catch (e) {
             return DEFAULTS;
@@ -173,38 +203,46 @@
     }
 
     // =============================================
-    // Получение последнего просмотра (из разных источников)
+    // УЛУЧШЕННЫЙ ПОИСК ПОСЛЕДНЕГО ПРОСМОТРА
     // =============================================
     
     function getLastView(card) {
         try {
+            if (!card) return null;
+            
             var title = card.original_title || card.original_name || card.title || card.name || '';
             if (!title) return null;
             
-            var file_id = Lampa.Utils.hash(title);
-            
-            // Проверяем в online_watched_last
+            // === 1. Проверяем online_watched_last (из MODS's и подобных) ===
             var watched = Lampa.Storage.cache('online_watched_last', 5000, {});
-            var data = watched[file_id];
-            
-            if (data && data.season && data.episode) {
-                return {
-                    season: data.season,
-                    episode: data.episode,
-                    balanser_name: data.balanser_name || ''
-                };
+            if (watched) {
+                var file_id = Lampa.Utils.hash(title);
+                if (watched[file_id] && watched[file_id].season && watched[file_id].episode) {
+                    return {
+                        season: watched[file_id].season,
+                        episode: watched[file_id].episode,
+                        source: 'online_watched_last'
+                    };
+                }
             }
             
-            // Проверяем в file_view (стандартное хранилище Lampa)
+            // === 2. Проверяем file_view + resume_file (стандартное хранилище Lampa) ===
             var views = Lampa.Storage.get('file_view', {});
             var files = Lampa.Storage.get('resume_file', {});
             
             // Пробуем разные варианты хеша
-            var hashes = [
+            var hashVariants = [
                 Lampa.Utils.hash(title),
                 Lampa.Utils.hash(card.original_title || ''),
-                Lampa.Utils.hash(card.original_name || '')
+                Lampa.Utils.hash(card.original_name || ''),
+                Lampa.Utils.hash((card.original_title || card.original_name || '') + (card.id || ''))
             ];
+            
+            // Уникальные хеши
+            var hashes = [];
+            hashVariants.forEach(function(h) {
+                if (h && hashes.indexOf(h) === -1) hashes.push(h);
+            });
             
             for (var i = 0; i < hashes.length; i++) {
                 var hash = hashes[i];
@@ -212,29 +250,97 @@
                     var resume = views[hash];
                     var fileData = files[hash];
                     
-                    // Пытаемся извлечь сезон и серию из данных
+                    // Пытаемся извлечь сезон и серию из данных файла
                     if (fileData.season !== undefined && fileData.episode !== undefined) {
                         return {
-                            season: fileData.season,
-                            episode: fileData.episode,
-                            balanser_name: ''
+                            season: parseInt(fileData.season),
+                            episode: parseInt(fileData.episode),
+                            source: 'resume_file'
                         };
                     }
                     
                     // Пытаемся извлечь из timeline
                     if (fileData.timeline && fileData.timeline.hash) {
-                        // Здесь можно попробовать восстановить данные
+                        // Проверяем, может быть там закодированы сезон/серия
+                        var tlHash = fileData.timeline.hash;
+                        // Пробуем найти в Timeline
+                        var tl = Lampa.Timeline.view(tlHash);
+                        if (tl && tl.percent > 0) {
+                            // Пытаемся определить сезон/серию из названия
+                            var match = (fileData.title || '').match(/S(\d+):?E(\d+)/i);
+                            if (match) {
+                                return {
+                                    season: parseInt(match[1]),
+                                    episode: parseInt(match[2]),
+                                    source: 'timeline_title'
+                                };
+                            }
+                        }
                     }
                 }
             }
             
-            // Проверяем Timeline напрямую
-            var tlHash = Lampa.Utils.hash(title);
-            var tl = Lampa.Timeline.view(tlHash);
-            if (tl && tl.percent > 0 && tl.percent < 100) {
-                // Пытаемся определить сезон и серию
-                // Это сложно, так как в Timeline нет прямой информации о сезоне/серии
+            // === 3. Проверяем Timeline напрямую ===
+            // Пытаемся найти Timeline с прогрессом
+            var allViews = Lampa.Storage.get('file_view', {});
+            for (var key in allViews) {
+                if (allViews.hasOwnProperty(key)) {
+                    var view = allViews[key];
+                    if (view && view.percent > 0 && view.percent < 100) {
+                        // Пытаемся определить сезон/серию из ключа
+                        var match = key.match(/S(\d+):?E(\d+)/i) || key.match(/(\d+):(\d+)/);
+                        if (match) {
+                            return {
+                                season: parseInt(match[1]),
+                                episode: parseInt(match[2]),
+                                source: 'timeline_direct'
+                            };
+                        }
+                    }
+                }
             }
+            
+            // === 4. Проверяем favorite (избранное) ===
+            var favorite = Lampa.Storage.get('favorite', {});
+            if (favorite.card) {
+                var cardData = favorite.card.find(function(c) {
+                    return c.id === card.id;
+                });
+                if (cardData && cardData.history) {
+                    // Пытаемся найти последний просмотренный эпизод
+                    var history = cardData.history;
+                    if (history && history.season && history.episode) {
+                        return {
+                            season: parseInt(history.season),
+                            episode: parseInt(history.episode),
+                            source: 'favorite'
+                        };
+                    }
+                }
+            }
+            
+            // === 5. Проверяем timeline (через Lampa.Timeline) ===
+            try {
+                var timelineData = Lampa.Storage.get('timeline', {});
+                for (var tlKey in timelineData) {
+                    if (timelineData.hasOwnProperty(tlKey)) {
+                        var tlItem = timelineData[tlKey];
+                        if (tlItem && tlItem.percent > 0 && tlItem.percent < 100) {
+                            // Пытаемся найти соответствие по названию
+                            if (tlItem.title && tlItem.title.indexOf(title) !== -1) {
+                                var match = (tlItem.title || '').match(/S(\d+):?E(\d+)/i);
+                                if (match) {
+                                    return {
+                                        season: parseInt(match[1]),
+                                        episode: parseInt(match[2]),
+                                        source: 'timeline_storage'
+                                    };
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (e) {}
             
         } catch (e) {
             console.error('[SerialInfo] getLastView error:', e);
@@ -278,31 +384,6 @@
         } catch (e) {
             return null;
         }
-    }
-
-    // =============================================
-    // Получение статуса на русском
-    // =============================================
-    
-    function getStatusText(status) {
-        var statusMap = {
-            'returning series': 'Онгоинг',
-            'ended': 'Завершён',
-            'canceled': 'Отменён',
-            'in production': 'В производстве',
-            'planned': 'Запланирован',
-            'released': 'Выпущен'
-        };
-        return statusMap[status] || status || '';
-    }
-
-    function getStatusColor(status) {
-        if (status === 'returning series') return '#4CAF50';
-        if (status === 'ended') return '#666';
-        if (status === 'canceled') return '#f44336';
-        if (status === 'in production') return '#FF9800';
-        if (status === 'planned') return '#2196F3';
-        return '#888';
     }
 
     // =============================================
@@ -622,6 +703,7 @@
                                 "</div>"
                             );
                             
+                            // Таймлайн
                             var hash = Lampa.Utils.hash([
                                 lastView.season,
                                 lastView.season > 10 ? ':' : '',
@@ -818,14 +900,13 @@
     // =============================================
 
     function addSettings() {
-        // Компонент настроек
         Lampa.SettingsApi.addComponent({
             component: 'serial_info',
-            name: Lampa.Lang.translate('serial_info_settings'),
+            name: 'Информация о сериале',
             icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M8 4v16"/><path d="M16 4v16"/><path d="M2 10h20"/></svg>'
         });
 
-        // -------- ОСНОВНЫЕ НАСТРОЙКИ --------
+        // Основной включатель
         Lampa.SettingsApi.addParam({
             component: 'serial_info',
             param: {
@@ -835,7 +916,7 @@
             },
             field: {
                 name: 'Включить информацию о сериале',
-                description: Lampa.Lang.translate('serial_info_enabled_desc')
+                description: 'Отображает информацию о сезонах, сериях и дате выхода следующей серии'
             },
             onChange: function(value) {
                 var settings = getSettings();
@@ -845,7 +926,7 @@
             }
         });
 
-        // -------- ОТОБРАЖЕНИЕ НА КАРТОЧКЕ --------
+        // Бейдж на карточке
         Lampa.SettingsApi.addParam({
             component: 'serial_info',
             param: {
@@ -855,7 +936,7 @@
             },
             field: {
                 name: 'Бейдж на карточке',
-                description: Lampa.Lang.translate('serial_info_badge_desc')
+                description: 'Показывает информацию о сезонах/сериях и дате выхода следующей серии внизу карточки'
             },
             onChange: function(value) {
                 var settings = getSettings();
@@ -865,7 +946,7 @@
             }
         });
 
-        // -------- ОТОБРАЖЕНИЕ НА ПОСТЕРЕ --------
+        // Информация на постере
         Lampa.SettingsApi.addParam({
             component: 'serial_info',
             param: {
@@ -875,7 +956,7 @@
             },
             field: {
                 name: 'Информация на постере',
-                description: Lampa.Lang.translate('serial_info_poster_desc')
+                description: 'Показывает на постере: статус сериала, номер последней серии, новую серию'
             },
             onChange: function(value) {
                 var settings = getSettings();
@@ -885,7 +966,7 @@
             }
         });
 
-        // -------- ДАТА СЛЕДУЮЩЕЙ СЕРИИ --------
+        // Дата следующей серии
         Lampa.SettingsApi.addParam({
             component: 'serial_info',
             param: {
@@ -895,7 +976,7 @@
             },
             field: {
                 name: 'Дата следующей серии',
-                description: Lampa.Lang.translate('serial_info_next_desc')
+                description: 'Показывает через сколько дней выйдет следующая серия'
             },
             onChange: function(value) {
                 var settings = getSettings();
@@ -905,7 +986,7 @@
             }
         });
 
-        // -------- ПОСЛЕДНИЙ ПРОСМОТР --------
+        // Последний просмотр
         Lampa.SettingsApi.addParam({
             component: 'serial_info',
             param: {
@@ -915,7 +996,7 @@
             },
             field: {
                 name: 'Последний просмотр',
-                description: Lampa.Lang.translate('serial_info_last_desc')
+                description: 'Показывает на постере последнюю просмотренную серию (только для просмотренных)'
             },
             onChange: function(value) {
                 var settings = getSettings();
