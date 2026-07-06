@@ -3,10 +3,10 @@
 
     // =============================================
     // Serial Info - ТОЧНАЯ КОПИЯ MODS's
-    // Версия: 3.0.0
+    // Версия: 3.1.0
     // =============================================
 
-    const VERSION = '3.0.0';
+    const VERSION = '3.1.0';
 
     // =============================================
     // ПРАВИЛЬНЫЕ РУССКИЕ СКЛОНЕНИЯ
@@ -152,21 +152,23 @@
     }
 
     // =============================================
-    // ПОСЛЕДНИЙ ПРОСМОТР - ТОЧНАЯ КОПИЯ MODS's
+    // ПОСЛЕДНИЙ ПРОСМОТР - ИЩЕМ ПО ВСЕМ СЕЗОНАМ
     // =============================================
     
     function getLastViewData(card) {
         try {
             if (!card) return null;
             
-            // ТОЧНО КАК В MODS's - используем Lampa.TimeTable.get()
+            // Получаем все эпизоды через TimeTable
             var episodes = Lampa.TimeTable.get(card);
             var viewed = null;
+            var maxTime = -1;
             
             if (episodes && episodes.length) {
+                // Перебираем ВСЕ эпизоды из ВСЕХ сезонов
                 for (var i = 0; i < episodes.length; i++) {
                     var ep = episodes[i];
-                    // ТОЧНО КАК В MODS's - хеш с season_number, episode_number и original_title
+                    // Хеш как в MODS's
                     var hash = Lampa.Utils.hash([
                         ep.season_number, 
                         ep.episode_number, 
@@ -174,15 +176,20 @@
                     ].join(''));
                     
                     var view = Lampa.Timeline.view(hash);
-                    if (view && view.percent) {
-                        viewed = {
-                            ep: ep,
-                            view: view
-                        };
+                    // Ищем эпизод с самым большим временем просмотра
+                    if (view && view.percent && view.percent > 0) {
+                        if (view.time > maxTime) {
+                            maxTime = view.time;
+                            viewed = {
+                                ep: ep,
+                                view: view
+                            };
+                        }
                     }
                 }
             }
             
+            // Если нашли через TimeTable - возвращаем
             if (viewed) {
                 return {
                     season: viewed.ep.season_number,
@@ -191,15 +198,21 @@
                 };
             }
             
-            // Fallback
+            // Fallback: проверяем online_watched_last
             var title = card.original_title || card.original_name || card.title || card.name || '';
             var file_id = Lampa.Utils.hash(title);
             var watched = Lampa.Storage.cache('online_watched_last', 5000, {});
             if (watched && watched[file_id] && watched[file_id].season && watched[file_id].episode) {
+                var hash2 = Lampa.Utils.hash([
+                    watched[file_id].season, 
+                    watched[file_id].episode, 
+                    title
+                ].join(''));
+                var view2 = Lampa.Timeline.view(hash2);
                 return {
                     season: watched[file_id].season,
                     episode: watched[file_id].episode,
-                    view: null
+                    view: view2 || null
                 };
             }
             
@@ -210,7 +223,7 @@
     }
 
     // =============================================
-    // ОТОБРАЖЕНИЕ ПОСЛЕДНЕГО ПРОСМОТРА - ТОЧНО КАК В MODS's
+    // ОТОБРАЖЕНИЕ ПОСЛЕДНЕГО ПРОСМОТРА И ТАЙМЛАЙНА
     // =============================================
     
     function showLastView(card) {
@@ -225,10 +238,10 @@
             // Удаляем старые элементы
             $('.timeline, .card--last_view').remove();
             
-            // ТОЧНО КАК В MODS's - добавляем на постер
+            // Находим постер
             var poster = $('.full-start__poster, .full-start-new__poster');
             if (poster.length) {
-                // Добавляем бейдж с иконкой истории
+                // 1. Добавляем бейдж с иконкой истории (как в MODS's)
                 poster.append(
                     "<div class='card--last_view' style='top:0.6em;right: -.5em;position: absolute;background: #168FDF;color: #fff;padding: 0.4em 0.4em;font-size: 1.2em;-webkit-border-radius: 0.3em;-moz-border-radius: 0.3em;border-radius: 0.3em;z-index:10;'>" +
                     "<div style='float:left;margin:-5px 0 -4px -4px' class='card__icon icon--history'></div>" + 
@@ -236,10 +249,24 @@
                     "</div>"
                 );
                 
-                // ТОЧНО КАК В MODS's - добавляем таймлайн
+                // 2. Добавляем таймлайн под постером (как в MODS's)
                 if (lastViewData.view) {
-                    poster.parent().append('<div class="timeline"></div>');
-                    $('body').find('.timeline').append(Lampa.Timeline.render(lastViewData.view));
+                    poster.parent().append('<div class="timeline" style="margin:0.5em 0;padding:0 0.5em;"></div>');
+                    $('.timeline').append(Lampa.Timeline.render(lastViewData.view));
+                } else {
+                    // Пробуем получить таймлайн по хешу
+                    var hash = Lampa.Utils.hash([
+                        se,
+                        se > 10 ? ':' : '',
+                        ep,
+                        card.original_title || card.original_name || ''
+                    ].join(''));
+                    
+                    var tl = Lampa.Timeline.view(hash);
+                    if (tl && tl.percent > 0 && tl.percent < 100) {
+                        poster.parent().append('<div class="timeline" style="margin:0.5em 0;padding:0 0.5em;"></div>');
+                        $('.timeline').append(Lampa.Timeline.render(tl));
+                    }
                 }
             }
             
@@ -365,8 +392,7 @@
                 }
             }
 
-            // --- Последний просмотр (всегда для активной карточки) ---
-            // В MODS's это работает только для активной карточки full
+            // --- Последний просмотр (только для активной карточки) ---
             var isActive = cardElement.closest('.activity--active').length > 0;
             if (settings.show_last_view && isActive) {
                 showLastView(cardData);
@@ -495,7 +521,6 @@
                 }
 
                 // --- Последний просмотр ---
-                // В MODS's last_view всегда вызывается для активной карточки
                 if (settings.show_last_view) {
                     showLastView(card);
                 }
