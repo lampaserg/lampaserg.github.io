@@ -3,10 +3,10 @@
 
     // =============================================
     // Serial Info - ТОЧНАЯ КОПИЯ MODS's
-    // Версия: 2.9.0
+    // Версия: 3.0.0
     // =============================================
 
-    const VERSION = '2.9.0';
+    const VERSION = '3.0.0';
 
     // =============================================
     // ПРАВИЛЬНЫЕ РУССКИЕ СКЛОНЕНИЯ
@@ -159,12 +159,14 @@
         try {
             if (!card) return null;
             
+            // ТОЧНО КАК В MODS's - используем Lampa.TimeTable.get()
             var episodes = Lampa.TimeTable.get(card);
             var viewed = null;
             
             if (episodes && episodes.length) {
                 for (var i = 0; i < episodes.length; i++) {
                     var ep = episodes[i];
+                    // ТОЧНО КАК В MODS's - хеш с season_number, episode_number и original_title
                     var hash = Lampa.Utils.hash([
                         ep.season_number, 
                         ep.episode_number, 
@@ -208,7 +210,7 @@
     }
 
     // =============================================
-    // ОТОБРАЖЕНИЕ ПОСЛЕДНЕГО ПРОСМОТРА
+    // ОТОБРАЖЕНИЕ ПОСЛЕДНЕГО ПРОСМОТРА - ТОЧНО КАК В MODS's
     // =============================================
     
     function showLastView(card) {
@@ -220,17 +222,21 @@
             var se = lastViewData.season;
             var last_view = 'S' + se + ':E' + ep;
             
+            // Удаляем старые элементы
             $('.timeline, .card--last_view').remove();
             
+            // ТОЧНО КАК В MODS's - добавляем на постер
             var poster = $('.full-start__poster, .full-start-new__poster');
             if (poster.length) {
+                // Добавляем бейдж с иконкой истории
                 poster.append(
-                    "<div class='card--last_view' style='top:0.6em;right: -.5em;position: absolute;background: #168FDF;color: #fff;padding: 0.4em 0.4em;font-size: 1.2em;-webkit-border-radius: 0.3em;-moz-border-radius: 0.3em;border-radius: 0.3em;z-index:10;display:flex;align-items:center;gap:0.3em;'>" +
+                    "<div class='card--last_view' style='top:0.6em;right: -.5em;position: absolute;background: #168FDF;color: #fff;padding: 0.4em 0.4em;font-size: 1.2em;-webkit-border-radius: 0.3em;-moz-border-radius: 0.3em;border-radius: 0.3em;z-index:10;'>" +
                     "<div style='float:left;margin:-5px 0 -4px -4px' class='card__icon icon--history'></div>" + 
                     last_view + 
                     "</div>"
                 );
                 
+                // ТОЧНО КАК В MODS's - добавляем таймлайн
                 if (lastViewData.view) {
                     poster.parent().append('<div class="timeline"></div>');
                     $('body').find('.timeline').append(Lampa.Timeline.render(lastViewData.view));
@@ -359,12 +365,11 @@
                 }
             }
 
-            // --- Последний просмотр ---
-            if (settings.show_last_view) {
-                var isActive = cardElement.closest('.activity--active').length > 0;
-                if (isActive) {
-                    showLastView(cardData);
-                }
+            // --- Последний просмотр (всегда для активной карточки) ---
+            // В MODS's это работает только для активной карточки full
+            var isActive = cardElement.closest('.activity--active').length > 0;
+            if (settings.show_last_view && isActive) {
+                showLastView(cardData);
             }
 
         } catch (e) {
@@ -429,7 +434,7 @@
     }
 
     // =============================================
-    // Обработка активной карточки
+    // Обработка активной карточки (full view)
     // =============================================
     
     function processCurrentCard() {
@@ -457,15 +462,12 @@
                 if (settings.show_badge) {
                     var text = getBadgeText(card, tvInfo);
                     if (text) {
-                        // Заменяем <br> на перевод строки для отображения в HTML
-                        var displayText = text;
-                        
                         if (!isMobile) {
                             var poster = $('.full-start__poster, .full-start-new__poster', activityRender);
                             if (poster.length) {
                                 poster.append(
                                     "<div class='card--info-badge' style='right:-0.6em!important;position:absolute;background:#168FDF;color:#fff;bottom:0.6em!important;padding:0.3em 0.5em;font-size:0.9em;border-radius:0.3em;z-index:10;text-align:center;line-height:1.5;'>" + 
-                                    displayText + 
+                                    text + 
                                     "</div>"
                                 );
                             }
@@ -477,14 +479,14 @@
                                 tags.append(
                                     '<div class="full-start__tag card--info-badge" style="display:inline-flex;align-items:center;gap:0.3em;background:#168FDF;color:#fff;padding:0.15em 0.5em;border-radius:0.3em;font-size:0.7em;margin-left:0.5em;text-align:center;line-height:1.5;flex-direction:column;">' +
                                     '<img src="./img/icons/menu/movie.svg" style="width:0.9em;height:0.9em;" />' +
-                                    '<div style="text-align:center;">' + displayText + '</div>' +
+                                    '<div style="text-align:center;">' + text + '</div>' +
                                     '</div>'
                                 );
                             } else if (details.length) {
                                 details.append(
                                     '<span class="full-start-new__split">●</span>' +
                                     '<div class="card--info-badge" style="display:inline-block;background:#168FDF;color:#fff;padding:0.15em 0.5em;border-radius:0.3em;font-size:0.7em;text-align:center;line-height:1.5;">' +
-                                    displayText +
+                                    text +
                                     '</div>'
                                 );
                             }
@@ -493,6 +495,7 @@
                 }
 
                 // --- Последний просмотр ---
+                // В MODS's last_view всегда вызывается для активной карточки
                 if (settings.show_last_view) {
                     showLastView(card);
                 }
