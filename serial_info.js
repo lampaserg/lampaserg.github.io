@@ -3,11 +3,11 @@
 
     // =============================================
     // Serial Info Card - Полная версия
-    // Версия: 1.1.0
-    // Обрабатывает ВСЕ карточки сериалов в любых подборках
+    // Версия: 1.2.0
+    // Отображает информацию на ВСЕХ сериалах
     // =============================================
 
-    const VERSION = '1.1.0';
+    const VERSION = '1.2.0';
 
     // =============================================
     // РУССКИЕ ПЕРЕВОДЫ (как в MODS's)
@@ -27,13 +27,22 @@
     }
 
     // =============================================
+    // Кеш для данных TMDB
+    // =============================================
+    
+    var tvCache = {};
+    var CACHE_TIME = 3600000; // 1 час
+
+    // =============================================
     // Настройки
     // =============================================
     
     const DEFAULTS = {
         enabled: true,
-        show_in_lines: true,
-        show_in_full: true
+        show_seasons: true,
+        show_episodes: true,
+        show_status: true,
+        show_last_view: true
     };
 
     function getSettings() {
@@ -73,262 +82,10 @@
         return hasSerialFields && !isMovie;
     }
 
-    function isValidForSerialInfo(card) {
-        if (!card) return false;
-        
-        // Проверяем источник
-        var sourceValid = card.source === 'tmdb' || 
-                         card.source === 'cub' || 
-                         card.source === undefined;
-        
-        // Проверяем наличие данных о сезонах
-        var hasSeasonsData = !!(card.seasons && card.seasons.length > 0 && 
-                               card.last_episode_to_air);
-        
-        // Для карточек без seasons, но с number_of_seasons
-        var hasBasicData = !!(card.number_of_seasons && card.number_of_seasons > 0);
-        
-        return sourceValid && (hasSeasonsData || hasBasicData);
-    }
-
-    // =============================================
-    // Функция last_view из Modss
-    // =============================================
-    
-    function lastView(card) {
-        try {
-            var episodes = Lampa.TimeTable.get(card);
-            var viewed;
-            
-            if (!episodes || !episodes.length) return;
-            
-            episodes.forEach(function (ep) {
-                var hash = Lampa.Utils.hash([ep.season_number, ep.episode_number, card.original_title].join(''));
-                var view = Lampa.Timeline.view(hash);
-                if (view && view.percent) {
-                    viewed = {
-                        ep: ep,
-                        view: view
-                    };
-                }
-            });
-            
-            if (viewed) {
-                var ep = viewed.ep.episode_number;
-                var se = viewed.ep.season_number;
-                var last_view = 'S' + se + ':E' + ep;
-                
-                // Удаляем старые элементы
-                $('.timeline, .card--last_view').remove();
-                
-                // Добавляем на постер
-                var poster = $('.full-start__poster, .full-start-new__poster');
-                if (poster.length) {
-                    poster.append(
-                        "<div class='card--last_view' style='top:0.6em;right: -.5em;position: absolute;background: #168FDF;color: #fff;padding: 0.4em 0.4em;font-size: 1.2em;-webkit-border-radius: 0.3em;-moz-border-radius: 0.3em;border-radius: 0.3em;z-index:10;'>" +
-                        "<div style='float:left;margin:-5px 0 -4px -4px' class='card__icon icon--history'></div>" + 
-                        last_view + 
-                        "</div>"
-                    );
-                    
-                    // Добавляем таймлайн
-                    poster.parent().append('<div class="timeline"></div>');
-                    $('body').find('.timeline').append(Lampa.Timeline.render(viewed.view));
-                }
-            } else {
-                $('.timeline,.card--last_view').remove();
-            }
-        } catch (e) {
-            console.error('[SerialInfo] lastView error:', e);
-        }
-    }
-
-    // =============================================
-    // Функция serialInfo из Modss (расширенная)
-    // =============================================
-    
-    function serialInfo(card) {
-        try {
-            if (!card) return false;
-            if (!isValidForSerialInfo(card)) return false;
-
-            // Получаем данные о сезонах из разных источников
-            var seasons = card.seasons || [];
-            var last_episode = card.last_episode_to_air || 
-                              (seasons.length > 0 && seasons[seasons.length - 1]);
-
-            if (!last_episode) return false;
-
-            var last_seria_inseason = last_episode.season_number || 1;
-            var next_episode = card.next_episode_to_air;
-            var last_seria = next_episode && new Date(next_episode.air_date) <= Date.now() 
-                ? next_episode.episode_number 
-                : (last_episode.episode_number || 0);
-            var new_ser;
-            
-            // Находим количество серий в последнем сезоне
-            var seasonData = seasons.find(function (eps) {
-                return eps.season_number == last_seria_inseason;
-            });
-            var count_eps_last_seas = seasonData ? seasonData.episode_count || 0 : 
-                                      (card.number_of_episodes || 0);
-
-            // Формируем текст
-            if (next_episode) {
-                var add_ = '<b>' + (last_seria || '');
-                var notices = Lampa.Storage.get('account_notice', []).filter(function (n) {
-                    return n.card_id == card.id;
-                });
-                
-                if (notices.length) {
-                    var notice = notices.find(function (itm) {
-                        return itm.episode == last_seria;
-                    });
-                    
-                    if (notice) {
-                        try {
-                            var episod_new = JSON.parse(notice.data).card.seasons;
-                            if (Lampa.Utils.parseTime(notice.date).full == Lampa.Utils.parseTime(Date.now()).full) {
-                                add_ = Lampa.Lang.translate('season_new') + ' <b>' + (episod_new[last_seria_inseason] || last_seria);
-                            }
-                        } catch (e) {}
-                    }
-                }
-                new_ser = add_ + '</b> ' + Lampa.Lang.translate('torrent_serial_episode') + ' ' + 
-                          Lampa.Lang.translate('season_from') + ' ' + count_eps_last_seas + ' - S' + last_seria_inseason;
-            } else {
-                new_ser = last_seria_inseason + ' ' + Lampa.Lang.translate('season_ended');
-            }
-
-            // Проверяем активную карточку
-            var activityRender = Lampa.Activity.active().activity.render();
-            if (activityRender && $('.card--new_seria', activityRender).length === 0) {
-                var isMobile = window.innerWidth <= 585;
-
-                if (!isMobile) {
-                    var poster = $('.full-start__poster, .full-start-new__poster', activityRender);
-                    if (poster.length) {
-                        poster.append(
-                            "<div class='card--new_seria' style='right: -0.6em!important;position: absolute;background: #168FDF;color: #fff;bottom:.6em!important;padding: 0.4em 0.4em;font-size: 1.2em;-webkit-border-radius: 0.3em;-moz-border-radius: 0.3em;border-radius: 0.3em;z-index:10;'>" + 
-                            Lampa.Lang.translate(new_ser) + 
-                            "</div>"
-                        );
-                    }
-                } else {
-                    var tags = $('.full-start__tags', activityRender);
-                    var details = $('.full-start-new__details', activityRender);
-                    
-                    if (tags.length && $('.card--new_seria', tags).length === 0) {
-                        tags.append(
-                            '<div class="full-start__tag card--new_seria">' +
-                            '<img src="./img/icons/menu/movie.svg" style="width: 1em; height: 1em; margin-right: 0.3em;" />' +
-                            '<div style="font-size: 0.9em;">' + Lampa.Lang.translate(new_ser) + '</div>' +
-                            '</div>'
-                        );
-                    } else if (details.length) {
-                        details.append(
-                            '<span class="full-start-new__split">●</span>' +
-                            '<div class="card--new_seria" style="display: inline-block; background: #168FDF; color: #fff; padding: 0.2em 0.5em; border-radius: 0.3em; font-size: 0.8em;">' +
-                            '<div>' + Lampa.Lang.translate(new_ser) + '</div>' +
-                            '</div>'
-                        );
-                    }
-                }
-
-                lastView(card);
-            }
-            
-            return true;
-        } catch (e) {
-            console.error('[SerialInfo] serialInfo error:', e);
-            return false;
-        }
-    }
-
-    // =============================================
-    // Обработка ВСЕХ карточек в подборках
-    // =============================================
-    
-    function processAllCards() {
-        try {
-            var settings = getSettings();
-            if (!settings.enabled) return;
-
-            // Обрабатываем ВСЕ карточки на странице
-            $('.card:not(.serial-info-checked)').each(function() {
-                var card = $(this);
-                
-                // Пропускаем баннеры и служебные карточки
-                if (card.hasClass('hero-banner')) return;
-                if (card.hasClass('card--category')) return;
-                if (card.hasClass('card-more')) return;
-                
-                var cardData = card.data('item') || 
-                              (card[0] && (card[0].card_data || card[0].item)) || 
-                              null;
-                
-                if (!cardData) return;
-                
-                // Проверяем, является ли карточка сериалом
-                if (!isSerialCard(cardData)) return;
-                
-                // Проверяем наличие данных для отображения
-                if (!isValidForSerialInfo(cardData)) {
-                    // Для карточек без полных данных показываем базовую информацию
-                    if (cardData.number_of_seasons) {
-                        var view = card.find('.card__view');
-                        if (view.length) {
-                            var info = cardData.number_of_seasons + ' сез';
-                            if (cardData.number_of_episodes) {
-                                info += ', ' + cardData.number_of_episodes + ' эп.';
-                            }
-                            view.append(
-                                '<div class="card--new_seria" style="position:absolute;bottom:0.3em;left:50%;transform:translateX(-50%);' +
-                                'background:rgba(0,0,0,0.7);color:#fff;padding:0.15em 0.5em;font-size:0.6em;border-radius:0.3em;z-index:10;white-space:nowrap;">' +
-                                info +
-                                '</div>'
-                            );
-                        }
-                    }
-                    card.addClass('serial-info-checked');
-                    return;
-                }
-                
-                // Получаем данные о сериале и отображаем информацию
-                getTvInfo(cardData, function(tvInfo) {
-                    if (tvInfo) {
-                        injectSerialInfoToCard(card, cardData, tvInfo);
-                    } else if (cardData.number_of_seasons) {
-                        // Если TMDB не ответил, показываем базовую информацию
-                        var view = card.find('.card__view');
-                        if (view.length) {
-                            var info = cardData.number_of_seasons + ' сез';
-                            if (cardData.number_of_episodes) {
-                                info += ', ' + cardData.number_of_episodes + ' эп.';
-                            }
-                            view.append(
-                                '<div class="card--new_seria" style="position:absolute;bottom:0.3em;left:50%;transform:translateX(-50%);' +
-                                'background:rgba(0,0,0,0.7);color:#fff;padding:0.15em 0.5em;font-size:0.6em;border-radius:0.3em;z-index:10;white-space:nowrap;">' +
-                                info +
-                                '</div>'
-                            );
-                        }
-                    }
-                });
-                
-                card.addClass('serial-info-checked');
-            });
-        } catch (e) {
-            console.error('[SerialInfo] processAllCards error:', e);
-        }
-    }
-
     // =============================================
     // Получение данных из TMDB с кешем
     // =============================================
     
-    var tvCache = {};
-
     function getTvInfo(card, callback) {
         if (!card || !card.id) {
             callback(null);
@@ -338,7 +95,7 @@
         var id = card.id;
         
         // Проверяем кеш
-        if (tvCache[id] && (Date.now() - tvCache[id].timestamp < 3600000)) {
+        if (tvCache[id] && (Date.now() - tvCache[id].timestamp < CACHE_TIME)) {
             callback(tvCache[id].data);
             return;
         }
@@ -364,37 +121,156 @@
     }
 
     // =============================================
-    // Инъекция информации в карточку
+    // Получение последнего просмотра (только для просмотренных)
     // =============================================
     
-    function injectSerialInfoToCard(cardElement, cardData, tvInfo) {
+    function getLastView(card) {
+        try {
+            var file_id = Lampa.Utils.hash(
+                card.original_title || 
+                card.original_name || 
+                card.title || 
+                card.name || 
+                ''
+            );
+            var watched = Lampa.Storage.cache('online_watched_last', 5000, {});
+            var data = watched[file_id];
+
+            if (data && data.season && data.episode) {
+                return {
+                    season: data.season,
+                    episode: data.episode,
+                    balanser_name: data.balanser_name || ''
+                };
+            }
+        } catch (e) {}
+        return null;
+    }
+
+    // =============================================
+    // Формирование текста для бейджа (как в MODS's)
+    // =============================================
+    
+    function getSerialInfoText(card, tvInfo) {
+        try {
+            if (!tvInfo) return null;
+
+            var last_seria_inseason = 1;
+            var count_eps_last_seas = 0;
+            var new_ser = '';
+
+            // Получаем данные о последнем сезоне
+            if (tvInfo.last_episode_to_air) {
+                last_seria_inseason = tvInfo.last_episode_to_air.season_number || 1;
+            } else if (tvInfo.number_of_seasons) {
+                last_seria_inseason = tvInfo.number_of_seasons;
+            }
+
+            // Находим количество серий в последнем сезоне
+            if (tvInfo.seasons && tvInfo.seasons.length) {
+                var seasonData = tvInfo.seasons.find(function (eps) {
+                    return eps.season_number == last_seria_inseason;
+                });
+                if (seasonData) {
+                    count_eps_last_seas = seasonData.episode_count || 0;
+                }
+            }
+
+            // Если нет данных о сезонах, используем number_of_episodes
+            if (!count_eps_last_seas && tvInfo.number_of_episodes) {
+                count_eps_last_seas = tvInfo.number_of_episodes;
+            }
+
+            var next_episode = tvInfo.next_episode_to_air;
+            var last_seria = next_episode && new Date(next_episode.air_date) <= Date.now() 
+                ? next_episode.episode_number 
+                : (tvInfo.last_episode_to_air ? tvInfo.last_episode_to_air.episode_number : 0);
+
+            // Формируем текст
+            if (next_episode) {
+                var add_ = '<b>' + (last_seria || '');
+                var notices = Lampa.Storage.get('account_notice', []).filter(function (n) {
+                    return n.card_id == card.id;
+                });
+                
+                if (notices.length) {
+                    var notice = notices.find(function (itm) {
+                        return itm.episode == last_seria;
+                    });
+                    
+                    if (notice) {
+                        try {
+                            var episod_new = JSON.parse(notice.data).card.seasons;
+                            if (Lampa.Utils.parseTime(notice.date).full == Lampa.Utils.parseTime(Date.now()).full) {
+                                add_ = Lampa.Lang.translate('season_new') + ' <b>' + (episod_new[last_seria_inseason] || last_seria);
+                            }
+                        } catch (e) {}
+                    }
+                }
+                new_ser = add_ + '</b> ' + Lampa.Lang.translate('torrent_serial_episode') + ' ' + 
+                          Lampa.Lang.translate('season_from') + ' ' + count_eps_last_seas + ' - S' + last_seria_inseason;
+            } else if (tvInfo.status && tvInfo.status === 'ended') {
+                new_ser = last_seria_inseason + ' ' + Lampa.Lang.translate('season_ended');
+            } else if (tvInfo.number_of_seasons) {
+                var word = getNumWord(tvInfo.number_of_seasons, ['', 'а', 'ов']);
+                new_ser = tvInfo.number_of_seasons + ' сез' + word;
+                if (tvInfo.number_of_episodes) {
+                    var epWord = getNumWord(tvInfo.number_of_episodes, ['', 'а', 'ов']);
+                    new_ser += ', ' + tvInfo.number_of_episodes + ' эпизод' + epWord;
+                }
+            }
+
+            return new_ser;
+        } catch (e) {
+            console.error('[SerialInfo] getSerialInfoText error:', e);
+            return null;
+        }
+    }
+
+    function getNumWord(value, words) {
+        value = Math.abs(value) % 100;
+        var num = value % 10;
+        if (value > 10 && value < 20) return words[2];
+        if (num > 1 && num < 5) return words[1];
+        if (num == 1) return words[0];
+        return words[2];
+    }
+
+    // =============================================
+    // Отображение информации на карточке (ДЛЯ ВСЕХ СЕРИАЛОВ)
+    // =============================================
+    
+    function injectSerialInfo(cardElement, cardData, tvInfo) {
         try {
             if (!tvInfo) return;
             
             var view = cardElement.find('.card__view');
             if (!view.length) return;
 
-            var seasonCount = tvInfo.number_of_seasons || 0;
-            var episodeCount = tvInfo.number_of_episodes || 0;
+            var settings = getSettings();
+            var text = getSerialInfoText(cardData, tvInfo);
             
-            if (seasonCount === 0 && episodeCount === 0) return;
+            if (!text) return;
 
-            var info = seasonCount + ' сез';
-            if (episodeCount) {
-                info += ', ' + episodeCount + ' эп.';
-            }
+            // Удаляем старые бейджи
+            cardElement.find('.card--new_seria').remove();
 
-            // Добавляем информацию на карточку
+            // Добавляем бейдж с информацией о сериале
             view.append(
                 '<div class="card--new_seria" style="position:absolute;bottom:0.3em;left:50%;transform:translateX(-50%);' +
                 'background:rgba(0,0,0,0.7);color:#fff;padding:0.15em 0.5em;font-size:0.6em;border-radius:0.3em;z-index:10;white-space:nowrap;">' +
-                info +
+                text +
                 '</div>'
             );
 
-            // Если есть данные о последней серии
+            // =============================================
+            // Дополнительная информация на постере (ДЛЯ ВСЕХ)
+            // =============================================
+            
+            // Номер последней серии на постере (для всех сериалов)
             if (tvInfo.last_episode_to_air) {
                 var lastEp = tvInfo.last_episode_to_air;
+                cardElement.find('.serial-episode-number').remove();
                 view.append(
                     '<div class="serial-episode-number" style="position:absolute;bottom:2.5em;left:0.5em;' +
                     'padding:0.15em 0.4em;font-size:0.6em;font-weight:bold;color:#fff;' +
@@ -404,7 +280,27 @@
                 );
             }
 
-            // Если есть следующая серия
+            // Статус сериала (для всех)
+            if (settings.show_status && tvInfo.status) {
+                var statusMap = {
+                    'returning series': 'Онгоинг',
+                    'ended': 'Завершен',
+                    'canceled': 'Отменен',
+                    'in production': 'В производстве',
+                    'planned': 'Запланирован'
+                };
+                var statusText = statusMap[tvInfo.status] || tvInfo.status;
+                cardElement.find('.serial-status').remove();
+                view.append(
+                    '<div class="serial-status" style="position:absolute;top:0.5em;right:0.5em;' +
+                    'padding:0.15em 0.4em;font-size:0.5em;font-weight:bold;color:#fff;' +
+                    'background:rgba(0,0,0,0.6);border-radius:0.3em;z-index:10;">' +
+                    statusText +
+                    '</div>'
+                );
+            }
+
+            // Новая серия (для всех)
             if (tvInfo.next_episode_to_air) {
                 var nextEp = tvInfo.next_episode_to_air;
                 var now = new Date();
@@ -413,6 +309,7 @@
 
                 if (diffDays >= -7 && diffDays <= 30) {
                     var label = diffDays <= 0 ? 'Новая' : 'Скоро';
+                    cardElement.find('.serial-new-badge').remove();
                     view.append(
                         '<div class="serial-new-badge" style="position:absolute;top:0.5em;left:0.5em;' +
                         'padding:0.15em 0.4em;font-size:0.55em;font-weight:bold;color:#fff;' +
@@ -423,24 +320,185 @@
                 }
             }
 
-            // Статус сериала
-            if (tvInfo.status) {
-                var statusMap = {
-                    'returning series': 'Онгоинг',
-                    'ended': 'Завершен',
-                    'canceled': 'Отменен'
-                };
-                var statusText = statusMap[tvInfo.status] || tvInfo.status;
-                view.append(
-                    '<div class="serial-status" style="position:absolute;top:0.5em;right:0.5em;' +
-                    'padding:0.15em 0.4em;font-size:0.5em;font-weight:bold;color:#fff;' +
-                    'background:rgba(0,0,0,0.6);border-radius:0.3em;z-index:10;">' +
-                    statusText +
-                    '</div>'
-                );
+            // =============================================
+            // Последний просмотр (ТОЛЬКО ДЛЯ ПРОСМОТРЕННЫХ)
+            // =============================================
+            
+            if (settings.show_last_view) {
+                var lastView = getLastView(cardData);
+                if (lastView) {
+                    cardElement.find('.card--last_view').remove();
+                    var viewText = 'S' + lastView.season + ':E' + lastView.episode;
+                    view.append(
+                        "<div class='card--last_view' style='top:0.6em;right: -.5em;position: absolute;background: #168FDF;color: #fff;padding: 0.3em 0.4em;font-size: 0.9em;-webkit-border-radius: 0.3em;-moz-border-radius: 0.3em;border-radius: 0.3em;z-index:10;display:flex;align-items:center;gap:0.3em;'>" +
+                        "<div style='float:left;margin:-3px 0 -3px -3px' class='card__icon icon--history'></div>" + 
+                        viewText + 
+                        "</div>"
+                    );
+                }
             }
+
         } catch (e) {
-            console.error('[SerialInfo] injectSerialInfoToCard error:', e);
+            console.error('[SerialInfo] injectSerialInfo error:', e);
+        }
+    }
+
+    // =============================================
+    // Обработка ВСЕХ карточек
+    // =============================================
+    
+    function processAllCards() {
+        try {
+            var settings = getSettings();
+            if (!settings.enabled) return;
+
+            $('.card:not(.serial-info-checked)').each(function() {
+                var card = $(this);
+                
+                // Пропускаем баннеры и служебные карточки
+                if (card.hasClass('hero-banner')) return;
+                if (card.hasClass('card--category')) return;
+                if (card.hasClass('card-more')) return;
+                if (card.find('.card__view').length === 0) return;
+                
+                var cardData = card.data('item') || 
+                              (card[0] && (card[0].card_data || card[0].item)) || 
+                              null;
+                
+                if (!cardData) return;
+                if (!isSerialCard(cardData)) return;
+                
+                // Проверяем, есть ли уже информация
+                if (card.find('.card--new_seria').length > 0) {
+                    card.addClass('serial-info-checked');
+                    return;
+                }
+
+                card.addClass('serial-info-checked');
+
+                // Получаем данные из TMDB
+                getTvInfo(cardData, function(tvInfo) {
+                    if (tvInfo) {
+                        injectSerialInfo(card, cardData, tvInfo);
+                    } else if (cardData.number_of_seasons) {
+                        // Если TMDB не ответил, показываем базовую информацию
+                        var view = card.find('.card__view');
+                        if (view.length) {
+                            var info = cardData.number_of_seasons + ' сез';
+                            if (cardData.number_of_episodes) {
+                                info += ', ' + cardData.number_of_episodes + ' эп.';
+                            }
+                            view.append(
+                                '<div class="card--new_seria" style="position:absolute;bottom:0.3em;left:50%;transform:translateX(-50%);' +
+                                'background:rgba(0,0,0,0.7);color:#fff;padding:0.15em 0.5em;font-size:0.6em;border-radius:0.3em;z-index:10;white-space:nowrap;">' +
+                                info +
+                                '</div>'
+                            );
+                        }
+                    }
+                });
+            });
+        } catch (e) {
+            console.error('[SerialInfo] processAllCards error:', e);
+        }
+    }
+
+    // =============================================
+    // Обработка активной карточки (полный экран)
+    // =============================================
+    
+    function processCurrentCard() {
+        try {
+            var active = Lampa.Activity.active();
+            if (!active) return;
+            
+            var card = active.card;
+            if (!card) return;
+            
+            if (!isSerialCard(card)) return;
+
+            // Удаляем старые элементы
+            var activityRender = Lampa.Activity.active().activity.render();
+            if (activityRender) {
+                activityRender.find('.card--new_seria, .card--last_view, .timeline, .serial-episode-number, .serial-new-badge, .serial-status').remove();
+            }
+
+            // Получаем данные из TMDB
+            getTvInfo(card, function(tvInfo) {
+                if (tvInfo) {
+                    // Отображаем информацию в активной карточке
+                    var settings = getSettings();
+                    var text = getSerialInfoText(card, tvInfo);
+                    
+                    if (!text) return;
+
+                    var isMobile = window.innerWidth <= 585;
+
+                    if (!isMobile) {
+                        var poster = $('.full-start__poster, .full-start-new__poster', activityRender);
+                        if (poster.length) {
+                            poster.append(
+                                "<div class='card--new_seria' style='right: -0.6em!important;position: absolute;background: #168FDF;color: #fff;bottom:.6em!important;padding: 0.4em 0.4em;font-size: 1.2em;-webkit-border-radius: 0.3em;-moz-border-radius: 0.3em;border-radius: 0.3em;z-index:10;'>" + 
+                                Lampa.Lang.translate(text) + 
+                                "</div>"
+                            );
+                        }
+                    } else {
+                        var tags = $('.full-start__tags', activityRender);
+                        var details = $('.full-start-new__details', activityRender);
+                        
+                        if (tags.length) {
+                            tags.append(
+                                '<div class="full-start__tag card--new_seria">' +
+                                '<img src="./img/icons/menu/movie.svg" style="width: 1em; height: 1em; margin-right: 0.3em;" />' +
+                                '<div style="font-size: 0.9em;">' + Lampa.Lang.translate(text) + '</div>' +
+                                '</div>'
+                            );
+                        } else if (details.length) {
+                            details.append(
+                                '<span class="full-start-new__split">●</span>' +
+                                '<div class="card--new_seria" style="display: inline-block; background: #168FDF; color: #fff; padding: 0.2em 0.5em; border-radius: 0.3em; font-size: 0.8em;">' +
+                                '<div>' + Lampa.Lang.translate(text) + '</div>' +
+                                '</div>'
+                            );
+                        }
+                    }
+
+                    // Показываем последний просмотр только если есть
+                    if (settings.show_last_view) {
+                        var lastView = getLastView(card);
+                        if (lastView) {
+                            var viewText = 'S' + lastView.season + ':E' + lastView.episode;
+                            var poster = $('.full-start__poster, .full-start-new__poster', activityRender);
+                            if (poster.length) {
+                                poster.append(
+                                    "<div class='card--last_view' style='top:0.6em;right: -.5em;position: absolute;background: #168FDF;color: #fff;padding: 0.3em 0.4em;font-size: 0.9em;-webkit-border-radius: 0.3em;-moz-border-radius: 0.3em;border-radius: 0.3em;z-index:10;display:flex;align-items:center;gap:0.3em;'>" +
+                                    "<div style='float:left;margin:-3px 0 -3px -3px' class='card__icon icon--history'></div>" + 
+                                    viewText + 
+                                    "</div>"
+                                );
+                                
+                                // Добавляем таймлайн
+                                var hash = Lampa.Utils.hash([
+                                    lastView.season,
+                                    lastView.season > 10 ? ':' : '',
+                                    lastView.episode,
+                                    card.original_title || card.original_name || ''
+                                ].join(''));
+                                
+                                var tl = Lampa.Timeline.view(hash);
+                                if (tl && tl.percent > 0 && tl.percent < 100) {
+                                    poster.parent().find('.timeline').remove();
+                                    poster.parent().append('<div class="timeline"></div>');
+                                    $('.timeline').append(Lampa.Timeline.render(tl));
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        } catch (e) {
+            console.error('[SerialInfo] processCurrentCard error:', e);
         }
     }
 
@@ -468,8 +526,8 @@
                 .card--last_view {
                     background: #168FDF;
                     color: #fff;
-                    padding: 0.4em 0.4em;
-                    font-size: 1.2em;
+                    padding: 0.3em 0.4em;
+                    font-size: 0.9em;
                     -webkit-border-radius: 0.3em;
                     -moz-border-radius: 0.3em;
                     border-radius: 0.3em;
@@ -482,8 +540,8 @@
 
                 .card--last_view .card__icon.icon--history {
                     display: inline-block;
-                    width: 1.2em;
-                    height: 1.2em;
+                    width: 1em;
+                    height: 1em;
                     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-.5-13v4l-2.5 1.5 1 1.5 3.5-2V7h-2z'/%3E%3C/svg%3E");
                     background-size: contain;
                     background-repeat: no-repeat;
@@ -592,67 +650,6 @@
     }
 
     // =============================================
-    // Настройки
-    // =============================================
-
-    function addSettings() {
-        Lampa.SettingsApi.addComponent({
-            component: 'serial_info',
-            name: 'Информация о сериале',
-            icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M8 4v16"/><path d="M16 4v16"/><path d="M2 10h20"/></svg>'
-        });
-
-        Lampa.SettingsApi.addParam({
-            component: 'serial_info',
-            param: {
-                name: 'serial_info_enabled',
-                type: 'trigger',
-                default: true
-            },
-            field: {
-                name: 'Включить информацию о сериале',
-                description: 'Отображает информацию о количестве серий в карточке, в том числе последнюю серию на постере'
-            },
-            onChange: function(value) {
-                var settings = getSettings();
-                settings.enabled = value === 'true' || value === true;
-                setSettings(settings);
-                
-                if (settings.enabled) {
-                    setTimeout(function() {
-                        processAllCards();
-                        processCurrentCard();
-                    }, 500);
-                } else {
-                    $('.card--new_seria, .card--last_view, .timeline, .serial-episode-number, .serial-new-badge, .serial-status').remove();
-                    $('.full-start__tag.card--new_seria').remove();
-                    $('.serial-info-checked').removeClass('serial-info-checked');
-                }
-            }
-        });
-    }
-
-    // =============================================
-    // Обработка текущей карточки
-    // =============================================
-
-    function processCurrentCard() {
-        try {
-            var active = Lampa.Activity.active();
-            if (!active) return;
-            
-            var card = active.card;
-            if (!card) return;
-            
-            if (isSerialCard(card) && isValidForSerialInfo(card)) {
-                serialInfo(card);
-            }
-        } catch (e) {
-            console.error('[SerialInfo] processCurrentCard error:', e);
-        }
-    }
-
-    // =============================================
     // MutationObserver для отслеживания новых карточек
     // =============================================
 
@@ -684,6 +681,76 @@
             childList: true,
             subtree: true
         });
+    }
+
+    // =============================================
+    // Настройки
+    // =============================================
+
+    function addSettings() {
+        Lampa.SettingsApi.addComponent({
+            component: 'serial_info',
+            name: 'Информация о сериале',
+            icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M8 4v16"/><path d="M16 4v16"/><path d="M2 10h20"/></svg>'
+        });
+
+        Lampa.SettingsApi.addParam({
+            component: 'serial_info',
+            param: {
+                name: 'serial_info_enabled',
+                type: 'trigger',
+                default: true
+            },
+            field: {
+                name: 'Включить информацию о сериале',
+                description: 'Отображает информацию о сезонах и сериях на ВСЕХ карточках сериалов'
+            },
+            onChange: function(value) {
+                var settings = getSettings();
+                settings.enabled = value === 'true' || value === true;
+                setSettings(settings);
+                
+                if (settings.enabled) {
+                    $('.serial-info-checked').removeClass('serial-info-checked');
+                    setTimeout(function() {
+                        processAllCards();
+                        processCurrentCard();
+                    }, 500);
+                } else {
+                    $('.card--new_seria, .card--last_view, .timeline, .serial-episode-number, .serial-new-badge, .serial-status').remove();
+                    $('.full-start__tag.card--new_seria').remove();
+                    $('.serial-info-checked').removeClass('serial-info-checked');
+                }
+            }
+        });
+
+        Lampa.SettingsApi.addParam({
+            component: 'serial_info',
+            param: {
+                name: 'serial_info_last_view',
+                type: 'trigger',
+                default: true
+            },
+            field: {
+                name: 'Показывать последний просмотр',
+                description: 'Отображать на постере последнюю просмотренную серию (только для просмотренных)'
+            },
+            onChange: function(value) {
+                var settings = getSettings();
+                settings.show_last_view = value === 'true' || value === true;
+                setSettings(settings);
+                refreshCards();
+            }
+        });
+    }
+
+    function refreshCards() {
+        $('.serial-info-checked').removeClass('serial-info-checked');
+        $('.card--new_seria, .card--last_view, .timeline, .serial-episode-number, .serial-new-badge, .serial-status').remove();
+        setTimeout(function() {
+            processAllCards();
+            processCurrentCard();
+        }, 300);
     }
 
     // =============================================
@@ -740,7 +807,7 @@
             processAllCards();
         }, 3000);
 
-        console.log('[SerialInfo] Plugin ready - processing all cards');
+        console.log('[SerialInfo] Plugin ready - processing ALL serials');
     }
 
     // =============================================
