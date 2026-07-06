@@ -2,11 +2,12 @@
     'use strict';
 
     // =============================================
-    // Serial Info + Next Episode - Объединенный плагин
-    // Версия: 2.5.0
+    // Serial Info - ТОЧНАЯ КОПИЯ MODS's
+    // Версия: 2.6.0
+    // Полностью копирует логику MODS's
     // =============================================
 
-    const VERSION = '2.5.0';
+    const VERSION = '2.6.0';
 
     // =============================================
     // ПРАВИЛЬНЫЕ РУССКИЕ СКЛОНЕНИЯ
@@ -58,36 +59,7 @@
     }
 
     // =============================================
-    // СТАТУСЫ НА РУССКОМ
-    // =============================================
-    
-    function getStatusText(status) {
-        var statusMap = {
-            'returning series': 'Онгоинг',
-            'returning': 'Онгоинг',
-            'ended': 'Завершён',
-            'canceled': 'Отменён',
-            'in production': 'В производстве',
-            'planned': 'Запланирован',
-            'released': 'Выпущен'
-        };
-        var key = (status || '').toLowerCase();
-        return statusMap[key] || status || '';
-    }
-
-    function getStatusColor(status) {
-        var key = (status || '').toLowerCase();
-        if (key === 'returning series' || key === 'returning') return '#4CAF50';
-        if (key === 'ended') return '#666';
-        if (key === 'canceled') return '#f44336';
-        if (key === 'in production') return '#FF9800';
-        if (key === 'planned') return '#2196F3';
-        if (key === 'released') return '#8BC34A';
-        return '#888';
-    }
-
-    // =============================================
-    // РУССКИЕ ПЕРЕВОДЫ
+    // РУССКИЕ ПЕРЕВОДЫ (как в MODS's)
     // =============================================
     
     function addTranslations() {
@@ -219,7 +191,7 @@
                 };
             }
             
-            // Fallback: проверяем online_watched_last
+            // Fallback
             var title = card.original_title || card.original_name || card.title || card.name || '';
             var file_id = Lampa.Utils.hash(title);
             var watched = Lampa.Storage.cache('online_watched_last', 5000, {});
@@ -250,7 +222,6 @@
             var se = lastViewData.season;
             var last_view = 'S' + se + ':E' + ep;
             
-            // Удаляем старые элементы
             $('.timeline, .card--last_view').remove();
             
             var poster = $('.full-start__poster, .full-start-new__poster');
@@ -274,44 +245,91 @@
     }
 
     // =============================================
-    // ФОРМИРОВАНИЕ ТЕКСТА ДЛЯ БЕЙДЖА
+    // ФОРМИРОВАНИЕ ТЕКСТА - ТОЧНО КАК В MODS's
     // =============================================
     
     function getBadgeText(card, tvInfo) {
         try {
             if (!tvInfo) return null;
 
-            var parts = [];
             var settings = getSettings();
+            
+            // ТОЧНО КАК В MODS's - логика из serialInfo
+            var last_seria_inseason = 1;
+            var count_eps_last_seas = 0;
+            var new_ser = '';
+            
+            // Получаем последний сезон
+            if (tvInfo.last_episode_to_air) {
+                last_seria_inseason = tvInfo.last_episode_to_air.season_number || 1;
+            } else if (tvInfo.number_of_seasons) {
+                last_seria_inseason = tvInfo.number_of_seasons;
+            }
+            
+            // Количество серий в последнем сезоне
+            if (tvInfo.seasons && tvInfo.seasons.length) {
+                var seasonData = tvInfo.seasons.find(function (eps) {
+                    return eps.season_number == last_seria_inseason;
+                });
+                if (seasonData) {
+                    count_eps_last_seas = seasonData.episode_count || 0;
+                }
+            }
+            
+            // Если нет данных о сезонах
+            if (!count_eps_last_seas && tvInfo.number_of_episodes) {
+                count_eps_last_seas = tvInfo.number_of_episodes;
+            }
+            
+            var next_episode = tvInfo.next_episode_to_air;
+            var last_seria = next_episode && new Date(next_episode.air_date) <= Date.now() 
+                ? next_episode.episode_number 
+                : (tvInfo.last_episode_to_air ? tvInfo.last_episode_to_air.episode_number : 0);
 
-            // Если сериал завершен - показываем "4 сезон завершён"
-            if (tvInfo.status && tvInfo.status.toLowerCase() === 'ended') {
-                var seasonNum = tvInfo.number_of_seasons || 1;
-                parts.push(seasonNum + ' ' + declension(seasonNum, ['сезон', 'сезона', 'сезонов']) + ' завершён');
+            // ТОЧНАЯ ЛОГИКА MODS's
+            if (next_episode) {
+                // Есть следующая серия - показываем "Новая серия из X - S2"
+                var add_ = '<b>' + (last_seria || '');
+                
+                // Проверяем уведомления (как в MODS's)
+                var notices = Lampa.Storage.get('account_notice', []).filter(function (n) {
+                    return n.card_id == card.id;
+                });
+                
+                if (notices.length) {
+                    var notice = notices.find(function (itm) {
+                        return itm.episode == last_seria;
+                    });
+                    
+                    if (notice) {
+                        try {
+                            var episod_new = JSON.parse(notice.data).card.seasons;
+                            if (Lampa.Utils.parseTime(notice.date).full == Lampa.Utils.parseTime(Date.now()).full) {
+                                add_ = Lampa.Lang.translate('season_new') + ' <b>' + (episod_new[last_seria_inseason] || last_seria);
+                            }
+                        } catch (e) {}
+                    }
+                }
+                
+                new_ser = add_ + '</b> ' + Lampa.Lang.translate('torrent_serial_episode') + ' ' + 
+                          Lampa.Lang.translate('season_from') + ' ' + count_eps_last_seas + ' - S' + last_seria_inseason;
             } else {
-                // Иначе показываем количество сезонов
-                if (tvInfo.number_of_seasons) {
-                    parts.push(getSeasonsText(tvInfo.number_of_seasons));
-                }
-                // И количество серий
-                if (tvInfo.number_of_episodes) {
-                    parts.push(getEpisodesText(tvInfo.number_of_episodes));
-                }
+                // НЕТ следующей серии - показываем "2 сезон завершён" (как в MODS's)
+                new_ser = last_seria_inseason + ' ' + Lampa.Lang.translate('season_ended');
             }
 
-            // Следующая серия (дата)
-            if (settings.show_next_episode && tvInfo.next_episode_to_air) {
-                var nextEp = tvInfo.next_episode_to_air;
-                var dateText = formatDaysUntil(nextEp.air_date);
+            // Добавляем дату следующей серии если включено
+            if (settings.show_next_episode && next_episode) {
+                var dateText = formatDaysUntil(next_episode.air_date);
                 if (dateText) {
-                    var epText = getSeasonEpisodeText(nextEp.season_number, nextEp.episode_number);
-                    parts.push('📅 ' + epText + ' — ' + dateText);
+                    var epText = getSeasonEpisodeText(next_episode.season_number, next_episode.episode_number);
+                    new_ser += ' • 📅 ' + epText + ' — ' + dateText;
                 }
             }
 
-            if (parts.length === 0) return null;
-            return parts.join(' • ');
+            return new_ser;
         } catch (e) {
+            console.error('[SerialInfo] getBadgeText error:', e);
             return null;
         }
     }
@@ -343,37 +361,18 @@
                 }
             }
 
-            // --- 2. Информация на постере ---
-            if (settings.show_poster) {
-                
-                // Статус сериала (на русском)
-                if (tvInfo.status) {
-                    var statusText = getStatusText(tvInfo.status);
-                    var statusColor = getStatusColor(tvInfo.status);
-                    
-                    cardElement.find('.serial-status').remove();
-                    view.append(
-                        '<div class="serial-status" style="position:absolute;top:0.5em;right:0.5em;' +
-                        'padding:0.12em 0.4em;font-size:0.5em;font-weight:bold;color:#fff;' +
-                        'background:' + statusColor + ';border-radius:0.3em;z-index:10;text-shadow:0 1px 2px rgba(0,0,0,0.5);">' +
-                        statusText +
-                        '</div>'
-                    );
-                }
-
-                // Номер последней серии на постере (с иконкой)
-                if (tvInfo.last_episode_to_air) {
-                    var lastEp = tvInfo.last_episode_to_air;
-                    cardElement.find('.serial-episode-number').remove();
-                    view.append(
-                        '<div class="serial-episode-number" style="position:absolute;bottom:2.5em;left:0.5em;' +
-                        'padding:0.12em 0.4em;font-size:0.5em;font-weight:bold;color:#fff;' +
-                        'background:rgba(22,143,223,0.85);border-radius:0.3em;z-index:10;text-shadow:0 1px 2px rgba(0,0,0,0.5);display:flex;align-items:center;gap:0.3em;">' +
-                        '<svg width="0.8em" height="0.8em" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M21 6h-2v2h-2V6h-2V4h2V2h2v2h2v2zm-10 3c1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3 1.34 3 3 3zm0 4c-2.33 0-7 1.17-7 3.5V17h14v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>' +
-                        getSeasonEpisodeText(lastEp.season_number, lastEp.episode_number) +
-                        '</div>'
-                    );
-                }
+            // --- 2. Информация на постере (только номер последней серии) ---
+            if (settings.show_poster && tvInfo.last_episode_to_air) {
+                var lastEp = tvInfo.last_episode_to_air;
+                cardElement.find('.serial-episode-number').remove();
+                view.append(
+                    '<div class="serial-episode-number" style="position:absolute;bottom:2.5em;left:0.5em;' +
+                    'padding:0.12em 0.4em;font-size:0.5em;font-weight:bold;color:#fff;' +
+                    'background:rgba(22,143,223,0.85);border-radius:0.3em;z-index:10;text-shadow:0 1px 2px rgba(0,0,0,0.5);display:flex;align-items:center;gap:0.3em;">' +
+                    '<svg width="0.8em" height="0.8em" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M21 6h-2v2h-2V6h-2V4h2V2h2v2h2v2zm-10 3c1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3 1.34 3 3 3zm0 4c-2.33 0-7 1.17-7 3.5V17h14v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>' +
+                    getSeasonEpisodeText(lastEp.season_number, lastEp.episode_number) +
+                    '</div>'
+                );
             }
 
             // --- 3. Последний просмотр ---
@@ -462,7 +461,7 @@
             if (!activityRender) return;
 
             // Удаляем старые элементы
-            activityRender.find('.card--info-badge, .card--last_view, .timeline, .serial-episode-number, .serial-status').remove();
+            activityRender.find('.card--info-badge, .card--last_view, .timeline, .serial-episode-number').remove();
 
             getTvInfo(card, function(tvInfo) {
                 if (!tvInfo) return;
@@ -506,40 +505,19 @@
                     }
                 }
 
-                // --- Информация на постере ---
-                if (settings.show_poster) {
-                    
-                    // Статус
-                    if (tvInfo.status) {
-                        var statusText = getStatusText(tvInfo.status);
-                        var statusColor = getStatusColor(tvInfo.status);
-                        
-                        var poster = $('.full-start__poster, .full-start-new__poster', activityRender);
-                        if (poster.length) {
-                            poster.append(
-                                '<div class="serial-status" style="position:absolute;top:0.5em;right:0.5em;' +
-                                'padding:0.15em 0.4em;font-size:0.7em;font-weight:bold;color:#fff;' +
-                                'background:' + statusColor + ';border-radius:0.3em;z-index:10;text-shadow:0 1px 2px rgba(0,0,0,0.5);">' +
-                                statusText +
-                                '</div>'
-                            );
-                        }
-                    }
-
-                    // Номер последней серии (с иконкой)
-                    if (tvInfo.last_episode_to_air) {
-                        var lastEp = tvInfo.last_episode_to_air;
-                        var poster = $('.full-start__poster, .full-start-new__poster', activityRender);
-                        if (poster.length) {
-                            poster.append(
-                                '<div class="serial-episode-number" style="position:absolute;bottom:3.5em;left:0.5em;' +
-                                'padding:0.12em 0.4em;font-size:0.65em;font-weight:bold;color:#fff;' +
-                                'background:rgba(22,143,223,0.85);border-radius:0.3em;z-index:10;text-shadow:0 1px 2px rgba(0,0,0,0.5);display:flex;align-items:center;gap:0.3em;">' +
-                                '<svg width="0.8em" height="0.8em" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M21 6h-2v2h-2V6h-2V4h2V2h2v2h2v2zm-10 3c1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3 1.34 3 3 3zm0 4c-2.33 0-7 1.17-7 3.5V17h14v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>' +
-                                getSeasonEpisodeText(lastEp.season_number, lastEp.episode_number) +
-                                '</div>'
-                            );
-                        }
+                // --- Номер последней серии на постере ---
+                if (settings.show_poster && tvInfo.last_episode_to_air) {
+                    var lastEp = tvInfo.last_episode_to_air;
+                    var poster = $('.full-start__poster, .full-start-new__poster', activityRender);
+                    if (poster.length) {
+                        poster.append(
+                            '<div class="serial-episode-number" style="position:absolute;bottom:3.5em;left:0.5em;' +
+                            'padding:0.12em 0.4em;font-size:0.65em;font-weight:bold;color:#fff;' +
+                            'background:rgba(22,143,223,0.85);border-radius:0.3em;z-index:10;text-shadow:0 1px 2px rgba(0,0,0,0.5);display:flex;align-items:center;gap:0.3em;">' +
+                            '<svg width="0.8em" height="0.8em" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M21 6h-2v2h-2V6h-2V4h2V2h2v2h2v2zm-10 3c1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3 1.34 3 3 3zm0 4c-2.33 0-7 1.17-7 3.5V17h14v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>' +
+                            getSeasonEpisodeText(lastEp.season_number, lastEp.episode_number) +
+                            '</div>'
+                        );
                     }
                 }
 
@@ -636,19 +614,6 @@
                     flex-shrink: 0;
                 }
 
-                .serial-status {
-                    position: absolute;
-                    top: 0.5em;
-                    right: 0.5em;
-                    padding: 0.15em 0.4em;
-                    font-size: 0.7em;
-                    font-weight: bold;
-                    color: #fff;
-                    border-radius: 0.3em;
-                    z-index: 10;
-                    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
-                }
-
                 .full-start__tag.card--info-badge {
                     display: inline-flex;
                     align-items: center;
@@ -693,16 +658,11 @@
                         width: 0.6em;
                         height: 0.6em;
                     }
-                    .serial-status {
-                        font-size: 0.5em;
-                        padding: 0.1em 0.3em;
-                    }
                 }
 
                 .card:not(.card--loaded) .card--info-badge,
                 .card:not(.card--loaded) .card--last_view,
-                .card:not(.card--loaded) .serial-episode-number,
-                .card:not(.card--loaded) .serial-status {
+                .card:not(.card--loaded) .serial-episode-number {
                     display: none;
                 }
             </style>
@@ -800,7 +760,7 @@
                 default: true
             },
             field: {
-                name: 'Информация на постере (статус, номер серии)'
+                name: 'Номер серии на постере'
             },
             onChange: function(value) {
                 var settings = getSettings();
@@ -849,7 +809,7 @@
 
     function refreshCards() {
         $('.serial-info-checked').removeClass('serial-info-checked');
-        $('.card--info-badge, .card--last_view, .timeline, .serial-episode-number, .serial-status').remove();
+        $('.card--info-badge, .card--last_view, .timeline, .serial-episode-number').remove();
         $('.full-start__tag.card--info-badge').remove();
         setTimeout(function() {
             processAllCards();
