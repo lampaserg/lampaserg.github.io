@@ -1,12 +1,13 @@
-/* Series Manager PRO 2.5.0 — Блок справа для темы SERG */
+/* Series Manager PRO 2.6.0 — Отдельный блок справа */
 (function () {
     'use strict';
 
-    var VERSION = '2.5.0';
+    var VERSION = '2.6.0';
     var MEMORY_KEY = 'series_manager_pro_v2';
+    var BLOCK_CLASS = 'series-manager-block';
 
     // =============================================
-    // ПРОВЕРКА ЗАГРУЗКИ LAMPA
+    // ПРОВЕРКА ЗАГРУЗКИ
     // =============================================
 
     if (typeof Lampa === 'undefined') {
@@ -17,7 +18,7 @@
     console.log('[Series Manager PRO] v' + VERSION + ' загружается...');
 
     // =============================================
-    // КЛЮЧИ НАСТРОЕК
+    // НАСТРОЙКИ
     // =============================================
 
     var DEFAULTS = {
@@ -42,8 +43,46 @@
     }
 
     // =============================================
-    // УТИЛИТЫ (из версии 2.0.0)
+    // УТИЛИТЫ
     // =============================================
+
+    function getCurrentCard() {
+        try {
+            var active = Lampa.Activity.active();
+            if (!active) return null;
+            return active.card || (active.object && active.object.card) || null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function getCurrentData() {
+        try {
+            var active = Lampa.Activity.active();
+            if (!active) return null;
+            return active.data || null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function getCurrentRender() {
+        try {
+            var active = Lampa.Activity.active();
+            if (!active) return null;
+            if (active.activity && typeof active.activity.render === 'function') {
+                return active.activity.render();
+            }
+            return null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function isTv(card) {
+        if (!card) return false;
+        return !!(card.name || card.original_name || card.first_air_date || card.number_of_seasons);
+    }
 
     function mediaType(card) {
         if (!card) return 'movie';
@@ -94,26 +133,9 @@
         return 'осталось ' + hours + ' ч' + (rest ? ' ' + rest + ' мин' : '');
     }
 
-    function activeActivity() {
-        try {
-            var active = Lampa.Activity && typeof Lampa.Activity.active === 'function' ? Lampa.Activity.active() : null;
-            return active || null;
-        } catch (error) {
-            return null;
-        }
-    }
-
-    function getCurrentRender() {
-        try {
-            var active = Lampa.Activity.active();
-            if (!active) return null;
-            if (active.activity && typeof active.activity.render === 'function') {
-                return active.activity.render();
-            }
-            return null;
-        } catch (e) {
-            return null;
-        }
+    function numberValue(value, fallback) {
+        var parsed = Number(value);
+        return isFinite(parsed) ? parsed : (fallback !== undefined ? fallback : 0);
     }
 
     function episodeAirTimestamp(episode) {
@@ -129,7 +151,7 @@
     }
 
     // =============================================
-    // ПАМЯТЬ СЕРИЙ (из версии 2.0.0)
+    // ПАМЯТЬ СЕРИЙ
     // =============================================
 
     function getMemoryStore() {
@@ -180,7 +202,7 @@
     }
 
     // =============================================
-    // СБОР ЭПИЗОДОВ (из версии 2.0.0)
+    // СБОР ЭПИЗОДОВ
     // =============================================
 
     function collectEpisodes(value, result, depth) {
@@ -241,13 +263,8 @@
         return road;
     }
 
-    function numberValue(value, fallback) {
-        var parsed = Number(value);
-        return isFinite(parsed) ? parsed : (fallback !== undefined ? fallback : 0);
-    }
-
     // =============================================
-    // АНАЛИЗ ПРОСМОТРА (из версии 2.0.0)
+    // АНАЛИЗ ПРОСМОТРА
     // =============================================
 
     function resolveSeriesPlayback(card, data) {
@@ -307,7 +324,7 @@
     }
 
     // =============================================
-    // ОТКРЫТИЕ БАЛАНСЕРА LAMPAC (из версии 2.0.0)
+    // ОТКРЫТИЕ БАЛАНСЕРА LAMPAC
     // =============================================
 
     function openLampacBalancer(card, season, episode) {
@@ -354,7 +371,7 @@
     }
 
     // =============================================
-    // СОЗДАНИЕ БЛОКА (на основе виджета 2.0.0)
+    // СОЗДАНИЕ БЛОКА (ОТДЕЛЬНЫЙ, СПРАВА)
     // =============================================
 
     function createBlock(state) {
@@ -371,23 +388,28 @@
 
         var statusText = '';
         var statusIcon = '';
+        var statusColor = '#69a7ff';
         if (state.status === 'complete') {
             statusText = 'Просмотрено';
             statusIcon = '✓';
+            statusColor = '#2ecc71';
         } else if (state.status === 'upcoming') {
             statusText = 'Ожидается';
             statusIcon = '⏳';
+            statusColor = '#ffb432';
         } else if (progress > 0 && progress < 100) {
             statusText = 'Продолжить';
             statusIcon = '▶';
+            statusColor = '#69a7ff';
         } else {
             statusText = 'Смотреть';
             statusIcon = '▶';
+            statusColor = '#69a7ff';
         }
 
         // Основной блок
         var block = document.createElement('div');
-        block.className = 'series-block';
+        block.className = BLOCK_CLASS;
         block.setAttribute('data-status', state.status);
         block.style.cssText = [
             'display:flex',
@@ -395,47 +417,47 @@
             'flex-shrink:0',
             'min-width:200px',
             'max-width:320px',
-            'margin-left:1.5em',
-            'padding:1em 1.2em',
+            'padding:0.8em 1.2em',
             'border-radius:0.8em',
-            'background:rgba(0,0,0,0.3)',
+            'background:rgba(0,0,0,0.25)',
             'border:1px solid rgba(255,255,255,0.06)',
-            'backdrop-filter:blur(10px)',
-            '-webkit-backdrop-filter:blur(10px)',
+            'backdrop-filter:blur(8px)',
+            '-webkit-backdrop-filter:blur(8px)',
             'transition:all .3s ease',
             'cursor:pointer',
             'color:#f6f8fc',
-            'font-family:"SegoeUI",system-ui,sans-serif'
+            'font-family:"SegoeUI",system-ui,sans-serif',
+            'font-size:13px',
+            'margin-left:1.5em'
         ].join(';');
 
         // Заголовок
         var header = document.createElement('div');
-        header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:0.2em;';
+        header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:0.15em;';
 
         var label = document.createElement('span');
-        label.style.cssText = 'font-size:0.55em;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.3);font-weight:600;';
+        label.style.cssText = 'font-size:0.5em;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.25);font-weight:600;';
         label.textContent = 'Продолжить';
         header.appendChild(label);
 
         var statusEl = document.createElement('span');
-        statusEl.style.cssText = 'font-size:0.55em;font-weight:700;color:#69a7ff;';
-        if (state.status === 'complete') statusEl.style.color = '#2ecc71';
+        statusEl.style.cssText = 'font-size:0.5em;font-weight:700;color:' + statusColor + ';';
         statusEl.textContent = statusIcon + ' ' + statusText;
         header.appendChild(statusEl);
 
         // Название сериала
         var seriesName = document.createElement('div');
-        seriesName.style.cssText = 'font-size:0.65em;color:rgba(255,255,255,0.3);margin-bottom:0.1em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+        seriesName.style.cssText = 'font-size:0.6em;color:rgba(255,255,255,0.25);margin-bottom:0.05em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
         seriesName.textContent = state.seriesTitle || 'Сериал';
 
         // Название серии
         var titleEl = document.createElement('div');
-        titleEl.style.cssText = 'font-size:0.85em;font-weight:700;color:#fff;margin-bottom:0.15em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+        titleEl.style.cssText = 'font-size:0.8em;font-weight:700;color:#fff;margin-bottom:0.1em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
         titleEl.textContent = title;
 
-        // Мета-информация
+        // Мета
         var meta = document.createElement('div');
-        meta.style.cssText = 'display:flex;align-items:center;gap:0.6em;flex-wrap:wrap;font-size:0.65em;color:rgba(255,255,255,0.4);';
+        meta.style.cssText = 'display:flex;align-items:center;gap:0.5em;flex-wrap:wrap;font-size:0.6em;color:rgba(255,255,255,0.35);';
 
         if (coords) {
             var seasonText = document.createElement('span');
@@ -457,7 +479,7 @@
 
         // Прогресс-бар
         var progressWrap = document.createElement('div');
-        progressWrap.style.cssText = 'width:100%;height:2px;border-radius:99em;background:rgba(255,255,255,0.05);margin:0.3em 0 0.05em;overflow:hidden;';
+        progressWrap.style.cssText = 'width:100%;height:2px;border-radius:99em;background:rgba(255,255,255,0.05);margin:0.25em 0 0.05em;overflow:hidden;';
         var progressBar = document.createElement('div');
         progressBar.style.cssText = 'height:100%;border-radius:inherit;background:linear-gradient(90deg,#69a7ff,#91beff);transition:width .5s ease;';
         progressBar.style.width = Math.max(0, Math.min(100, progress)) + '%';
@@ -465,7 +487,7 @@
 
         // Подсказка
         var hint = document.createElement('div');
-        hint.style.cssText = 'font-size:0.45em;color:rgba(255,255,255,0.08);text-align:right;margin-top:0.05em;';
+        hint.style.cssText = 'font-size:0.4em;color:rgba(255,255,255,0.06);text-align:right;margin-top:0.05em;';
         hint.textContent = '↗ Открыть в Lampac';
 
         block.appendChild(header);
@@ -477,12 +499,12 @@
 
         // Ховер
         block.addEventListener('mouseenter', function () {
-            this.style.borderColor = 'rgba(105,167,255,0.25)';
-            this.style.background = 'rgba(0,0,0,0.4)';
+            this.style.borderColor = 'rgba(105,167,255,0.2)';
+            this.style.background = 'rgba(0,0,0,0.35)';
         });
         block.addEventListener('mouseleave', function () {
             this.style.borderColor = 'rgba(255,255,255,0.06)';
-            this.style.background = 'rgba(0,0,0,0.3)';
+            this.style.background = 'rgba(0,0,0,0.25)';
         });
 
         // Клик
@@ -503,7 +525,7 @@
     }
 
     // =============================================
-    // УПРАВЛЕНИЕ БЛОКОМ
+    // ВСТАВКА БЛОКА
     // =============================================
 
     var currentBlock = null;
@@ -511,21 +533,19 @@
     var updateTimer = null;
 
     function removeBlock() {
-        if (currentBlock && currentBlock.parentNode) {
-            currentBlock.parentNode.removeChild(currentBlock);
-        }
+        var blocks = document.querySelectorAll('.' + BLOCK_CLASS);
+        blocks.forEach(function (b) {
+            if (b.parentNode) {
+                b.parentNode.removeChild(b);
+            }
+        });
         currentBlock = null;
-        var blocks = document.querySelectorAll('.series-block');
-        if (blocks.length === 0) {
-            var style = document.getElementById('series-block-styles');
-            if (style) style.remove();
-        }
     }
 
     function insertBlock() {
         try {
             // Проверяем, что мы на странице сериала
-            var active = activeActivity();
+            var active = Lampa.Activity.active();
             if (!active || active.component !== 'full') {
                 removeBlock();
                 return;
@@ -537,13 +557,8 @@
                 return;
             }
 
-            var card = active.card || (active.object && active.object.card) || null;
-            if (!card) {
-                removeBlock();
-                return;
-            }
-
-            if (mediaType(card) !== 'tv') {
+            var card = getCurrentCard();
+            if (!card || !isTv(card)) {
                 removeBlock();
                 return;
             }
@@ -553,20 +568,19 @@
                 return;
             }
 
-            // Ищем контейнер .applecation__content-wrapper
-            var contentWrapper = render.find('.applecation__content-wrapper');
-            if (!contentWrapper.length) {
-                // Если нет, ищем .applecation__wrapper или .applecation__left
-                contentWrapper = render.find('.applecation__wrapper');
-                if (!contentWrapper.length) {
-                    contentWrapper = render.find('.applecation__left');
-                }
-                if (!contentWrapper.length) {
-                    return;
-                }
+            // Ищем контейнер .applecation__left или .applecation__wrapper
+            var container = render.find('.applecation__left');
+            if (!container.length) {
+                container = render.find('.applecation__wrapper');
+            }
+            if (!container.length) {
+                container = render.find('.full-start-new__right');
+            }
+            if (!container.length) {
+                return;
             }
 
-            var data = active.data || null;
+            var data = getCurrentData();
             var state = resolveSeriesPlayback(card, data || {});
             if (!state || !state.current) {
                 removeBlock();
@@ -581,38 +595,45 @@
                 state.status
             ].join('|');
 
-            // Если блок уже есть и состояние не изменилось — обновляем прогресс
-            var existingBlock = document.querySelector('.series-block');
-            if (existingBlock && lastState === signature) {
-                var bar = existingBlock.querySelector('.series-block .sw-progress-bar');
-                if (bar && state.current) {
+            // Проверяем существующий блок
+            var existingBlock = container.find('.' + BLOCK_CLASS);
+            if (existingBlock.length && lastState === signature) {
+                // Обновляем прогресс
+                var bar = existingBlock.find('.sw-progress-bar');
+                if (bar.length && state.current) {
                     var progress = Math.round(state.current.timeline.percent || 0);
-                    bar.style.width = Math.max(0, Math.min(100, progress)) + '%';
+                    bar.css('width', Math.max(0, Math.min(100, progress)) + '%');
                     
-                    var statusEl = existingBlock.querySelector('.series-block .sw-status');
-                    if (statusEl) {
+                    var statusEl = existingBlock.find('.sw-status');
+                    if (statusEl.length) {
                         var statusText = '';
                         var statusIcon = '';
+                        var statusColor = '#69a7ff';
                         if (state.status === 'complete') {
                             statusText = 'Просмотрено';
                             statusIcon = '✓';
+                            statusColor = '#2ecc71';
                         } else if (state.status === 'upcoming') {
                             statusText = 'Ожидается';
                             statusIcon = '⏳';
+                            statusColor = '#ffb432';
                         } else if (progress > 0 && progress < 100) {
                             statusText = 'Продолжить';
                             statusIcon = '▶';
+                            statusColor = '#69a7ff';
                         } else {
                             statusText = 'Смотреть';
                             statusIcon = '▶';
+                            statusColor = '#69a7ff';
                         }
-                        statusEl.textContent = statusIcon + ' ' + statusText;
+                        statusEl.text(statusIcon + ' ' + statusText);
+                        statusEl.css('color', statusColor);
                     }
                     
                     var remaining = formatRemainingTime(state.current.timeline);
-                    var remainingEl = existingBlock.querySelector('.series-block .sw-remaining');
-                    if (remainingEl) {
-                        remainingEl.textContent = remaining ? '⏱ ' + remaining : '';
+                    var remainingEl = existingBlock.find('.sw-remaining');
+                    if (remainingEl.length) {
+                        remainingEl.text(remaining ? '⏱ ' + remaining : '');
                     }
                 }
                 return;
@@ -624,63 +645,45 @@
             var block = createBlock(state);
             if (!block) return;
 
-            // Вставляем блок справа от contentWrapper
-            var parent = contentWrapper.parent();
-            
-            // Если родитель уже flex — просто добавляем
-            if (parent.css('display') === 'flex') {
-                contentWrapper.after(block);
-            } else {
-                // Делаем родителя flex-контейнером
-                parent.css('display', 'flex');
-                parent.css('align-items', 'flex-end');
-                parent.css('flex-wrap', 'wrap');
-                parent.css('gap', '0.5em');
-                contentWrapper.after(block);
-            }
+            // Делаем контейнер flex
+            container.css('display', 'flex');
+            container.css('align-items', 'flex-end');
+            container.css('flex-wrap', 'wrap');
+            container.css('gap', '0.5em');
 
+            // Вставляем блок
+            container.append(block);
             currentBlock = block;
 
             console.log('[Series Manager PRO] Блок добавлен справа');
 
         } catch (e) {
-            console.error('[Series Manager PRO] Ошибка вставки блока:', e);
+            console.error('[Series Manager PRO] Ошибка:', e);
         }
     }
 
     // =============================================
-    // ОБРАБОТЧИКИ СОБЫТИЙ (из версии 2.0.0)
+    // СОБЫТИЯ
     // =============================================
 
     function onFull(event) {
         if (!event) return;
-        
-        if (event.type === 'complite' || event.type === 'start') {
+        if (event.type === 'complite' || event.type === 'start' || event.type === 'build') {
             clearTimeout(updateTimer);
-            updateTimer = setTimeout(function () {
-                insertBlock();
-            }, 400);
+            updateTimer = setTimeout(insertBlock, 500);
         }
     }
 
     function onTimeline() {
-        var active = activeActivity();
-        if (active && active.component === 'full') {
-            clearTimeout(updateTimer);
-            updateTimer = setTimeout(function () {
-                insertBlock();
-            }, 300);
-        }
+        clearTimeout(updateTimer);
+        updateTimer = setTimeout(insertBlock, 300);
     }
 
     function onActivity(event) {
         if (!event || event.type !== 'start') return;
-
+        clearTimeout(updateTimer);
         if (event.component === 'full') {
-            clearTimeout(updateTimer);
-            updateTimer = setTimeout(function () {
-                insertBlock();
-            }, 500);
+            updateTimer = setTimeout(insertBlock, 600);
         } else {
             removeBlock();
             lastState = null;
@@ -704,10 +707,7 @@
             Lampa.Listener.follow('timeline', onTimeline);
             Lampa.Listener.follow('activity', onActivity);
 
-            // Проверяем текущую страницу
-            setTimeout(function () {
-                insertBlock();
-            }, 1000);
+            setTimeout(insertBlock, 1200);
 
         } catch (e) {
             console.error('[Series Manager PRO] Ошибка:', e);
@@ -806,7 +806,7 @@
         getState: function () {
             return {
                 version: VERSION,
-                hasBlock: !!currentBlock,
+                hasBlock: !!document.querySelector('.' + BLOCK_CLASS),
                 settings: getSettings()
             };
         }
