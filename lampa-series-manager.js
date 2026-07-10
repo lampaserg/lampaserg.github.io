@@ -1,9 +1,10 @@
-/* Series Manager PRO 2.1.0 — С балансером Lampac */
+/* Series Manager PRO 2.2.0 — Исправленная версия */
 (function () {
     'use strict';
 
-    var VERSION = '2.1.0';
+    var VERSION = '2.2.0';
     var MEMORY_KEY = 'series_manager_pro_v2';
+    var WIDGET_ID = 'series-manager-pro-widget';
 
     // =============================================
     // ПРОВЕРКА ЗАГРУЗКИ LAMPA
@@ -42,17 +43,47 @@
     }
 
     // =============================================
-    // УТИЛИТЫ
+    // ОПРЕДЕЛЕНИЕ ТЕКУЩЕЙ СТРАНИЦЫ
     // =============================================
 
-    function storageGet(name, fallback) {
+    function isSeriesPage() {
         try {
-            if (Lampa.Storage && typeof Lampa.Storage.get === 'function') {
-                return Lampa.Storage.get(name, fallback);
-            }
-        } catch (e) {}
-        return fallback;
+            var active = Lampa.Activity && typeof Lampa.Activity.active === 'function' ? Lampa.Activity.active() : null;
+            if (!active) return false;
+            if (active.component !== 'full') return false;
+            
+            var card = active.card || (active.object && active.object.card) || null;
+            if (!card) return false;
+            
+            return !!(card.name || card.original_name || card.first_air_date || card.number_of_seasons);
+        } catch (e) {
+            return false;
+        }
     }
+
+    function getCurrentCard() {
+        try {
+            var active = Lampa.Activity && typeof Lampa.Activity.active === 'function' ? Lampa.Activity.active() : null;
+            if (!active) return null;
+            return active.card || (active.object && active.object.card) || null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function getCurrentData() {
+        try {
+            var active = Lampa.Activity && typeof Lampa.Activity.active === 'function' ? Lampa.Activity.active() : null;
+            if (!active) return null;
+            return active.data || null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    // =============================================
+    // УТИЛИТЫ
+    // =============================================
 
     function numberValue(value, fallback) {
         var parsed = Number(value);
@@ -106,15 +137,6 @@
         var hours = Math.floor(minutes / 60);
         var rest = minutes % 60;
         return 'осталось ' + hours + ' ч' + (rest ? ' ' + rest + ' мин' : '');
-    }
-
-    function activeActivity() {
-        try {
-            var active = Lampa.Activity && typeof Lampa.Activity.active === 'function' ? Lampa.Activity.active() : null;
-            return active || null;
-        } catch (error) {
-            return null;
-        }
     }
 
     function episodeAirTimestamp(episode) {
@@ -313,41 +335,22 @@
             var settings = getSettings();
             if (!settings.auto_open_balancer) return false;
 
-            // Проверяем, загружен ли плагин Lampac
-            if (typeof Lampa.Component === 'undefined' || typeof Lampa.Component.get === 'undefined') {
-                console.warn('[Series Manager PRO] Lampa.Component не найден');
-                return false;
-            }
-
-            // Получаем компонент Lampac
             var LampacComponent = Lampa.Component.get('lampac');
             if (!LampacComponent) {
                 console.warn('[Series Manager PRO] Компонент Lampac не найден');
                 return false;
             }
 
-            // Формируем данные для открытия
             var movie = Lampa.Arrays.clone(card);
-            
-            // Добавляем информацию о сезоне и серии
             if (season !== undefined && episode !== undefined) {
                 movie.season = season;
                 movie.episode = episode;
             }
 
-            // Получаем сохранённый поисковый запрос
             var id = Lampa.Utils.hash(card.number_of_seasons ? card.original_name : card.original_title);
             var all = Lampa.Storage.get('clarification_search', '{}');
             var searchQuery = all[id] || card.title || card.name || '';
 
-            console.log('[Series Manager PRO] Открываем Lampac:', {
-                movie: movie,
-                search: searchQuery,
-                season: season,
-                episode: episode
-            });
-
-            // Открываем через Activity
             Lampa.Activity.push({
                 url: '',
                 title: 'Lampac - ' + (card.title || card.name || ''),
@@ -369,7 +372,7 @@
     }
 
     // =============================================
-    // ИНФОРМАТИВНЫЙ ВИДЖЕТ
+    // ВИДЖЕТ (увеличенный, с уменьшенным шрифтом)
     // =============================================
 
     function createWidget(state) {
@@ -400,10 +403,16 @@
             statusIcon = '▶';
         }
 
+        // Удаляем старый виджет, если есть
+        var oldWidget = document.getElementById(WIDGET_ID);
+        if (oldWidget) oldWidget.remove();
+
         var widget = document.createElement('div');
+        widget.id = WIDGET_ID;
         widget.className = 'series-widget';
         widget.setAttribute('data-status', state.status);
 
+        // Стили виджета (увеличенная ширина, уменьшенный шрифт)
         var style = document.createElement('style');
         style.id = 'series-widget-styles';
         style.textContent = `
@@ -412,14 +421,14 @@
                 bottom: 2.5em !important;
                 right: 2.5em !important;
                 z-index: 9999 !important;
-                max-width: 380px !important;
-                min-width: 220px !important;
-                padding: 0.8em 1.2em !important;
-                border-radius: 1em !important;
+                max-width: 420px !important;
+                min-width: 280px !important;
+                padding: 0.7em 1em !important;
+                border-radius: 0.85em !important;
                 background: rgba(7, 10, 16, 0.94) !important;
                 backdrop-filter: blur(24px) !important;
                 -webkit-backdrop-filter: blur(24px) !important;
-                border: 0.075em solid rgba(255, 255, 255, 0.1) !important;
+                border: 0.075em solid rgba(255, 255, 255, 0.08) !important;
                 box-shadow: 0 1.2em 4em rgba(0, 0, 0, 0.8) !important;
                 color: #f6f8fc !important;
                 font-family: "SegoeUI", system-ui, -apple-system, sans-serif !important;
@@ -427,71 +436,72 @@
                 cursor: pointer !important;
                 user-select: none !important;
                 animation: series-widget-in 0.4s cubic-bezier(0.22, 0.72, 0.2, 1) !important;
-                line-height: 1.5 !important;
+                line-height: 1.4 !important;
                 pointer-events: auto !important;
+                font-size: 12px !important;
             }
             .series-widget:hover {
-                transform: scale(1.03) !important;
-                border-color: rgba(105, 167, 255, 0.5) !important;
+                transform: scale(1.02) !important;
+                border-color: rgba(105, 167, 255, 0.4) !important;
                 box-shadow: 0 1.5em 5em rgba(0, 0, 0, 0.9) !important;
             }
             .series-widget .sw-header {
                 display: flex !important;
                 align-items: center !important;
                 justify-content: space-between !important;
-                margin-bottom: 0.2em !important;
+                margin-bottom: 0.15em !important;
             }
             .series-widget .sw-title {
-                font-size: 1.1em !important;
+                font-size: 0.95em !important;
                 font-weight: 700 !important;
                 color: #fff !important;
                 line-height: 1.3 !important;
-                margin-bottom: 0.15em !important;
+                margin-bottom: 0.1em !important;
                 overflow: hidden !important;
                 text-overflow: ellipsis !important;
                 white-space: nowrap !important;
             }
             .series-widget .sw-series-name {
-                font-size: 0.8em !important;
-                color: rgba(255, 255, 255, 0.4) !important;
-                margin-bottom: 0.15em !important;
+                font-size: 0.7em !important;
+                color: rgba(255, 255, 255, 0.35) !important;
+                margin-bottom: 0.1em !important;
                 overflow: hidden !important;
                 text-overflow: ellipsis !important;
                 white-space: nowrap !important;
             }
             .series-widget .sw-status {
-                font-size: 0.65em !important;
-                padding: 0.15em 0.6em !important;
+                font-size: 0.6em !important;
+                padding: 0.12em 0.5em !important;
                 border-radius: 99em !important;
-                background: rgba(105, 167, 255, 0.15) !important;
+                background: rgba(105, 167, 255, 0.12) !important;
                 color: #69a7ff !important;
                 font-weight: 700 !important;
                 letter-spacing: 0.05em !important;
                 white-space: nowrap !important;
             }
             .series-widget[data-status="complete"] .sw-status {
-                background: rgba(105, 167, 255, 0.1) !important;
-                color: rgba(255, 255, 255, 0.3) !important;
+                background: rgba(105, 167, 255, 0.08) !important;
+                color: rgba(255, 255, 255, 0.25) !important;
             }
             .series-widget[data-status="upcoming"] .sw-status {
-                background: rgba(255, 180, 50, 0.15) !important;
+                background: rgba(255, 180, 50, 0.12) !important;
                 color: #ffb432 !important;
             }
             .series-widget .sw-meta {
-                font-size: 0.8em !important;
-                color: rgba(255, 255, 255, 0.5) !important;
+                font-size: 0.7em !important;
+                color: rgba(255, 255, 255, 0.45) !important;
                 display: flex !important;
                 align-items: center !important;
-                gap: 0.6em !important;
+                gap: 0.5em !important;
                 flex-wrap: wrap !important;
-                margin-bottom: 0.2em !important;
+                margin-bottom: 0.1em !important;
             }
             .series-widget .sw-progress-wrap {
                 width: 100% !important;
-                height: 0.25em !important;
+                height: 0.2em !important;
                 border-radius: 99em !important;
-                background: rgba(255, 255, 255, 0.08) !important;
-                margin: 0.4em 0 0.2em !important;
+                background: rgba(255, 255, 255, 0.06) !important;
+                margin: 0.35em 0 0.15em !important;
                 overflow: hidden !important;
             }
             .series-widget .sw-progress-bar {
@@ -501,39 +511,38 @@
                 transition: width 0.5s ease !important;
             }
             .series-widget .sw-remaining {
-                font-size: 0.75em !important;
-                color: rgba(255, 255, 255, 0.3) !important;
+                font-size: 0.65em !important;
+                color: rgba(255, 255, 255, 0.25) !important;
                 margin-left: auto !important;
                 white-space: nowrap !important;
             }
             .series-widget .sw-next {
-                font-size: 0.75em !important;
-                color: rgba(255, 255, 255, 0.25) !important;
-                margin-top: 0.25em !important;
-                border-top: 0.05em solid rgba(255, 255, 255, 0.05) !important;
-                padding-top: 0.25em !important;
+                font-size: 0.65em !important;
+                color: rgba(255, 255, 255, 0.2) !important;
+                margin-top: 0.2em !important;
+                border-top: 0.05em solid rgba(255, 255, 255, 0.04) !important;
+                padding-top: 0.2em !important;
                 overflow: hidden !important;
                 text-overflow: ellipsis !important;
                 white-space: nowrap !important;
             }
             .series-widget .sw-next strong {
-                color: rgba(255, 255, 255, 0.5) !important;
+                color: rgba(255, 255, 255, 0.4) !important;
                 font-weight: 600 !important;
             }
             .series-widget .sw-total {
-                font-size: 0.7em !important;
-                color: rgba(255, 255, 255, 0.2) !important;
-                margin-top: 0.15em !important;
-                border-top: 0.05em solid rgba(255, 255, 255, 0.03) !important;
-                padding-top: 0.2em !important;
+                font-size: 0.6em !important;
+                color: rgba(255, 255, 255, 0.15) !important;
+                margin-top: 0.1em !important;
+                padding-top: 0.15em !important;
                 display: flex !important;
                 justify-content: space-between !important;
             }
             .series-widget .sw-click-hint {
-                font-size: 0.55em !important;
-                color: rgba(255, 255, 255, 0.12) !important;
+                font-size: 0.5em !important;
+                color: rgba(255, 255, 255, 0.1) !important;
                 text-align: right !important;
-                margin-top: 0.1em !important;
+                margin-top: 0.05em !important;
                 letter-spacing: 0.05em !important;
             }
             @keyframes series-widget-in {
@@ -541,12 +550,12 @@
                 100% { opacity: 1; transform: translateY(0) scale(1); }
             }
             .series-widget.sw-hidden {
-                opacity: 0.3 !important;
+                opacity: 0.25 !important;
                 transform: scale(0.98) !important;
             }
             .series-widget.sw-hidden:hover {
                 opacity: 1 !important;
-                transform: scale(1.03) !important;
+                transform: scale(1.02) !important;
             }
             @media (max-width: 720px) {
                 .series-widget {
@@ -555,20 +564,21 @@
                     left: 1.2em !important;
                     max-width: none !important;
                     min-width: auto !important;
-                    padding: 0.6em 1em !important;
-                    border-radius: 0.85em !important;
+                    padding: 0.5em 0.8em !important;
+                    border-radius: 0.7em !important;
+                    font-size: 11px !important;
                 }
                 .series-widget .sw-title {
-                    font-size: 0.95em !important;
+                    font-size: 0.85em !important;
                 }
                 .series-widget .sw-meta {
-                    font-size: 0.7em !important;
-                }
-                .series-widget .sw-next {
                     font-size: 0.65em !important;
                 }
-                .series-widget .sw-total {
+                .series-widget .sw-next {
                     font-size: 0.6em !important;
+                }
+                .series-widget .sw-total {
+                    font-size: 0.55em !important;
                 }
             }
         `;
@@ -634,13 +644,13 @@
         totalEl.className = 'sw-total';
         var totalInfo = [];
         if (state.totalSeasons > 0) {
-            totalInfo.push(state.totalSeasons + ' сезонов');
+            totalInfo.push(state.totalSeasons + ' сез.');
         }
         if (state.totalEpisodes > 0) {
             totalInfo.push(state.totalEpisodes + ' серий');
         }
         if (state.episodes && state.episodes.length > 0) {
-            totalInfo.push('Доступно: ' + state.available.length + ' серий');
+            totalInfo.push('Доступно: ' + state.available.length);
         }
         totalEl.textContent = totalInfo.join(' · ') || '';
 
@@ -671,7 +681,7 @@
             openLampacBalancer(card, season, episode);
         });
 
-        // Авто-скрытие
+        // Авто-скрытие при нулевом прогрессе
         if (progress === 0 && !remaining) {
             var hideTimeout = null;
             var isHidden = false;
@@ -691,7 +701,7 @@
                 clearTimeout(hideTimeout);
             }
 
-            hideTimeout = setTimeout(hideWidget, 5000);
+            hideTimeout = setTimeout(hideWidget, 6000);
 
             widget.addEventListener('mouseenter', function () {
                 showWidget();
@@ -720,10 +730,12 @@
     var currentWidget = null;
     var lastState = null;
     var updateTimer = null;
+    var isOnSeriesPage = false;
 
     function removeWidget() {
-        if (currentWidget && currentWidget.parentNode) {
-            currentWidget.parentNode.removeChild(currentWidget);
+        var widget = document.getElementById(WIDGET_ID);
+        if (widget && widget.parentNode) {
+            widget.parentNode.removeChild(widget);
         }
         currentWidget = null;
         var widgets = document.querySelectorAll('.series-widget');
@@ -734,16 +746,36 @@
     }
 
     function updateWidget(card, data) {
-        removeWidget();
+        // Проверяем, что мы на странице сериала
+        if (!isSeriesPage()) {
+            removeWidget();
+            isOnSeriesPage = false;
+            return;
+        }
+
+        isOnSeriesPage = true;
 
         var settings = getSettings();
-        if (!settings.enabled || !settings.show_widget) return;
+        if (!settings.enabled || !settings.show_widget) {
+            removeWidget();
+            return;
+        }
 
-        if (!card) return;
-        if (mediaType(card) !== 'tv') return;
+        if (!card) {
+            removeWidget();
+            return;
+        }
+
+        if (mediaType(card) !== 'tv') {
+            removeWidget();
+            return;
+        }
 
         var state = resolveSeriesPlayback(card, data || {});
-        if (!state || !state.current) return;
+        if (!state || !state.current) {
+            removeWidget();
+            return;
+        }
 
         var signature = [
             contentId(card),
@@ -753,12 +785,15 @@
             state.status
         ].join('|');
 
-        if (lastState === signature && currentWidget && currentWidget.parentNode) {
-            var bar = currentWidget.querySelector('.sw-progress-bar');
+        // Если виджет уже есть и состояние не изменилось — обновляем прогресс
+        var existingWidget = document.getElementById(WIDGET_ID);
+        if (existingWidget && lastState === signature) {
+            var bar = existingWidget.querySelector('.sw-progress-bar');
             if (bar && state.current) {
                 var progress = Math.round(state.current.timeline.percent || 0);
                 bar.style.width = Math.max(0, Math.min(100, progress)) + '%';
-                var statusEl = currentWidget.querySelector('.sw-status');
+                
+                var statusEl = existingWidget.querySelector('.sw-status');
                 if (statusEl) {
                     var statusText = '';
                     var statusIcon = '';
@@ -777,8 +812,9 @@
                     }
                     statusEl.textContent = statusIcon + ' ' + statusText;
                 }
+                
                 var remaining = formatRemainingTime(state.current.timeline);
-                var remainingEl = currentWidget.querySelector('.sw-remaining');
+                var remainingEl = existingWidget.querySelector('.sw-remaining');
                 if (remainingEl) {
                     remainingEl.textContent = remaining ? '⏱ ' + remaining : '';
                 }
@@ -787,6 +823,7 @@
         }
 
         lastState = signature;
+        removeWidget();
 
         var widget = createWidget(state);
         if (widget) {
@@ -801,41 +838,56 @@
 
     function onFull(event) {
         if (!event) return;
-        if (event.type !== 'complite' && event.type !== 'start' && event.type !== 'build') return;
+        
+        // При завершении загрузки страницы сериала — показываем виджет
+        if (event.type === 'complite') {
+            var card = null;
+            if (event.data && event.data.movie) {
+                card = event.data.movie;
+            } else if (event.object && (event.object.card || event.object)) {
+                card = event.object.card || event.object;
+            }
 
-        var card = null;
-        if (event.data && event.data.movie) {
-            card = event.data.movie;
-        } else if (event.object && (event.object.card || event.object)) {
-            card = event.object.card || event.object;
+            if (card) {
+                clearTimeout(updateTimer);
+                updateTimer = setTimeout(function () {
+                    updateWidget(card, event.data || {});
+                }, 300);
+            }
         }
-
-        if (!card) return;
-
-        clearTimeout(updateTimer);
-        updateTimer = setTimeout(function () {
-            updateWidget(card, event.data || {});
-        }, 400);
     }
 
     function onTimeline() {
-        var active = activeActivity();
-        if (!active || active.component !== 'full') return;
-
-        var card = active.card || (active.object && active.object.card) || null;
-        if (!card) return;
-
-        clearTimeout(updateTimer);
-        updateTimer = setTimeout(function () {
-            updateWidget(card, active.data || {});
-        }, 300);
+        // При обновлении таймлайна — обновляем виджет
+        if (isSeriesPage()) {
+            var card = getCurrentCard();
+            var data = getCurrentData();
+            if (card) {
+                clearTimeout(updateTimer);
+                updateTimer = setTimeout(function () {
+                    updateWidget(card, data || {});
+                }, 200);
+            }
+        }
     }
 
     function onActivity(event) {
         if (!event || event.type !== 'start') return;
-        if (event.component !== 'full') {
+
+        // При переходе на страницу сериала — показываем виджет
+        if (event.component === 'full') {
+            setTimeout(function () {
+                var card = getCurrentCard();
+                var data = getCurrentData();
+                if (card && mediaType(card) === 'tv') {
+                    updateWidget(card, data || {});
+                }
+            }, 400);
+        } else {
+            // При переходе на другую страницу — скрываем виджет
             removeWidget();
             lastState = null;
+            isOnSeriesPage = false;
         }
     }
 
@@ -856,15 +908,16 @@
             Lampa.Listener.follow('timeline', onTimeline);
             Lampa.Listener.follow('activity', onActivity);
 
+            // Проверяем текущую страницу
             setTimeout(function () {
-                var active = activeActivity();
-                if (active && active.component === 'full') {
-                    var card = active.card || (active.object && active.object.card) || null;
-                    if (card && mediaType(card) === 'tv') {
-                        updateWidget(card, active.data || {});
+                if (isSeriesPage()) {
+                    var card = getCurrentCard();
+                    var data = getCurrentData();
+                    if (card) {
+                        updateWidget(card, data || {});
                     }
                 }
-            }, 1000);
+            }, 800);
 
         } catch (e) {
             console.error('[Series Manager PRO] Ошибка:', e);
@@ -956,10 +1009,12 @@
         update: updateWidget,
         remove: removeWidget,
         openLampac: openLampacBalancer,
+        isSeriesPage: isSeriesPage,
         getState: function () {
             return {
                 version: VERSION,
-                hasWidget: !!currentWidget,
+                hasWidget: !!document.getElementById(WIDGET_ID),
+                isSeriesPage: isSeriesPage(),
                 settings: getSettings()
             };
         }
