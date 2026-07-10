@@ -1,785 +1,342 @@
-/* Lampa Series Manager 1.5.0 — Полноценный плагин */
+/* Series Manager Widget 1.0.0 — Виджет для Lampa Modern UI */
 (function () {
     'use strict';
 
-    var VERSION = '1.5.0';
-    var RUNTIME_KEY = '__LSM_RUNTIME__';
-    var DETAIL_MEMORY_KEY = 'lmui_detail_episode_v1';
+    var VERSION = '1.0.0';
+    var WIDGET_KEY = '__LSM_WIDGET__';
+
+    // Проверяем, есть ли Lampa Modern UI
+    var hasModernUI = !!(window.__LMUI_RUNTIME__ || document.querySelector('.lampa-modern-ui'));
+
+    if (!hasModernUI) {
+        console.warn('[Series Manager Widget] Lampa Modern UI не найден. Плагин не будет работать.');
+        return;
+    }
+
+    console.log('[Series Manager Widget] v' + VERSION + ' загружен');
 
     // =============================================
-    // 1. УНИЧТОЖЕНИЕ СТАРОГО ИНСТАНСА
+    // 1. КЛЮЧ ПАМЯТИ (используем тот же, что в Lampa Modern UI)
     // =============================================
 
-    var previous = window[RUNTIME_KEY];
-    if (previous && typeof previous.destroy === 'function') {
-        try { previous.destroy('replace'); } catch (error) {}
-    }
+    var MEMORY_KEY = 'lmui_detail_episode_v1';
 
-    // =============================================
-    // 2. ЯДРО (все необходимые функции)
-    // =============================================
-
-    var runtime = {
-        version: VERSION,
-        started: false,
-        destroyed: false,
-        timerIds: [],
-        disposers: [],
-        patches: [],
-        destroy: destroyRuntime
-    };
-    window[RUNTIME_KEY] = runtime;
-
-    function setTimeout(callback, delay) {
-        if (runtime.destroyed) return 0;
-        var id = window.setTimeout(function () {
-            var index = runtime.timerIds.indexOf(id);
-            if (index >= 0) runtime.timerIds.splice(index, 1);
-            if (!runtime.destroyed) callback();
-        }, delay || 0);
-        runtime.timerIds.push(id);
-        return id;
-    }
-
-    function clearTimeout(id) {
-        if (!id) return;
-        window.clearTimeout(id);
-        var index = runtime.timerIds.indexOf(id);
-        if (index >= 0) runtime.timerIds.splice(index, 1);
-    }
-
-    function addDisposer(disposer) {
-        if (typeof disposer === 'function') runtime.disposers.push(disposer);
-        return disposer;
-    }
-
-    function followEmitter(emitter, event, handler) {
-        if (!emitter || typeof emitter.follow !== 'function') return false;
-        emitter.follow(event, handler);
-        addDisposer(function () {
-            try {
-                if (typeof emitter.remove === 'function') emitter.remove(event, handler);
-                else if (typeof emitter.unfollow === 'function') emitter.unfollow(event, handler);
-            } catch (error) {}
-        });
-        return true;
-    }
-
-    function installPatch(target, key, wrapped) {
-        if (!target || typeof wrapped !== 'function') return false;
-        var original = target[key];
-        target[key] = wrapped;
-        runtime.patches.push({ target: target, key: key, original: original, wrapped: wrapped });
-        return true;
-    }
-
-    function destroyRuntime(reason) {
-        if (runtime.destroyed) return;
-        runtime.destroyed = true;
-        runtime.started = false;
-
-        while (runtime.timerIds.length) {
-            window.clearTimeout(runtime.timerIds.pop());
-        }
-
-        while (runtime.disposers.length) {
-            try { runtime.disposers.pop()(); } catch (error) {}
-        }
-
-        while (runtime.patches.length) {
-            var patch = runtime.patches.pop();
-            try {
-                if (patch.target && patch.target[patch.key] === patch.wrapped) {
-                    patch.target[patch.key] = patch.original;
-                }
-            } catch (error) {}
-        }
-
-        removeOldWidgets();
-        currentWidget = null;
-
-        if (window[RUNTIME_KEY] === runtime) delete window[RUNTIME_KEY];
-        if (window.__LSM_API__ === api) delete window.__LSM_API__;
-
-        console.log('[Series Manager] Destroyed:', reason || '');
-    }
-
-    // =============================================
-    // 3. УТИЛИТЫ
-    // =============================================
-
-    function storageGet(name, fallback) {
+    function getMemory() {
         try {
-            if (window.Lampa && Lampa.Storage && typeof Lampa.Storage.get === 'function') {
-                return Lampa.Storage.get(name, fallback);
-            }
-        } catch (error) {}
-        return fallback;
-    }
-
-    function storageSet(name, value) {
-        try {
-            if (window.Lampa && Lampa.Storage && typeof Lampa.Storage.set === 'function') {
-                Lampa.Storage.set(name, value, true);
-                return true;
-            }
-        } catch (error) {}
-        return false;
-    }
-
-    function asArray(value) {
-        return Array.isArray(value) ? value : [];
-    }
-
-    function clone(value) {
-        try { return JSON.parse(JSON.stringify(value)); }
-        catch (error) { return value; }
-    }
-
-    function numberValue(value, fallback) {
-        var parsed = Number(value);
-        return isFinite(parsed) ? parsed : (fallback !== undefined ? fallback : 0);
-    }
-
-    function mediaType(card) {
-        if (!card) return 'movie';
-        var type = String(card.media_type || card.mediaType || card.method || '').toLowerCase();
-        if (type === 'tv' || type === 'series' || type === 'show') return 'tv';
-        if (type === 'movie') return 'movie';
-        return card.name || card.original_name || card.first_air_date || card.number_of_seasons ? 'tv' : 'movie';
-    }
-
-    function contentId(card) {
-        if (!card) return '';
-        var source = String(card.source || 'tmdb');
-        var id = card.id !== undefined && card.id !== null ? String(card.id) : '';
-        if (id) return mediaType(card) + ':' + source + ':' + id;
-        return mediaType(card) + ':title:' + String(card.title || card.name || card.original_title || card.original_name || '').toLowerCase();
-    }
-
-    function episodeCoordinates(episode) {
-        if (!episode || typeof episode !== 'object') return null;
-        var season = episode.season_number !== undefined ? episode.season_number : episode.season;
-        var number = episode.episode_number !== undefined ? episode.episode_number : episode.episode;
-        season = Number(season);
-        number = Number(number);
-        if (!isFinite(season) || !isFinite(number) || season < 0 || number < 1) return null;
-        return { season: season, episode: number };
-    }
-
-    function padEpisodeNumber(value) {
-        var text = String(value);
-        return text.length < 2 ? '0' + text : text;
-    }
-
-    function formatEpisodeTitle(episode) {
-        var coordinates = episodeCoordinates(episode);
-        if (!coordinates) return '';
-        var label = 'S' + padEpisodeNumber(coordinates.season) + ' E' + padEpisodeNumber(coordinates.episode);
-        var name = episode && episode.name ? String(episode.name) : '';
-        return name ? label + ' · ' + name : label;
-    }
-
-    function formatRemainingTime(timeline) {
-        if (!timeline || !timeline.duration || timeline.duration <= timeline.time) return '';
-        var seconds = Math.max(0, timeline.duration - timeline.time);
-        var minutes = Math.max(1, Math.round(seconds / 60));
-        if (minutes < 60) return 'осталось ' + minutes + ' мин';
-        var hours = Math.floor(minutes / 60);
-        var rest = minutes % 60;
-        return 'осталось ' + hours + ' ч' + (rest ? ' ' + rest + ' мин' : '');
-    }
-
-    function activeActivity() {
-        try {
-            var active = Lampa.Activity && typeof Lampa.Activity.active === 'function' ? Lampa.Activity.active() : null;
-            return active || null;
-        } catch (error) {
-            return null;
-        }
-    }
-
-    function activeActivityRoot() {
-        var active = document.querySelector('.activity--active');
-        if (active) return active;
-        var activity = activeActivity();
-        if (activity && activity.activity && activity.activity.render) {
-            try {
-                var rendered = activity.activity.render(true);
-                if (rendered && rendered.nodeType === 1) return rendered;
-            } catch (error) {}
-        }
-        return null;
-    }
-
-    function episodeAirTimestamp(episode) {
-        if (!episode || !episode.air_date) return 0;
-        var parsed = new Date(String(episode.air_date).replace(/-/g, '/')).getTime();
-        return isFinite(parsed) ? parsed : 0;
-    }
-
-    function episodeIsAvailable(episode) {
-        if (!episode || episode.comeing) return false;
-        var timestamp = episodeAirTimestamp(episode);
-        return !timestamp || timestamp <= (Date.now ? Date.now() : new Date().getTime());
-    }
-
-    function collectEpisodes(value, result, depth) {
-        if (depth > 5 || value === null || value === undefined) return;
-        if (Array.isArray(value)) {
-            value.forEach(function (item) { collectEpisodes(item, result, depth + 1); });
-            return;
-        }
-        if (typeof value !== 'object') return;
-        if (episodeCoordinates(value)) {
-            result.push(value);
-            return;
-        }
-        ['episodes_original', 'episodes', 'results', 'items'].forEach(function (key) {
-            if (value[key] !== undefined) collectEpisodes(value[key], result, depth + 1);
-        });
-    }
-
-    function seriesEpisodesFromData(data) {
-        var collected = [];
-        collectEpisodes(data && data.episodes, collected, 0);
-        var unique = {};
-        return collected.filter(function (episode) {
-            var coordinates = episodeCoordinates(episode);
-            if (!coordinates) return false;
-            var key = coordinates.season + ':' + coordinates.episode;
-            if (unique[key]) return false;
-            unique[key] = true;
-            return true;
-        }).sort(function (left, right) {
-            var a = episodeCoordinates(left);
-            var b = episodeCoordinates(right);
-            return a.season === b.season ? a.episode - b.episode : a.season - b.season;
-        });
-    }
-
-    function episodeTimeline(card, episode) {
-        var coordinates = episodeCoordinates(episode);
-        var road = { percent: 0, time: 0, duration: 0 };
-        if (!coordinates) return road;
-        try {
-            if (window.Lampa && Lampa.Timeline && typeof Lampa.Timeline.watchedEpisode === 'function') {
-                var current = Lampa.Timeline.watchedEpisode(card, coordinates.season, coordinates.episode, true);
-                if (current && typeof current === 'object') {
-                    road.percent = numberValue(current.percent, 0);
-                    road.time = numberValue(current.time, 0);
-                    road.duration = numberValue(current.duration, 0);
-                    return road;
-                }
-            }
-        } catch (error) {}
-        var embedded = episode.timeline || episode.view || null;
-        if (embedded && typeof embedded === 'object') {
-            road.percent = numberValue(embedded.percent, 0);
-            road.time = numberValue(embedded.time, 0);
-            road.duration = numberValue(embedded.duration, 0);
-        }
-        return road;
-    }
-
-    // =============================================
-    // 4. ПАМЯТЬ СЕРИЙ
-    // =============================================
-
-    function detailMemoryStore() {
-        try {
-            var raw = window.sessionStorage && window.sessionStorage.getItem(DETAIL_MEMORY_KEY);
-            var parsed = raw ? JSON.parse(raw) : {};
-            return parsed && typeof parsed === 'object' ? parsed : {};
-        } catch (error) {
+            var raw = sessionStorage.getItem(MEMORY_KEY);
+            return raw ? JSON.parse(raw) : {};
+        } catch (e) {
             return {};
         }
     }
 
-    function writeDetailMemory(store) {
+    function getSavedEpisode(card) {
         try {
-            if (window.sessionStorage) window.sessionStorage.setItem(DETAIL_MEMORY_KEY, JSON.stringify(store || {}));
-        } catch (error) {}
-    }
-
-    function readEpisodeMemory(card) {
-        var key = contentId(card);
-        if (!key) return null;
-        var value = detailMemoryStore()[key];
-        return value && typeof value === 'object' ? value : null;
-    }
-
-    function rememberEpisodeSelection(card, episode, reason) {
-        var coordinates = episodeCoordinates(episode);
-        var key = contentId(card);
-        if (!key || !coordinates) return false;
-        var store = detailMemoryStore();
-        store[key] = {
-            season: coordinates.season,
-            episode: coordinates.episode,
-            updatedAt: Date.now ? Date.now() : new Date().getTime()
-        };
-        var keys = Object.keys(store);
-        if (keys.length > 80) {
-            keys.sort(function (left, right) {
-                return numberValue(store[left] && store[left].updatedAt, 0) - numberValue(store[right] && store[right].updatedAt, 0);
-            });
-            keys.slice(0, keys.length - 80).forEach(function (oldKey) { delete store[oldKey]; });
+            var key = getContentId(card);
+            if (!key) return null;
+            var mem = getMemory();
+            return mem[key] || null;
+        } catch (e) {
+            return null;
         }
-        writeDetailMemory(store);
-        return true;
     }
 
     // =============================================
-    // 5. АНАЛИЗ ПРОСМОТРА
+    // 2. УТИЛИТЫ
     // =============================================
 
-    function resolveSeriesPlayback(card, data) {
-        if (!card) return { status: 'empty', episodes: [], current: null, next: null, available: [] };
+    function getContentId(card) {
+        if (!card) return '';
+        var source = card.source || 'tmdb';
+        var id = card.id || '';
+        var type = card.name || card.original_name || card.first_air_date ? 'tv' : 'movie';
+        return type + ':' + source + ':' + String(id);
+    }
 
-        var episodes = seriesEpisodesFromData(data || {});
-        var available = episodes.filter(episodeIsAvailable);
-        var entries = available.map(function (episode) {
-            return { episode: episode, timeline: episodeTimeline(card, episode) };
+    function getEpisodeCoords(episode) {
+        if (!episode || typeof episode !== 'object') return null;
+        var season = episode.season_number || episode.season || 0;
+        var number = episode.episode_number || episode.episode || 0;
+        season = Number(season);
+        number = Number(number);
+        if (season < 0 || number < 1) return null;
+        return { season: season, episode: number };
+    }
+
+    function formatEpisode(episode) {
+        var coords = getEpisodeCoords(episode);
+        if (!coords) return '';
+        var s = String(coords.season).padStart(2, '0');
+        var e = String(coords.episode).padStart(2, '0');
+        var name = episode && episode.name ? ' · ' + episode.name : '';
+        return 'S' + s + ' E' + e + name;
+    }
+
+    function getProgress(card, episode) {
+        try {
+            if (!card || !episode) return 0;
+            var coords = getEpisodeCoords(episode);
+            if (!coords) return 0;
+            if (Lampa.Timeline && typeof Lampa.Timeline.watchedEpisode === 'function') {
+                var data = Lampa.Timeline.watchedEpisode(card, coords.season, coords.episode, true);
+                if (data && data.percent) return Math.round(data.percent);
+            }
+        } catch (e) {}
+        return 0;
+    }
+
+    function getRemaining(timeline) {
+        if (!timeline || !timeline.duration) return '';
+        var seconds = Math.max(0, timeline.duration - (timeline.time || 0));
+        var minutes = Math.round(seconds / 60);
+        if (minutes < 1) return '';
+        if (minutes < 60) return minutes + ' мин';
+        var hours = Math.floor(minutes / 60);
+        var rest = minutes % 60;
+        return hours + ' ч' + (rest > 0 ? ' ' + rest + ' мин' : '');
+    }
+
+    function getEpisodes(data) {
+        try {
+            if (data && data.episodes && Array.isArray(data.episodes)) {
+                return data.episodes;
+            }
+            if (data && data.episodes && data.episodes.episodes) {
+                return data.episodes.episodes;
+            }
+        } catch (e) {}
+        return [];
+    }
+
+    function activeActivity() {
+        try {
+            if (Lampa.Activity && typeof Lampa.Activity.active === 'function') {
+                return Lampa.Activity.active();
+            }
+        } catch (e) {}
+        return null;
+    }
+
+    function getTimeline(card, episode) {
+        var coords = getEpisodeCoords(episode);
+        if (!coords) return { percent: 0, time: 0, duration: 0 };
+        try {
+            if (Lampa.Timeline && typeof Lampa.Timeline.watchedEpisode === 'function') {
+                var data = Lampa.Timeline.watchedEpisode(card, coords.season, coords.episode, true);
+                if (data) {
+                    return {
+                        percent: data.percent || 0,
+                        time: data.time || 0,
+                        duration: data.duration || 0
+                    };
+                }
+            }
+        } catch (e) {}
+        return { percent: 0, time: 0, duration: 0 };
+    }
+
+    // =============================================
+    // 3. АНАЛИЗ СЕРИАЛА
+    // =============================================
+
+    function analyzeSeries(card, data) {
+        if (!card) return null;
+
+        var episodes = getEpisodes(data);
+        if (!episodes || episodes.length === 0) {
+            return { current: null, next: null, episodes: [] };
+        }
+
+        // Сортируем
+        episodes.sort(function (a, b) {
+            var ca = getEpisodeCoords(a);
+            var cb = getEpisodeCoords(b);
+            if (!ca || !cb) return 0;
+            if (ca.season !== cb.season) return ca.season - cb.season;
+            return ca.episode - cb.episode;
         });
 
+        // Ищем текущий
+        var saved = getSavedEpisode(card);
         var current = null;
-        var memory = readEpisodeMemory(card);
-        if (memory) {
-            var hint = memory;
-            current = entries.find(function (entry) {
-                var coords = episodeCoordinates(entry.episode);
-                return coords && coords.season === hint.season && coords.episode === hint.episode && entry.timeline.percent < 60;
-            }) || null;
+        var currentIndex = -1;
+
+        for (var i = 0; i < episodes.length; i++) {
+            var coords = getEpisodeCoords(episodes[i]);
+            if (!coords) continue;
+
+            if (saved && coords.season === saved.season && coords.episode === saved.episode) {
+                current = episodes[i];
+                currentIndex = i;
+                break;
+            }
         }
 
         if (!current) {
-            var partial = entries.filter(function (entry) { return entry.timeline.percent > 0 && entry.timeline.percent < 60; });
-            if (partial.length) current = partial[partial.length - 1];
+            for (var j = 0; j < episodes.length; j++) {
+                var progress = getProgress(card, episodes[j]);
+                if (progress > 0 && progress < 60) {
+                    current = episodes[j];
+                    currentIndex = j;
+                    break;
+                }
+            }
         }
 
-        if (!current) {
-            var lastWatchedIndex = -1;
-            entries.forEach(function (entry, index) {
-                if (entry.timeline.percent >= 60) lastWatchedIndex = index;
-            });
-            current = entries.find(function (entry, index) { return index > lastWatchedIndex && entry.timeline.percent < 60; }) || null;
+        if (!current && episodes.length > 0) {
+            current = episodes[0];
+            currentIndex = 0;
         }
 
-        var allWatched = !!entries.length && entries.every(function (entry) { return entry.timeline.percent >= 60; });
-        if (!current && entries.length) current = entries[allWatched ? entries.length - 1 : 0];
-
-        var currentIndex = current ? entries.indexOf(current) : -1;
-        var next = currentIndex >= 0 ? entries.slice(currentIndex + 1).find(function (entry) { return entry.timeline.percent < 60; }) || null : null;
+        var next = null;
+        if (currentIndex >= 0 && currentIndex < episodes.length - 1) {
+            next = episodes[currentIndex + 1];
+        }
 
         return {
-            card: card,
-            episodes: episodes,
-            available: entries,
             current: current,
             next: next,
-            allWatched: allWatched,
-            status: !episodes.length ? 'empty' : !entries.length ? 'upcoming' : allWatched ? 'complete' : 'ready'
+            episodes: episodes,
+            currentIndex: currentIndex
         };
     }
 
     // =============================================
-    // 6. ВИДЖЕТ В ПРАВОМ НИЖНЕМ УГЛУ
+    // 4. ВИДЖЕТ
     // =============================================
 
-    function createWidget(state) {
-        if (!state || !state.current) return null;
+    function createWidget(card, analysis) {
+        if (!card || !analysis || !analysis.current) return null;
 
-        // Удаляем старые стили
-        var oldStyle = document.getElementById('lsm-widget-style');
-        if (oldStyle) oldStyle.remove();
+        var current = analysis.current;
+        var coords = getEpisodeCoords(current);
+        var progress = getProgress(card, current);
+        var timeline = getTimeline(card, current);
+        var remaining = getRemaining(timeline);
+        var label = formatEpisode(current);
 
         var widget = document.createElement('div');
         widget.className = 'lsm-widget';
-        widget.setAttribute('data-lsm-status', state.status);
+        widget.style.cssText = [
+            'position:fixed!important',
+            'bottom:2.5em!important',
+            'right:2.5em!important',
+            'z-index:9999!important',
+            'max-width:320px!important',
+            'min-width:160px!important',
+            'padding:0.6em 1em!important',
+            'border-radius:0.8em!important',
+            'background:rgba(7,10,16,0.92)!important',
+            'backdrop-filter:blur(16px)!important',
+            'border:1px solid rgba(255,255,255,0.08)!important',
+            'box-shadow:0 1em 3em rgba(0,0,0,0.6)!important',
+            'color:#f6f8fc!important',
+            'font-family:system-ui,sans-serif!important',
+            'font-size:14px!important',
+            'cursor:pointer!important',
+            'transition:opacity .3s ease,transform .3s ease!important'
+        ].join(';');
 
-        // Стили виджета
-        var style = document.createElement('style');
-        style.id = 'lsm-widget-style';
-        style.textContent = `
-            .lsm-widget {
-                position: fixed !important;
-                bottom: 2.5em !important;
-                right: 2.5em !important;
-                z-index: 9999 !important;
-                max-width: 340px !important;
-                min-width: 180px !important;
-                padding: 0.7em 1.1em !important;
-                border-radius: 0.9em !important;
-                background: rgba(7, 10, 16, 0.94) !important;
-                backdrop-filter: blur(20px) !important;
-                -webkit-backdrop-filter: blur(20px) !important;
-                border: 0.075em solid rgba(255, 255, 255, 0.1) !important;
-                box-shadow: 0 1.2em 3.6em rgba(0, 0, 0, 0.75) !important;
-                color: #f6f8fc !important;
-                font-family: "SegoeUI", system-ui, -apple-system, sans-serif !important;
-                transition: opacity 0.3s ease, transform 0.3s ease !important;
-                cursor: pointer !important;
-                user-select: none !important;
-                animation: lsm-widget-in 0.35s cubic-bezier(0.22, 0.72, 0.2, 1) !important;
-                line-height: 1.4 !important;
-            }
-            .lsm-widget:hover {
-                transform: scale(1.03) !important;
-                border-color: rgba(105, 167, 255, 0.45) !important;
-            }
-            .lsm-widget .lsm-header {
-                display: flex !important;
-                align-items: center !important;
-                justify-content: space-between !important;
-                margin-bottom: 0.15em !important;
-            }
-            .lsm-widget .lsm-label {
-                font-size: 0.6em !important;
-                text-transform: uppercase !important;
-                letter-spacing: 0.1em !important;
-                color: rgba(255, 255, 255, 0.4) !important;
-                font-weight: 600 !important;
-            }
-            .lsm-widget .lsm-status-icon {
-                font-size: 0.55em !important;
-                padding: 0.15em 0.45em !important;
-                border-radius: 99em !important;
-                background: rgba(105, 167, 255, 0.15) !important;
-                color: #69a7ff !important;
-                font-weight: 700 !important;
-                letter-spacing: 0.05em !important;
-            }
-            .lsm-widget[data-lsm-status="complete"] .lsm-status-icon {
-                background: rgba(105, 167, 255, 0.1) !important;
-                color: rgba(255, 255, 255, 0.3) !important;
-            }
-            .lsm-widget[data-lsm-status="upcoming"] .lsm-status-icon {
-                background: rgba(255, 180, 50, 0.15) !important;
-                color: #ffb432 !important;
-            }
-            .lsm-widget .lsm-title {
-                font-size: 0.9em !important;
-                font-weight: 700 !important;
-                color: #fff !important;
-                line-height: 1.3 !important;
-                margin: 0.15em 0 0.2em !important;
-                overflow: hidden !important;
-                text-overflow: ellipsis !important;
-                white-space: nowrap !important;
-            }
-            .lsm-widget .lsm-meta {
-                font-size: 0.75em !important;
-                color: rgba(255, 255, 255, 0.55) !important;
-                display: flex !important;
-                align-items: center !important;
-                gap: 0.6em !important;
-                flex-wrap: wrap !important;
-            }
-            .lsm-widget .lsm-progress-wrap {
-                width: 100% !important;
-                height: 0.2em !important;
-                border-radius: 99em !important;
-                background: rgba(255, 255, 255, 0.1) !important;
-                margin: 0.4em 0 0.2em !important;
-                overflow: hidden !important;
-            }
-            .lsm-widget .lsm-progress-bar {
-                height: 100% !important;
-                border-radius: inherit !important;
-                background: linear-gradient(90deg, #69a7ff, #91beff) !important;
-                transition: width 0.4s ease !important;
-            }
-            .lsm-widget .lsm-remaining {
-                font-size: 0.7em !important;
-                color: rgba(255, 255, 255, 0.35) !important;
-                margin-left: auto !important;
-                white-space: nowrap !important;
-            }
-            .lsm-widget .lsm-next {
-                font-size: 0.7em !important;
-                color: rgba(255, 255, 255, 0.3) !important;
-                margin-top: 0.2em !important;
-                border-top: 0.05em solid rgba(255, 255, 255, 0.06) !important;
-                padding-top: 0.25em !important;
-                overflow: hidden !important;
-                text-overflow: ellipsis !important;
-                white-space: nowrap !important;
-            }
-            .lsm-widget .lsm-next strong {
-                color: rgba(255, 255, 255, 0.5) !important;
-                font-weight: 600 !important;
-            }
-            .lsm-widget .lsm-click-hint {
-                font-size: 0.55em !important;
-                color: rgba(255, 255, 255, 0.15) !important;
-                text-align: right !important;
-                margin-top: 0.15em !important;
-                letter-spacing: 0.05em !important;
-            }
-            @keyframes lsm-widget-in {
-                0% { opacity: 0; transform: translateY(25px) scale(0.92); }
-                100% { opacity: 1; transform: translateY(0) scale(1); }
-            }
-            .lsm-widget.lsm-hidden {
-                opacity: 0.35 !important;
-                transform: scale(0.98) !important;
-            }
-            .lsm-widget.lsm-hidden:hover {
-                opacity: 1 !important;
-                transform: scale(1.03) !important;
-            }
-            @media (max-width: 720px) {
-                .lsm-widget {
-                    bottom: 1.2em !important;
-                    right: 1.2em !important;
-                    left: 1.2em !important;
-                    max-width: none !important;
-                    min-width: auto !important;
-                    padding: 0.55em 0.9em !important;
-                    border-radius: 0.8em !important;
-                }
-                .lsm-widget .lsm-title {
-                    font-size: 0.8em !important;
-                }
-                .lsm-widget .lsm-meta {
-                    font-size: 0.7em !important;
-                }
-                .lsm-widget .lsm-next {
-                    font-size: 0.65em !important;
-                }
-            }
-        `;
-        document.head.appendChild(style);
+        // Метка
+        var labelEl = document.createElement('div');
+        labelEl.style.cssText = 'font-size:0.6em;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.4);margin-bottom:0.15em;';
+        labelEl.textContent = 'Сейчас смотрите';
+        widget.appendChild(labelEl);
 
-        var current = state.current;
-        var coords = episodeCoordinates(current.episode);
-        var title = formatEpisodeTitle(current.episode);
-        var progress = Math.round(current.timeline.percent || 0);
-        var remaining = formatRemainingTime(current.timeline);
-
-        // Header
-        var header = document.createElement('div');
-        header.className = 'lsm-header';
-
-        var label = document.createElement('span');
-        label.className = 'lsm-label';
-        label.textContent = state.status === 'complete' ? 'Просмотрено' : 'Сейчас смотрите';
-
-        var statusIcon = document.createElement('span');
-        statusIcon.className = 'lsm-status-icon';
-        if (state.status === 'complete') {
-            statusIcon.textContent = '✓ Всё';
-        } else if (state.status === 'upcoming') {
-            statusIcon.textContent = '⏳ Ожидается';
-        } else {
-            statusIcon.textContent = '▶ ' + (progress > 0 ? progress + '%' : 'Готово');
-        }
-
-        header.appendChild(label);
-        header.appendChild(statusIcon);
-
-        // Title
+        // Название
         var titleEl = document.createElement('div');
-        titleEl.className = 'lsm-title';
-        titleEl.textContent = title;
+        titleEl.style.cssText = 'font-size:0.9em;font-weight:700;color:#fff;margin:0.1em 0 0.2em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+        titleEl.textContent = label;
+        widget.appendChild(titleEl);
 
-        // Meta
-        var meta = document.createElement('div');
-        meta.className = 'lsm-meta';
-
+        // Мета
+        var metaEl = document.createElement('div');
+        metaEl.style.cssText = 'font-size:0.75em;color:rgba(255,255,255,0.5);display:flex;align-items:center;gap:0.6em;flex-wrap:wrap;';
         if (coords) {
             var seasonText = document.createElement('span');
             seasonText.textContent = 'Сезон ' + coords.season + ' · Эпизод ' + coords.episode;
-            meta.appendChild(seasonText);
+            metaEl.appendChild(seasonText);
         }
-
+        if (progress > 0) {
+            var progressText = document.createElement('span');
+            progressText.textContent = progress + '%';
+            metaEl.appendChild(progressText);
+        }
         if (remaining) {
-            var remainingEl = document.createElement('span');
-            remainingEl.className = 'lsm-remaining';
-            remainingEl.textContent = '⏱ ' + remaining;
-            meta.appendChild(remainingEl);
+            var remainingText = document.createElement('span');
+            remainingText.textContent = '⏱ ' + remaining;
+            metaEl.appendChild(remainingText);
+        }
+        widget.appendChild(metaEl);
+
+        // Прогресс
+        var barWrap = document.createElement('div');
+        barWrap.style.cssText = 'width:100%;height:0.2em;border-radius:99em;background:rgba(255,255,255,0.1);margin:0.3em 0 0.15em;overflow:hidden;';
+        var bar = document.createElement('div');
+        bar.style.cssText = 'height:100%;border-radius:inherit;background:linear-gradient(90deg,#69a7ff,#91beff);transition:width .4s ease;';
+        bar.style.width = Math.min(100, progress) + '%';
+        barWrap.appendChild(bar);
+        widget.appendChild(barWrap);
+
+        // Следующая
+        if (analysis.next) {
+            var nextLabel = formatEpisode(analysis.next);
+            var nextEl = document.createElement('div');
+            nextEl.style.cssText = 'font-size:0.7em;color:rgba(255,255,255,0.3);margin-top:0.2em;border-top:1px solid rgba(255,255,255,0.05);padding-top:0.2em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+            nextEl.innerHTML = 'Далее: <strong style="color:rgba(255,255,255,0.4);">' + nextLabel + '</strong>';
+            widget.appendChild(nextEl);
         }
 
-        // Progress
-        var progressWrap = document.createElement('div');
-        progressWrap.className = 'lsm-progress-wrap';
-        var progressBar = document.createElement('div');
-        progressBar.className = 'lsm-progress-bar';
-        progressBar.style.width = Math.max(0, Math.min(100, progress)) + '%';
-        progressWrap.appendChild(progressBar);
+        // Подсказка
+        var hint = document.createElement('div');
+        hint.style.cssText = 'font-size:0.55em;color:rgba(255,255,255,0.15);text-align:right;margin-top:0.1em;';
+        hint.textContent = '↗ Открыть эпизоды';
+        widget.appendChild(hint);
 
-        // Next
-        var nextEl = null;
-        if (state.next && state.status !== 'complete' && state.status !== 'upcoming') {
-            nextEl = document.createElement('div');
-            nextEl.className = 'lsm-next';
-            var nextTitle = formatEpisodeTitle(state.next.episode);
-            var nextProgress = Math.round(state.next.timeline.percent || 0);
-            nextEl.innerHTML = 'Далее: <strong>' + nextTitle + '</strong>' +
-                (nextProgress > 0 ? ' (' + nextProgress + '%)' : '');
-        }
-
-        // Hint
-        var clickHint = document.createElement('div');
-        clickHint.className = 'lsm-click-hint';
-        clickHint.textContent = '↗ Открыть эпизоды';
-
-        widget.appendChild(header);
-        widget.appendChild(titleEl);
-        widget.appendChild(meta);
-        widget.appendChild(progressWrap);
-        if (nextEl) widget.appendChild(nextEl);
-        widget.appendChild(clickHint);
-
-        // Click
+        // Клик
         widget.addEventListener('click', function (e) {
             e.stopPropagation();
-            openEpisodesScreen(state.card);
+            try {
+                var payload = {
+                    component: 'episodes',
+                    title: 'Эпизоды',
+                    card: card,
+                    source: card.source || 'tmdb',
+                    page: 1
+                };
+                if (Lampa.Activity && typeof Lampa.Activity.push === 'function') {
+                    Lampa.Activity.push(payload);
+                }
+            } catch (err) {}
         });
-
-        // Auto-hide
-        if (progress === 0 && !remaining) {
-            var hideTimeout = null;
-            var isHidden = false;
-
-            function hideWidget() {
-                if (!isHidden && widget.parentNode) {
-                    isHidden = true;
-                    widget.classList.add('lsm-hidden');
-                }
-            }
-
-            function showWidget() {
-                if (isHidden && widget.parentNode) {
-                    isHidden = false;
-                    widget.classList.remove('lsm-hidden');
-                }
-                clearTimeout(hideTimeout);
-            }
-
-            hideTimeout = setTimeout(hideWidget, 5000);
-
-            widget.addEventListener('mouseenter', function () {
-                showWidget();
-                clearTimeout(hideTimeout);
-                hideTimeout = setTimeout(hideWidget, 8000);
-            });
-
-            widget.addEventListener('mouseleave', function () {
-                clearTimeout(hideTimeout);
-                hideTimeout = setTimeout(hideWidget, 3000);
-            });
-
-            widget.addEventListener('click', function () {
-                clearTimeout(hideTimeout);
-                showWidget();
-            });
-        }
 
         return widget;
     }
 
     // =============================================
-    // 7. ОТКРЫТИЕ ЭПИЗОДОВ
+    // 5. УПРАВЛЕНИЕ
     // =============================================
-
-    function openEpisodesScreen(card) {
-        if (!card) return false;
-        var memory = readEpisodeMemory(card);
-        var payload = {
-            component: 'episodes',
-            title: window.Lampa && Lampa.Lang && typeof Lampa.Lang.translate === 'function' ? Lampa.Lang.translate('title_episodes') : 'Эпизоды',
-            card: card,
-            source: card.source || storageGet('source', 'tmdb'),
-            page: 1
-        };
-        if (memory && memory.season) payload.season = memory.season;
-        try {
-            if (window.Lampa && Lampa.Activity && typeof Lampa.Activity.push === 'function') {
-                Lampa.Activity.push(payload);
-                return true;
-            }
-            if (window.Lampa && Lampa.Router && typeof Lampa.Router.call === 'function') {
-                Lampa.Router.call('episodes', card);
-                return true;
-            }
-        } catch (error) {}
-        return false;
-    }
-
-    // =============================================
-    // 8. УПРАВЛЕНИЕ ВИДЖЕТОМ
-    // =============================================
-
-    function removeOldWidgets() {
-        var widgets = document.querySelectorAll('.lsm-widget');
-        widgets.forEach(function (w) {
-            if (w.parentNode) w.parentNode.removeChild(w);
-        });
-    }
 
     var currentWidget = null;
-    var lastState = null;
-    var lastCard = null;
     var updateTimer = null;
 
+    function removeWidget() {
+        if (currentWidget && currentWidget.parentNode) {
+            currentWidget.parentNode.removeChild(currentWidget);
+        }
+        currentWidget = null;
+    }
+
     function updateWidget(card, data) {
-        if (runtime.destroyed) return;
+        removeWidget();
 
-        if (mediaType(card) !== 'tv') {
-            removeOldWidgets();
-            currentWidget = null;
-            return;
-        }
+        if (!card) return;
+        if (!card.name && !card.original_name && !card.first_air_date) return;
 
-        var state = resolveSeriesPlayback(card, data || {});
-        if (!state || !state.current) {
-            removeOldWidgets();
-            currentWidget = null;
-            return;
-        }
+        var analysis = analyzeSeries(card, data || {});
+        if (!analysis || !analysis.current) return;
 
-        var signature = [
-            contentId(card),
-            state.current ? episodeCoordinates(state.current.episode).season : '',
-            state.current ? episodeCoordinates(state.current.episode).episode : '',
-            Math.round(state.current.timeline.percent || 0),
-            state.next ? episodeCoordinates(state.next.episode).season : '',
-            state.next ? episodeCoordinates(state.next.episode).episode : '',
-            state.status
-        ].join('|');
-
-        if (lastState === signature && currentWidget && currentWidget.parentNode) {
-            var bar = currentWidget.querySelector('.lsm-progress-bar');
-            if (bar && state.current) {
-                var progress = Math.round(state.current.timeline.percent || 0);
-                bar.style.width = Math.max(0, Math.min(100, progress)) + '%';
-                var statusIcon = currentWidget.querySelector('.lsm-status-icon');
-                if (statusIcon) {
-                    if (state.status === 'complete') {
-                        statusIcon.textContent = '✓ Всё';
-                    } else if (state.status === 'upcoming') {
-                        statusIcon.textContent = '⏳ Ожидается';
-                    } else {
-                        statusIcon.textContent = '▶ ' + (progress > 0 ? progress + '%' : 'Готово');
-                    }
-                }
-                var remaining = formatRemainingTime(state.current.timeline);
-                var remainingEl = currentWidget.querySelector('.lsm-remaining');
-                if (remainingEl) {
-                    remainingEl.textContent = remaining ? '⏱ ' + remaining : '';
-                }
-            }
-            return;
-        }
-
-        lastState = signature;
-        lastCard = card;
-
-        removeOldWidgets();
-
-        var widget = createWidget(state);
+        var widget = createWidget(card, analysis);
         if (widget) {
             document.body.appendChild(widget);
             currentWidget = widget;
@@ -787,168 +344,98 @@
     }
 
     // =============================================
-    // 9. ОБРАБОТЧИКИ СОБЫТИЙ
+    // 6. СОБЫТИЯ
     // =============================================
 
-    function handleDetailEvent(event) {
+    function onFull(event) {
         if (!event) return;
-        var card = event.data && event.data.movie ? event.data.movie :
-            event.object && (event.object.card || event.object) : null;
+        if (event.type !== 'complite' && event.type !== 'start' && event.type !== 'build') return;
+
+        var card = null;
+        if (event.data && event.data.movie) {
+            card = event.data.movie;
+        } else if (event.object && (event.object.card || event.object)) {
+            card = event.object.card || event.object;
+        }
 
         if (!card) return;
 
-        if (event.type === 'start' || event.type === 'complite' || event.type === 'build') {
-            var data = event.data || null;
-            clearTimeout(updateTimer);
-            updateTimer = setTimeout(function () {
-                updateWidget(card, data);
-            }, 300);
-        }
-    }
-
-    function handleTimelineEvent() {
-        var active = activeActivity();
-        if (active && active.component === 'full') {
-            var card = active.card || (active.object && active.object.card) || null;
-            if (card && mediaType(card) === 'tv') {
-                clearTimeout(updateTimer);
-                updateTimer = setTimeout(function () {
-                    updateWidget(card, active.data || {});
-                }, 200);
-            }
-        }
-    }
-
-    function handleEpisodeSelection(episode, card) {
-        if (!episode || !card) return;
-        rememberEpisodeSelection(card, episode, 'click');
         clearTimeout(updateTimer);
         updateTimer = setTimeout(function () {
-            updateWidget(card, {});
-        }, 100);
-    }
-
-    // =============================================
-    // 10. УСТАНОВКА СЛУШАТЕЛЕЙ
-    // =============================================
-
-    var listenersInstalled = false;
-
-    function installListeners() {
-        if (listenersInstalled) return true;
-        if (!window.Lampa || !Lampa.Listener) return false;
-
-        listenersInstalled = true;
-
-        followEmitter(Lampa.Listener, 'full', function (event) {
-            if (event && (event.type === 'start' || event.type === 'complite' || event.type === 'build')) {
-                handleDetailEvent(event);
-            }
-        });
-
-        followEmitter(Lampa.Listener, 'timeline', handleTimelineEvent);
-
-        followEmitter(Lampa.Listener, 'episodes', function (event) {
-            if (event && event.type === 'start' && event.item) {
-                var card = event.data && event.data.movie ? event.data.movie :
-                    event.object && (event.object.card || event.object) : null;
-                if (card && mediaType(card) === 'tv') {
-                    setTimeout(function () {
-                        var root = activeActivityRoot();
-                        if (root) {
-                            var focused = root.querySelector('.selector.focus, .full-episode.focus, .season-episode.focus');
-                            if (focused) {
-                                var episodeData = focused.card_data || null;
-                                if (episodeData && episodeCoordinates(episodeData)) {
-                                    rememberEpisodeSelection(card, episodeData, 'episodes-open');
-                                }
-                            }
-                        }
-                    }, 100);
-                }
-            }
-        });
-
-        if (window.$) {
-            try {
-                $(document).on('click.lsm hover:enter.lsm', '.full-episode, .season-episode, .card-episode', function () {
-                    var episode = this.card_data || null;
-                    var active = activeActivity();
-                    var card = active && (active.card || (active.object && active.object.card) || null);
-                    if (episode && card && mediaType(card) === 'tv') {
-                        handleEpisodeSelection(episode, card);
-                    }
-                });
-                addDisposer(function () {
-                    try { $(document).off('.lsm'); } catch (error) {}
-                });
-            } catch (error) {}
-        }
-
-        return true;
-    }
-
-    // =============================================
-    // 11. ЗАПУСК
-    // =============================================
-
-    function start() {
-        if (runtime.destroyed || runtime.started) return;
-        if (!window.Lampa || !Lampa.Listener) {
-            setTimeout(start, 100);
-            return;
-        }
-
-        runtime.started = true;
-        console.log('[Series Manager] v' + VERSION + ' started');
-
-        installListeners();
-
-        setTimeout(function () {
-            var active = activeActivity();
-            if (active && active.component === 'full') {
-                var card = active.card || (active.object && active.object.card) || null;
-                if (card && mediaType(card) === 'tv') {
-                    updateWidget(card, active.data || {});
-                }
-            }
+            updateWidget(card, event.data || {});
         }, 500);
     }
 
+    function onTimeline() {
+        var active = activeActivity();
+        if (!active || active.component !== 'full') return;
+
+        var card = active.card || (active.object && active.object.card) || null;
+        if (!card) return;
+
+        clearTimeout(updateTimer);
+        updateTimer = setTimeout(function () {
+            updateWidget(card, active.data || {});
+        }, 300);
+    }
+
     // =============================================
-    // 12. API
+    // 7. ЗАПУСК
     // =============================================
 
-    var api = {
+    function start() {
+        try {
+            if (!Lampa || !Lampa.Listener) {
+                setTimeout(start, 200);
+                return;
+            }
+
+            Lampa.Listener.follow('full', onFull);
+            Lampa.Listener.follow('timeline', onTimeline);
+
+            // Проверяем текущий экран
+            setTimeout(function () {
+                var active = activeActivity();
+                if (active && active.component === 'full') {
+                    var card = active.card || (active.object && active.object.card) || null;
+                    if (card) {
+                        updateWidget(card, active.data || {});
+                    }
+                }
+            }, 1000);
+
+            console.log('[Series Manager Widget] Активен');
+
+        } catch (e) {
+            console.error('[Series Manager Widget] Ошибка:', e);
+        }
+    }
+
+    // =============================================
+    // 8. API
+    // =============================================
+
+    window.__LSM_WIDGET__ = {
         version: VERSION,
-        updateWidget: updateWidget,
-        resolveSeriesPlayback: resolveSeriesPlayback,
-        rememberEpisode: rememberEpisodeSelection,
-        readMemory: readEpisodeMemory,
-        openEpisodes: openEpisodesScreen,
-        destroy: destroyRuntime,
+        update: updateWidget,
+        remove: removeWidget,
         getState: function () {
             return {
                 version: VERSION,
-                destroyed: runtime.destroyed,
-                started: runtime.started,
                 hasWidget: !!currentWidget,
-                lastCard: lastCard ? contentId(lastCard) : null
+                modernUI: hasModernUI
             };
         }
     };
 
-    window.__LSM_API__ = api;
-    window[RUNTIME_KEY] = runtime;
-
     // =============================================
-    // 13. СТАРТ
+    // 9. СТАРТ
     // =============================================
 
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', start, { once: true });
-    } else {
+    if (document.readyState === 'complete') {
         start();
+    } else {
+        document.addEventListener('DOMContentLoaded', start);
     }
 
 })();
