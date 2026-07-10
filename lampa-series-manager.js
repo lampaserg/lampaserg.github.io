@@ -1,19 +1,23 @@
-/* Lampa Series Manager 1.4.0 — Оригинальный код из Lampa Modern UI 0.13.4 */
+/* Lampa Series Manager 1.5.0 — Полноценный плагин */
 (function () {
     'use strict';
 
-    var VERSION = '0.13.4';
+    var VERSION = '1.5.0';
     var RUNTIME_KEY = '__LSM_RUNTIME__';
     var DETAIL_MEMORY_KEY = 'lmui_detail_episode_v1';
 
-    // Уничтожаем старый инстанс
+    // =============================================
+    // 1. УНИЧТОЖЕНИЕ СТАРОГО ИНСТАНСА
+    // =============================================
+
     var previous = window[RUNTIME_KEY];
     if (previous && typeof previous.destroy === 'function') {
         try { previous.destroy('replace'); } catch (error) {}
     }
 
-    var nativeSetTimeout = window.setTimeout.bind(window);
-    var nativeClearTimeout = window.clearTimeout.bind(window);
+    // =============================================
+    // 2. ЯДРО (все необходимые функции)
+    // =============================================
 
     var runtime = {
         version: VERSION,
@@ -28,7 +32,7 @@
 
     function setTimeout(callback, delay) {
         if (runtime.destroyed) return 0;
-        var id = nativeSetTimeout(function () {
+        var id = window.setTimeout(function () {
             var index = runtime.timerIds.indexOf(id);
             if (index >= 0) runtime.timerIds.splice(index, 1);
             if (!runtime.destroyed) callback();
@@ -39,7 +43,7 @@
 
     function clearTimeout(id) {
         if (!id) return;
-        nativeClearTimeout(id);
+        window.clearTimeout(id);
         var index = runtime.timerIds.indexOf(id);
         if (index >= 0) runtime.timerIds.splice(index, 1);
     }
@@ -69,8 +73,39 @@
         return true;
     }
 
+    function destroyRuntime(reason) {
+        if (runtime.destroyed) return;
+        runtime.destroyed = true;
+        runtime.started = false;
+
+        while (runtime.timerIds.length) {
+            window.clearTimeout(runtime.timerIds.pop());
+        }
+
+        while (runtime.disposers.length) {
+            try { runtime.disposers.pop()(); } catch (error) {}
+        }
+
+        while (runtime.patches.length) {
+            var patch = runtime.patches.pop();
+            try {
+                if (patch.target && patch.target[patch.key] === patch.wrapped) {
+                    patch.target[patch.key] = patch.original;
+                }
+            } catch (error) {}
+        }
+
+        removeOldWidgets();
+        currentWidget = null;
+
+        if (window[RUNTIME_KEY] === runtime) delete window[RUNTIME_KEY];
+        if (window.__LSM_API__ === api) delete window.__LSM_API__;
+
+        console.log('[Series Manager] Destroyed:', reason || '');
+    }
+
     // =============================================
-    // УТИЛИТЫ (оригинальные из Lampa Modern UI)
+    // 3. УТИЛИТЫ
     // =============================================
 
     function storageGet(name, fallback) {
@@ -78,22 +113,17 @@
             if (window.Lampa && Lampa.Storage && typeof Lampa.Storage.get === 'function') {
                 return Lampa.Storage.get(name, fallback);
             }
-        } catch (error) {
-            console.warn('[Lampa Modern UI] Storage.get failed:', name, error);
-        }
+        } catch (error) {}
         return fallback;
     }
 
-    function storageSet(name, value, force) {
+    function storageSet(name, value) {
         try {
             if (window.Lampa && Lampa.Storage && typeof Lampa.Storage.set === 'function') {
-                if (!force && typeof Lampa.Storage.get === 'function' && Lampa.Storage.get(name, undefined) === value) return false;
                 Lampa.Storage.set(name, value, true);
                 return true;
             }
-        } catch (error) {
-            console.warn('[Lampa Modern UI] Storage.set failed:', name, error);
-        }
+        } catch (error) {}
         return false;
     }
 
@@ -242,9 +272,7 @@
                     return road;
                 }
             }
-        } catch (error) {
-            console.warn('[Lampa Modern UI] Timeline error:', error);
-        }
+        } catch (error) {}
         var embedded = episode.timeline || episode.view || null;
         if (embedded && typeof embedded === 'object') {
             road.percent = numberValue(embedded.percent, 0);
@@ -255,7 +283,7 @@
     }
 
     // =============================================
-    // ПАМЯТЬ СЕРИЙ (оригинальная из Lampa Modern UI)
+    // 4. ПАМЯТЬ СЕРИЙ
     // =============================================
 
     function detailMemoryStore() {
@@ -271,9 +299,7 @@
     function writeDetailMemory(store) {
         try {
             if (window.sessionStorage) window.sessionStorage.setItem(DETAIL_MEMORY_KEY, JSON.stringify(store || {}));
-        } catch (error) {
-            console.warn('[Lampa Modern UI] Memory write error:', error);
-        }
+        } catch (error) {}
     }
 
     function readEpisodeMemory(card) {
@@ -301,12 +327,11 @@
             keys.slice(0, keys.length - 80).forEach(function (oldKey) { delete store[oldKey]; });
         }
         writeDetailMemory(store);
-        console.log('[Lampa Modern UI] Remembered episode:', key, coordinates, reason || '');
         return true;
     }
 
     // =============================================
-    // АНАЛИЗ ПРОСМОТРА (оригинальный из Lampa Modern UI)
+    // 5. АНАЛИЗ ПРОСМОТРА
     // =============================================
 
     function resolveSeriesPlayback(card, data) {
@@ -359,16 +384,21 @@
     }
 
     // =============================================
-    // РЕНДЕРИНГ ВИДЖЕТА В ПРАВОМ НИЖНЕМ УГЛУ
+    // 6. ВИДЖЕТ В ПРАВОМ НИЖНЕМ УГЛУ
     // =============================================
 
     function createWidget(state) {
         if (!state || !state.current) return null;
 
+        // Удаляем старые стили
+        var oldStyle = document.getElementById('lsm-widget-style');
+        if (oldStyle) oldStyle.remove();
+
         var widget = document.createElement('div');
         widget.className = 'lsm-widget';
         widget.setAttribute('data-lsm-status', state.status);
 
+        // Стили виджета
         var style = document.createElement('style');
         style.id = 'lsm-widget-style';
         style.textContent = `
@@ -651,7 +681,7 @@
     }
 
     // =============================================
-    // ОТКРЫТИЕ ЭПИЗОДОВ
+    // 7. ОТКРЫТИЕ ЭПИЗОДОВ
     // =============================================
 
     function openEpisodesScreen(card) {
@@ -674,14 +704,12 @@
                 Lampa.Router.call('episodes', card);
                 return true;
             }
-        } catch (error) {
-            console.warn('[Lampa Modern UI] Open episodes error:', error);
-        }
+        } catch (error) {}
         return false;
     }
 
     // =============================================
-    // УПРАВЛЕНИЕ ВИДЖЕТОМ
+    // 8. УПРАВЛЕНИЕ ВИДЖЕТОМ
     // =============================================
 
     function removeOldWidgets() {
@@ -759,7 +787,7 @@
     }
 
     // =============================================
-    // ОБРАБОТЧИКИ СОБЫТИЙ (оригинальные)
+    // 9. ОБРАБОТЧИКИ СОБЫТИЙ
     // =============================================
 
     function handleDetailEvent(event) {
@@ -801,11 +829,16 @@
     }
 
     // =============================================
-    // УСТАНОВКА СЛУШАТЕЛЕЙ
+    // 10. УСТАНОВКА СЛУШАТЕЛЕЙ
     // =============================================
 
+    var listenersInstalled = false;
+
     function installListeners() {
+        if (listenersInstalled) return true;
         if (!window.Lampa || !Lampa.Listener) return false;
+
+        listenersInstalled = true;
 
         followEmitter(Lampa.Listener, 'full', function (event) {
             if (event && (event.type === 'start' || event.type === 'complite' || event.type === 'build')) {
@@ -849,16 +882,14 @@
                 addDisposer(function () {
                     try { $(document).off('.lsm'); } catch (error) {}
                 });
-            } catch (error) {
-                console.warn('[Lampa Modern UI] DOM click handlers failed:', error);
-            }
+            } catch (error) {}
         }
 
         return true;
     }
 
     // =============================================
-    // ЗАПУСК
+    // 11. ЗАПУСК
     // =============================================
 
     function start() {
@@ -869,7 +900,7 @@
         }
 
         runtime.started = true;
-        console.log('[Lampa Modern UI] Series Manager v' + VERSION + ' started');
+        console.log('[Series Manager] v' + VERSION + ' started');
 
         installListeners();
 
@@ -885,7 +916,7 @@
     }
 
     // =============================================
-    // API
+    // 12. API
     // =============================================
 
     var api = {
@@ -911,42 +942,7 @@
     window[RUNTIME_KEY] = runtime;
 
     // =============================================
-    // DESTROY
-    // =============================================
-
-    function destroyRuntime(reason) {
-        if (runtime.destroyed) return;
-        runtime.destroyed = true;
-        runtime.started = false;
-
-        while (runtime.timerIds.length) {
-            nativeClearTimeout(runtime.timerIds.pop());
-        }
-
-        while (runtime.disposers.length) {
-            try { runtime.disposers.pop()(); } catch (error) {}
-        }
-
-        while (runtime.patches.length) {
-            var patch = runtime.patches.pop();
-            try {
-                if (patch.target && patch.target[patch.key] === patch.wrapped) {
-                    patch.target[patch.key] = patch.original;
-                }
-            } catch (error) {}
-        }
-
-        removeOldWidgets();
-        currentWidget = null;
-
-        if (window[RUNTIME_KEY] === runtime) delete window[RUNTIME_KEY];
-        if (window.__LSM_API__ === api) delete window.__LSM_API__;
-
-        console.log('[Lampa Modern UI] Series Manager destroyed:', reason || '');
-    }
-
-    // =============================================
-    // СТАРТ
+    // 13. СТАРТ
     // =============================================
 
     if (document.readyState === 'loading') {
