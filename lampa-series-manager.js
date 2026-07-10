@@ -1,8 +1,8 @@
-/* Series Manager PRO 3.9.0 — С .applecation__right */
+/* Series Manager PRO 3.8.0 — Яркий блок справа */
 (function () {
     'use strict';
 
-    var VERSION = '3.9.0';
+    var VERSION = '3.8.0';
     var MEMORY_KEY = 'lmui_detail_episode_v1';
 
     // =============================================
@@ -364,7 +364,7 @@
     }
 
     // =============================================
-    // СОЗДАНИЕ .applecation__right И БЛОКА
+    // ЯРКИЙ БЛОК СПРАВА
     // =============================================
 
     function createBlock(state, card) {
@@ -403,31 +403,31 @@
             statusColor = '#69a7ff';
         }
 
-        // Создаём блок
         var block = document.createElement('div');
         block.className = 'series-info-block';
         block.id = 'series-info-block';
         block.setAttribute('data-card-id', contentId(card));
 
+        // ЯРКИЕ СТИЛИ
         block.style.cssText = [
             'display:flex',
             'flex-direction:column',
             'width:100%',
-            'min-width:300px',
-            'max-width:400px',
-            'padding:1.2em 1.6em',
-            'border-radius:1em',
-            'background:rgba(0,0,0,0.4)',
-            'border:2px solid rgba(105,167,255,0.2)',
-            'backdrop-filter:blur(12px)',
-            '-webkit-backdrop-filter:blur(12px)',
+            'min-width:340px',
+            'max-width:460px',
+            'padding:1.4em 1.8em',
+            'border-radius:1.2em',
+            'background:rgba(0,0,0,0.5)',
+            'border:2px solid rgba(105,167,255,0.25)',
+            'backdrop-filter:blur(16px)',
+            '-webkit-backdrop-filter:blur(16px)',
             'transition:all .3s ease',
             'cursor:pointer',
             'color:#ffffff',
             'font-family:"SegoeUI",system-ui,sans-serif',
-            'font-size:15px',
-            'box-shadow:0 8px 32px rgba(0,0,0,0.5)',
-            'margin:0',
+            'font-size:16px',
+            'box-shadow:0 8px 40px rgba(0,0,0,0.6)',
+            'margin:0 0 0.5em 0',
             'flex-shrink:0',
             'position:relative',
             'overflow:hidden'
@@ -440,9 +440,9 @@
             'top:0',
             'left:0',
             'right:0',
-            'height:3px',
+            'height:4px',
             'background:linear-gradient(90deg, #69a7ff, #91beff)',
-            'opacity:0.6'
+            'opacity:0.7'
         ].join(';');
         block.appendChild(gradient);
 
@@ -451,92 +451,94 @@
         header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:0.3em;';
 
         var leftHeader = document.createElement('div');
-        leftHeader.style.cssText = 'display:flex;align-items:center;gap:0.5em;';
+        leftHeader.style.cssText = 'display:flex;align-items:center;gap:0.6em;';
 
         var icon = document.createElement('span');
-        icon.style.cssText = 'font-size:1em;color:#69a7ff;';
+        icon.style.cssText = 'font-size:1.2em;color:#69a7ff;text-shadow:0 0 20px rgba(105,167,255,0.3);';
         icon.textContent = '▶';
         leftHeader.appendChild(icon);
 
         var eyebrow = document.createElement('span');
-        eyebrow.style.cssText = 'font-size:0.6em;text-transform:uppercase;letter-spacing:0.1em;color:#69a7ff;font-weight:700;';
-        eyebrow.textContent = 'ПРОДОЛЖИТЬ';
+        eyebrow.style.cssText = 'font-size:0.65em;text-transform:uppercase;letter-spacing:0.12em;color:#69a7ff;font-weight:700;text-shadow:0 0 20px rgba(105,167,255,0.2);';
+        eyebrow.textContent = 'ПРОДОЛЖИТЬ ПРОСМОТР';
         leftHeader.appendChild(eyebrow);
 
         header.appendChild(leftHeader);
 
         var statusEl = document.createElement('span');
-        statusEl.style.cssText = 'font-size:0.6em;font-weight:700;color:' + statusColor + ';padding:0.15em 0.7em;border-radius:99em;background:rgba(0,0,0,0.3);border:1px solid ' + statusColor + '30;white-space:nowrap;';
+        statusEl.style.cssText = 'font-size:0.65em;font-weight:700;color:' + statusColor + ';padding:0.2em 0.8em;border-radius:99em;background:rgba(0,0,0,0.4);border:1px solid ' + statusColor + '40;white-space:nowrap;text-shadow:0 0 20px ' + statusColor + '20;';
         statusEl.textContent = statusIcon + ' ' + statusText;
         header.appendChild(statusEl);
 
         block.appendChild(header);
 
-        // Название сериала
+        // Название сериала (крупное, яркое)
         var seriesName = document.createElement('div');
-        seriesName.style.cssText = 'font-size:1.6em;font-weight:800;color:#ffffff;margin-bottom:0.05em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.2;text-shadow:0 2px 10px rgba(0,0,0,0.5);';
+        seriesName.style.cssText = 'font-size:1.8em;font-weight:800;color:#ffffff;margin-bottom:0.05em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.2;text-shadow:0 2px 10px rgba(0,0,0,0.5);';
         seriesName.textContent = seriesTitle || 'Сериал';
         block.appendChild(seriesName);
 
         // Название серии
         var titleEl = document.createElement('div');
-        titleEl.style.cssText = 'font-size:1em;font-weight:600;color:rgba(255,255,255,0.8);margin-bottom:0.15em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+        titleEl.style.cssText = 'font-size:1.15em;font-weight:600;color:rgba(255,255,255,0.85);margin-bottom:0.2em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:0 1px 6px rgba(0,0,0,0.4);';
         titleEl.textContent = title;
         block.appendChild(titleEl);
 
         // Разделитель
         var divider = document.createElement('div');
-        divider.style.cssText = 'width:100%;height:1px;background:rgba(255,255,255,0.06);margin:0.15em 0 0.25em;';
+        divider.style.cssText = 'width:100%;height:1px;background:rgba(255,255,255,0.08);margin:0.15em 0 0.3em;';
         block.appendChild(divider);
 
-        // Мета
+        // Мета с бейджами (яркая)
         var meta = document.createElement('div');
-        meta.style.cssText = 'display:flex;align-items:center;gap:0.5em;flex-wrap:wrap;font-size:0.8em;';
+        meta.style.cssText = 'display:flex;align-items:center;gap:0.6em;flex-wrap:wrap;font-size:0.85em;';
 
         if (coords) {
             var seasonText = document.createElement('span');
-            seasonText.style.cssText = 'background:rgba(255,255,255,0.06);padding:0.2em 0.7em;border-radius:0.4em;color:rgba(255,255,255,0.6);';
+            seasonText.style.cssText = 'background:rgba(255,255,255,0.08);padding:0.25em 0.8em;border-radius:0.4em;color:rgba(255,255,255,0.7);font-weight:500;';
             seasonText.textContent = 'Сезон ' + coords.season + ' · Эпизод ' + coords.episode;
             meta.appendChild(seasonText);
         }
 
         if (progress > 0) {
             var progressText = document.createElement('span');
-            progressText.style.cssText = 'background:rgba(105,167,255,0.12);padding:0.2em 0.7em;border-radius:0.4em;color:#69a7ff;font-weight:700;';
+            progressText.style.cssText = 'background:rgba(105,167,255,0.15);padding:0.25em 0.8em;border-radius:0.4em;color:#69a7ff;font-weight:700;border:1px solid rgba(105,167,255,0.2);';
             progressText.textContent = progress + '%';
             meta.appendChild(progressText);
         }
 
         if (remaining) {
             var remainingEl = document.createElement('span');
-            remainingEl.style.cssText = 'background:rgba(255,255,255,0.06);padding:0.2em 0.7em;border-radius:0.4em;color:rgba(255,255,255,0.4);';
+            remainingEl.style.cssText = 'background:rgba(255,255,255,0.06);padding:0.25em 0.8em;border-radius:0.4em;color:rgba(255,255,255,0.5);';
             remainingEl.textContent = '⏱ ' + remaining;
             meta.appendChild(remainingEl);
         }
 
         block.appendChild(meta);
 
-        // Прогресс-бар
+        // Прогресс-бар (большой, яркий)
         var progressWrap = document.createElement('div');
-        progressWrap.style.cssText = 'width:100%;height:4px;border-radius:99em;background:rgba(255,255,255,0.06);margin:0.3em 0 0.1em;overflow:hidden;';
+        progressWrap.style.cssText = 'width:100%;height:6px;border-radius:99em;background:rgba(255,255,255,0.08);margin:0.4em 0 0.15em;overflow:hidden;box-shadow:inset 0 1px 3px rgba(0,0,0,0.3);';
         var progressBar = document.createElement('div');
         progressBar.className = 'sw-progress-bar';
-        progressBar.style.cssText = 'height:100%;border-radius:inherit;background:linear-gradient(90deg,#69a7ff,#91beff);transition:width .5s ease;';
+        progressBar.style.cssText = 'height:100%;border-radius:inherit;background:linear-gradient(90deg,#69a7ff,#91beff);transition:width .6s ease;box-shadow:0 0 20px rgba(105,167,255,0.3);';
         progressBar.style.width = Math.max(0, Math.min(100, progress)) + '%';
         progressWrap.appendChild(progressBar);
         block.appendChild(progressWrap);
 
-        // Время
+        // Время просмотра (яркое)
         var timeRow = document.createElement('div');
-        timeRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;font-size:0.7em;color:rgba(255,255,255,0.3);margin-top:0.1em;';
+        timeRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;font-size:0.75em;color:rgba(255,255,255,0.4);margin-top:0.15em;';
 
         var watchedEl = document.createElement('span');
-        watchedEl.textContent = '👁 ' + watchedTime;
+        watchedEl.style.cssText = 'color:rgba(255,255,255,0.5);';
+        watchedEl.textContent = '👁 Просмотрено: ' + watchedTime;
         timeRow.appendChild(watchedEl);
 
         if (remaining) {
             var remainingShort = document.createElement('span');
-            remainingShort.textContent = '⏱ ' + remaining;
+            remainingShort.style.cssText = 'color:rgba(255,255,255,0.4);';
+            remainingShort.textContent = '⏱ Осталось: ' + remaining;
             timeRow.appendChild(remainingShort);
         }
 
@@ -547,7 +549,7 @@
             var nextCoords = episodeCoordinates(state.next.episode);
             if (nextCoords) {
                 var nextRow = document.createElement('div');
-                nextRow.style.cssText = 'font-size:0.7em;color:rgba(255,255,255,0.2);margin-top:0.15em;padding-top:0.1em;border-top:1px solid rgba(255,255,255,0.04);';
+                nextRow.style.cssText = 'font-size:0.75em;color:rgba(255,255,255,0.3);margin-top:0.2em;padding-top:0.15em;border-top:1px solid rgba(255,255,255,0.05);';
                 nextRow.textContent = 'Далее: S' + padEpisodeNumber(nextCoords.season) + ' E' + padEpisodeNumber(nextCoords.episode);
                 block.appendChild(nextRow);
             }
@@ -555,22 +557,22 @@
 
         // Подсказка
         var hint = document.createElement('div');
-        hint.style.cssText = 'font-size:0.55em;color:rgba(255,255,255,0.1);text-align:right;margin-top:0.05em;';
-        hint.textContent = '↗ Открыть в Lampac';
+        hint.style.cssText = 'font-size:0.6em;color:rgba(255,255,255,0.15);text-align:right;margin-top:0.1em;letter-spacing:0.05em;';
+        hint.textContent = '↗ Нажмите, чтобы открыть в Lampac';
         block.appendChild(hint);
 
         // Ховер
         block.addEventListener('mouseenter', function () {
-            this.style.borderColor = 'rgba(105,167,255,0.4)';
-            this.style.background = 'rgba(0,0,0,0.5)';
+            this.style.borderColor = 'rgba(105,167,255,0.5)';
+            this.style.background = 'rgba(0,0,0,0.6)';
             this.style.transform = 'scale(1.02)';
-            this.style.boxShadow = '0 12px 40px rgba(0,0,0,0.6)';
+            this.style.boxShadow = '0 12px 50px rgba(0,0,0,0.7)';
         });
         block.addEventListener('mouseleave', function () {
-            this.style.borderColor = 'rgba(105,167,255,0.2)';
-            this.style.background = 'rgba(0,0,0,0.4)';
+            this.style.borderColor = 'rgba(105,167,255,0.25)';
+            this.style.background = 'rgba(0,0,0,0.5)';
             this.style.transform = 'scale(1)';
-            this.style.boxShadow = '0 8px 32px rgba(0,0,0,0.5)';
+            this.style.boxShadow = '0 8px 40px rgba(0,0,0,0.6)';
         });
 
         // Клик
@@ -590,7 +592,7 @@
     }
 
     // =============================================
-    // УПРАВЛЕНИЕ СТРУКТУРОЙ .applecation__right
+    // УПРАВЛЕНИЕ БЛОКОМ (СТАБИЛЬНОЕ)
     // =============================================
 
     var currentBlock = null;
@@ -599,7 +601,6 @@
     var currentCard = null;
     var currentData = null;
     var isOnSeriesPage = false;
-    var rightContainerCreated = false;
 
     function removeBlock() {
         var block = document.getElementById('series-info-block');
@@ -607,40 +608,6 @@
             block.parentNode.removeChild(block);
         }
         currentBlock = null;
-    }
-
-    function createRightContainer(render) {
-        // Ищем .full-start-new__right
-        var right = render.find('.full-start-new__right');
-        if (!right.length) {
-            return null;
-        }
-
-        // Проверяем, есть ли уже .applecation__right
-        var existingRight = right.find('.applecation__right');
-        if (existingRight.length) {
-            return existingRight;
-        }
-
-        // Создаём .applecation__right
-        var newRight = $('<div class="applecation__right"></div>');
-        newRight.css({
-            'display': 'flex',
-            'flex-direction': 'column',
-            'align-items': 'flex-end',
-            'justify-content': 'flex-end',
-            'width': '100%',
-            'margin-top': 'auto',
-            'padding': '0.5em 0',
-            'flex-shrink': '0',
-            'min-height': '100px'
-        });
-
-        // Добавляем в конец .full-start-new__right
-        right.append(newRight);
-        rightContainerCreated = true;
-
-        return newRight;
     }
 
     function insertBlock(card, data) {
@@ -678,10 +645,35 @@
                 return;
             }
 
-            // Создаём или получаем .applecation__right
-            var container = createRightContainer(render);
-            if (!container) {
+            // Ищем .full-start-new__right
+            var rightContainer = render.find('.full-start-new__right');
+            if (!rightContainer.length) {
                 return;
+            }
+
+            // Делаем rightContainer flex с колонками
+            rightContainer.css({
+                'display': 'flex',
+                'flex-direction': 'column',
+                'align-items': 'flex-end',
+                'justify-content': 'flex-end',
+                'width': '100%',
+                'height': '100%'
+            });
+
+            // Ищем контейнер для блока
+            var blockContainer = rightContainer.find('.series-block-container');
+            if (!blockContainer.length) {
+                blockContainer = $('<div class="series-block-container"></div>');
+                blockContainer.css({
+                    'display': 'flex',
+                    'flex-direction': 'column',
+                    'align-items': 'flex-end',
+                    'width': '100%',
+                    'margin-top': 'auto',
+                    'padding': '0.5em 0'
+                });
+                rightContainer.append(blockContainer);
             }
 
             // Анализируем просмотр
@@ -728,10 +720,10 @@
             if (!block) return;
 
             // Очищаем контейнер от старых блоков
-            container.find('.series-info-block').remove();
+            blockContainer.find('.series-info-block').remove();
             
-            // Вставляем блок
-            container.append(block);
+            // Вставляем блок в конец контейнера
+            blockContainer.append(block);
             currentBlock = block;
 
         } catch (e) {
@@ -744,11 +736,8 @@
     // =============================================
 
     function forceRestore() {
-        var active = activeActivity();
-        if (active && active.component === 'full') {
-            if (!document.getElementById('series-info-block') && currentCard) {
-                insertBlock(currentCard, currentData);
-            }
+        if (isOnSeriesPage && currentCard && !document.getElementById('series-info-block')) {
+            insertBlock(currentCard, currentData);
         }
     }
 
@@ -808,7 +797,7 @@
             }, 300);
         } else {
             isOnSeriesPage = false;
-            // Не удаляем блок, он останется в структуре
+            // Не удаляем блок, он останется
             // При возврате на full он обновится через onFull
         }
     }
@@ -856,6 +845,11 @@
             
             // Принудительное восстановление через 4 секунды
             setTimeout(forceRestore, 4000);
+
+            // Интервал для восстановления (каждые 3 секунды, но только если блок пропал)
+            setInterval(function () {
+                forceRestore();
+            }, 3000);
 
         } catch (e) {
             console.error('[Series Manager PRO] Ошибка:', e);
@@ -957,7 +951,6 @@
                 version: VERSION,
                 hasBlock: !!document.getElementById('series-info-block'),
                 isOnSeriesPage: isOnSeriesPage,
-                rightContainerCreated: rightContainerCreated,
                 settings: getSettings()
             };
         }
