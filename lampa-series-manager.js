@@ -1,8 +1,8 @@
-/* Series Manager PRO 2.0.0 — Рабочая версия с виджетом */
+/* Series Manager PRO 2.5.0 — Блок справа для темы SERG */
 (function () {
     'use strict';
 
-    var VERSION = '2.0.0';
+    var VERSION = '2.5.0';
     var MEMORY_KEY = 'series_manager_pro_v2';
 
     // =============================================
@@ -22,7 +22,7 @@
 
     var DEFAULTS = {
         enabled: true,
-        show_widget: true,
+        show_block: true,
         auto_open_balancer: true
     };
 
@@ -42,22 +42,8 @@
     }
 
     // =============================================
-    // УТИЛИТЫ
+    // УТИЛИТЫ (из версии 2.0.0)
     // =============================================
-
-    function storageGet(name, fallback) {
-        try {
-            if (Lampa.Storage && typeof Lampa.Storage.get === 'function') {
-                return Lampa.Storage.get(name, fallback);
-            }
-        } catch (e) {}
-        return fallback;
-    }
-
-    function numberValue(value, fallback) {
-        var parsed = Number(value);
-        return isFinite(parsed) ? parsed : (fallback !== undefined ? fallback : 0);
-    }
 
     function mediaType(card) {
         if (!card) return 'movie';
@@ -117,6 +103,19 @@
         }
     }
 
+    function getCurrentRender() {
+        try {
+            var active = Lampa.Activity.active();
+            if (!active) return null;
+            if (active.activity && typeof active.activity.render === 'function') {
+                return active.activity.render();
+            }
+            return null;
+        } catch (e) {
+            return null;
+        }
+    }
+
     function episodeAirTimestamp(episode) {
         if (!episode || !episode.air_date) return 0;
         var parsed = new Date(String(episode.air_date).replace(/-/g, '/')).getTime();
@@ -130,7 +129,7 @@
     }
 
     // =============================================
-    // ПАМЯТЬ СЕРИЙ
+    // ПАМЯТЬ СЕРИЙ (из версии 2.0.0)
     // =============================================
 
     function getMemoryStore() {
@@ -181,7 +180,7 @@
     }
 
     // =============================================
-    // СБОР ЭПИЗОДОВ
+    // СБОР ЭПИЗОДОВ (из версии 2.0.0)
     // =============================================
 
     function collectEpisodes(value, result, depth) {
@@ -242,8 +241,13 @@
         return road;
     }
 
+    function numberValue(value, fallback) {
+        var parsed = Number(value);
+        return isFinite(parsed) ? parsed : (fallback !== undefined ? fallback : 0);
+    }
+
     // =============================================
-    // АНАЛИЗ ПРОСМОТРА
+    // АНАЛИЗ ПРОСМОТРА (из версии 2.0.0)
     // =============================================
 
     function resolveSeriesPlayback(card, data) {
@@ -303,7 +307,7 @@
     }
 
     // =============================================
-    // ОТКРЫТИЕ БАЛАНСЕРА LAMPAC
+    // ОТКРЫТИЕ БАЛАНСЕРА LAMPAC (из версии 2.0.0)
     // =============================================
 
     function openLampacBalancer(card, season, episode) {
@@ -350,14 +354,14 @@
     }
 
     // =============================================
-    // ВИДЖЕТ
+    // СОЗДАНИЕ БЛОКА (на основе виджета 2.0.0)
     // =============================================
 
-    function createWidget(state) {
+    function createBlock(state) {
         if (!state || !state.current) return null;
 
         var settings = getSettings();
-        if (!settings.show_widget) return null;
+        if (!settings.show_block) return null;
 
         var current = state.current;
         var coords = episodeCoordinates(current.episode);
@@ -381,205 +385,57 @@
             statusIcon = '▶';
         }
 
-        // Удаляем старый виджет
-        var oldWidget = document.getElementById('series-widget');
-        if (oldWidget) oldWidget.remove();
+        // Основной блок
+        var block = document.createElement('div');
+        block.className = 'series-block';
+        block.setAttribute('data-status', state.status);
+        block.style.cssText = [
+            'display:flex',
+            'flex-direction:column',
+            'flex-shrink:0',
+            'min-width:200px',
+            'max-width:320px',
+            'margin-left:1.5em',
+            'padding:1em 1.2em',
+            'border-radius:0.8em',
+            'background:rgba(0,0,0,0.3)',
+            'border:1px solid rgba(255,255,255,0.06)',
+            'backdrop-filter:blur(10px)',
+            '-webkit-backdrop-filter:blur(10px)',
+            'transition:all .3s ease',
+            'cursor:pointer',
+            'color:#f6f8fc',
+            'font-family:"SegoeUI",system-ui,sans-serif'
+        ].join(';');
 
-        var widget = document.createElement('div');
-        widget.id = 'series-widget';
-        widget.className = 'series-widget';
-        widget.setAttribute('data-status', state.status);
-
-        // Стили виджета
-        var style = document.createElement('style');
-        style.id = 'series-widget-styles';
-        style.textContent = `
-            .series-widget {
-                position: fixed !important;
-                bottom: 2.5em !important;
-                right: 2.5em !important;
-                z-index: 9999 !important;
-                max-width: 380px !important;
-                min-width: 220px !important;
-                padding: 0.8em 1.2em !important;
-                border-radius: 1em !important;
-                background: rgba(7, 10, 16, 0.94) !important;
-                backdrop-filter: blur(24px) !important;
-                -webkit-backdrop-filter: blur(24px) !important;
-                border: 0.075em solid rgba(255, 255, 255, 0.1) !important;
-                box-shadow: 0 1.2em 4em rgba(0, 0, 0, 0.8) !important;
-                color: #f6f8fc !important;
-                font-family: "SegoeUI", system-ui, -apple-system, sans-serif !important;
-                transition: opacity 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease !important;
-                cursor: pointer !important;
-                user-select: none !important;
-                animation: series-widget-in 0.4s cubic-bezier(0.22, 0.72, 0.2, 1) !important;
-                line-height: 1.5 !important;
-                pointer-events: auto !important;
-            }
-            .series-widget:hover {
-                transform: scale(1.03) !important;
-                border-color: rgba(105, 167, 255, 0.5) !important;
-                box-shadow: 0 1.5em 5em rgba(0, 0, 0, 0.9) !important;
-            }
-            .series-widget .sw-header {
-                display: flex !important;
-                align-items: center !important;
-                justify-content: space-between !important;
-                margin-bottom: 0.2em !important;
-            }
-            .series-widget .sw-title {
-                font-size: 1.1em !important;
-                font-weight: 700 !important;
-                color: #fff !important;
-                line-height: 1.3 !important;
-                margin-bottom: 0.15em !important;
-                overflow: hidden !important;
-                text-overflow: ellipsis !important;
-                white-space: nowrap !important;
-            }
-            .series-widget .sw-series-name {
-                font-size: 0.8em !important;
-                color: rgba(255, 255, 255, 0.4) !important;
-                margin-bottom: 0.15em !important;
-                overflow: hidden !important;
-                text-overflow: ellipsis !important;
-                white-space: nowrap !important;
-            }
-            .series-widget .sw-status {
-                font-size: 0.65em !important;
-                padding: 0.15em 0.6em !important;
-                border-radius: 99em !important;
-                background: rgba(105, 167, 255, 0.15) !important;
-                color: #69a7ff !important;
-                font-weight: 700 !important;
-                letter-spacing: 0.05em !important;
-                white-space: nowrap !important;
-            }
-            .series-widget[data-status="complete"] .sw-status {
-                background: rgba(105, 167, 255, 0.1) !important;
-                color: rgba(255, 255, 255, 0.3) !important;
-            }
-            .series-widget[data-status="upcoming"] .sw-status {
-                background: rgba(255, 180, 50, 0.15) !important;
-                color: #ffb432 !important;
-            }
-            .series-widget .sw-meta {
-                font-size: 0.8em !important;
-                color: rgba(255, 255, 255, 0.5) !important;
-                display: flex !important;
-                align-items: center !important;
-                gap: 0.6em !important;
-                flex-wrap: wrap !important;
-                margin-bottom: 0.2em !important;
-            }
-            .series-widget .sw-progress-wrap {
-                width: 100% !important;
-                height: 0.25em !important;
-                border-radius: 99em !important;
-                background: rgba(255, 255, 255, 0.08) !important;
-                margin: 0.4em 0 0.2em !important;
-                overflow: hidden !important;
-            }
-            .series-widget .sw-progress-bar {
-                height: 100% !important;
-                border-radius: inherit !important;
-                background: linear-gradient(90deg, #69a7ff, #91beff) !important;
-                transition: width 0.5s ease !important;
-            }
-            .series-widget .sw-remaining {
-                font-size: 0.75em !important;
-                color: rgba(255, 255, 255, 0.3) !important;
-                margin-left: auto !important;
-                white-space: nowrap !important;
-            }
-            .series-widget .sw-next {
-                font-size: 0.75em !important;
-                color: rgba(255, 255, 255, 0.25) !important;
-                margin-top: 0.25em !important;
-                border-top: 0.05em solid rgba(255, 255, 255, 0.05) !important;
-                padding-top: 0.25em !important;
-                overflow: hidden !important;
-                text-overflow: ellipsis !important;
-                white-space: nowrap !important;
-            }
-            .series-widget .sw-next strong {
-                color: rgba(255, 255, 255, 0.5) !important;
-                font-weight: 600 !important;
-            }
-            .series-widget .sw-total {
-                font-size: 0.7em !important;
-                color: rgba(255, 255, 255, 0.2) !important;
-                margin-top: 0.15em !important;
-                border-top: 0.05em solid rgba(255, 255, 255, 0.03) !important;
-                padding-top: 0.2em !important;
-                display: flex !important;
-                justify-content: space-between !important;
-            }
-            .series-widget .sw-click-hint {
-                font-size: 0.55em !important;
-                color: rgba(255, 255, 255, 0.12) !important;
-                text-align: right !important;
-                margin-top: 0.1em !important;
-                letter-spacing: 0.05em !important;
-            }
-            @keyframes series-widget-in {
-                0% { opacity: 0; transform: translateY(30px) scale(0.92); }
-                100% { opacity: 1; transform: translateY(0) scale(1); }
-            }
-            .series-widget.sw-hidden {
-                opacity: 0.3 !important;
-                transform: scale(0.98) !important;
-            }
-            .series-widget.sw-hidden:hover {
-                opacity: 1 !important;
-                transform: scale(1.03) !important;
-            }
-            @media (max-width: 720px) {
-                .series-widget {
-                    bottom: 1.2em !important;
-                    right: 1.2em !important;
-                    left: 1.2em !important;
-                    max-width: none !important;
-                    min-width: auto !important;
-                    padding: 0.6em 1em !important;
-                    border-radius: 0.85em !important;
-                }
-                .series-widget .sw-title {
-                    font-size: 0.95em !important;
-                }
-                .series-widget .sw-meta {
-                    font-size: 0.7em !important;
-                }
-                .series-widget .sw-next {
-                    font-size: 0.65em !important;
-                }
-                .series-widget .sw-total {
-                    font-size: 0.6em !important;
-                }
-            }
-        `;
-        document.head.appendChild(style);
-
-        // Сборка виджета
+        // Заголовок
         var header = document.createElement('div');
-        header.className = 'sw-header';
+        header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:0.2em;';
+
+        var label = document.createElement('span');
+        label.style.cssText = 'font-size:0.55em;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.3);font-weight:600;';
+        label.textContent = 'Продолжить';
+        header.appendChild(label);
 
         var statusEl = document.createElement('span');
-        statusEl.className = 'sw-status';
+        statusEl.style.cssText = 'font-size:0.55em;font-weight:700;color:#69a7ff;';
+        if (state.status === 'complete') statusEl.style.color = '#2ecc71';
         statusEl.textContent = statusIcon + ' ' + statusText;
         header.appendChild(statusEl);
 
+        // Название сериала
         var seriesName = document.createElement('div');
-        seriesName.className = 'sw-series-name';
+        seriesName.style.cssText = 'font-size:0.65em;color:rgba(255,255,255,0.3);margin-bottom:0.1em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
         seriesName.textContent = state.seriesTitle || 'Сериал';
 
+        // Название серии
         var titleEl = document.createElement('div');
-        titleEl.className = 'sw-title';
+        titleEl.style.cssText = 'font-size:0.85em;font-weight:700;color:#fff;margin-bottom:0.15em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
         titleEl.textContent = title;
 
+        // Мета-информация
         var meta = document.createElement('div');
-        meta.className = 'sw-meta';
+        meta.style.cssText = 'display:flex;align-items:center;gap:0.6em;flex-wrap:wrap;font-size:0.65em;color:rgba(255,255,255,0.4);';
 
         if (coords) {
             var seasonText = document.createElement('span');
@@ -595,251 +451,225 @@
 
         if (remaining) {
             var remainingEl = document.createElement('span');
-            remainingEl.className = 'sw-remaining';
             remainingEl.textContent = '⏱ ' + remaining;
             meta.appendChild(remainingEl);
         }
 
+        // Прогресс-бар
         var progressWrap = document.createElement('div');
-        progressWrap.className = 'sw-progress-wrap';
+        progressWrap.style.cssText = 'width:100%;height:2px;border-radius:99em;background:rgba(255,255,255,0.05);margin:0.3em 0 0.05em;overflow:hidden;';
         var progressBar = document.createElement('div');
-        progressBar.className = 'sw-progress-bar';
+        progressBar.style.cssText = 'height:100%;border-radius:inherit;background:linear-gradient(90deg,#69a7ff,#91beff);transition:width .5s ease;';
         progressBar.style.width = Math.max(0, Math.min(100, progress)) + '%';
         progressWrap.appendChild(progressBar);
 
-        var nextEl = null;
-        if (state.next && state.status !== 'complete' && state.status !== 'upcoming') {
-            nextEl = document.createElement('div');
-            nextEl.className = 'sw-next';
-            var nextTitle = formatEpisodeTitle(state.next.episode);
-            var nextProgress = Math.round(state.next.timeline.percent || 0);
-            nextEl.innerHTML = 'Далее: <strong>' + nextTitle + '</strong>' +
-                (nextProgress > 0 ? ' (' + nextProgress + '%)' : '');
-        }
-
-        var totalEl = document.createElement('div');
-        totalEl.className = 'sw-total';
-        var totalInfo = [];
-        if (state.totalSeasons > 0) {
-            totalInfo.push(state.totalSeasons + ' сезонов');
-        }
-        if (state.totalEpisodes > 0) {
-            totalInfo.push(state.totalEpisodes + ' серий');
-        }
-        if (state.episodes && state.episodes.length > 0) {
-            totalInfo.push('Доступно: ' + state.available.length + ' серий');
-        }
-        totalEl.textContent = totalInfo.join(' · ') || '';
-
+        // Подсказка
         var hint = document.createElement('div');
-        hint.className = 'sw-click-hint';
+        hint.style.cssText = 'font-size:0.45em;color:rgba(255,255,255,0.08);text-align:right;margin-top:0.05em;';
         hint.textContent = '↗ Открыть в Lampac';
 
-        widget.appendChild(header);
-        widget.appendChild(seriesName);
-        widget.appendChild(titleEl);
-        widget.appendChild(meta);
-        widget.appendChild(progressWrap);
-        if (nextEl) widget.appendChild(nextEl);
-        if (totalEl.textContent) widget.appendChild(totalEl);
-        widget.appendChild(hint);
+        block.appendChild(header);
+        block.appendChild(seriesName);
+        block.appendChild(titleEl);
+        block.appendChild(meta);
+        block.appendChild(progressWrap);
+        block.appendChild(hint);
 
-        // Клик — открываем Lampac Balancer
-        widget.addEventListener('click', function (e) {
+        // Ховер
+        block.addEventListener('mouseenter', function () {
+            this.style.borderColor = 'rgba(105,167,255,0.25)';
+            this.style.background = 'rgba(0,0,0,0.4)';
+        });
+        block.addEventListener('mouseleave', function () {
+            this.style.borderColor = 'rgba(255,255,255,0.06)';
+            this.style.background = 'rgba(0,0,0,0.3)';
+        });
+
+        // Клик
+        block.addEventListener('click', function (e) {
             e.stopPropagation();
             var card = state.card;
             var season = coords ? coords.season : undefined;
             var episode = coords ? coords.episode : undefined;
 
             if (state.current) {
-                saveEpisode(card, state.current.episode, 'widget-click');
+                saveEpisode(card, state.current.episode, 'block-click');
             }
 
             openLampacBalancer(card, season, episode);
         });
 
-        // Авто-скрытие при нулевом прогрессе
-        if (progress === 0 && !remaining) {
-            var hideTimeout = null;
-            var isHidden = false;
-
-            function hideWidget() {
-                if (!isHidden && widget.parentNode) {
-                    isHidden = true;
-                    widget.classList.add('sw-hidden');
-                }
-            }
-
-            function showWidget() {
-                if (isHidden && widget.parentNode) {
-                    isHidden = false;
-                    widget.classList.remove('sw-hidden');
-                }
-                clearTimeout(hideTimeout);
-            }
-
-            hideTimeout = setTimeout(hideWidget, 5000);
-
-            widget.addEventListener('mouseenter', function () {
-                showWidget();
-                clearTimeout(hideTimeout);
-                hideTimeout = setTimeout(hideWidget, 8000);
-            });
-
-            widget.addEventListener('mouseleave', function () {
-                clearTimeout(hideTimeout);
-                hideTimeout = setTimeout(hideWidget, 3000);
-            });
-
-            widget.addEventListener('click', function () {
-                clearTimeout(hideTimeout);
-                showWidget();
-            });
-        }
-
-        return widget;
+        return block;
     }
 
     // =============================================
-    // УПРАВЛЕНИЕ ВИДЖЕТОМ
+    // УПРАВЛЕНИЕ БЛОКОМ
     // =============================================
 
-    var currentWidget = null;
+    var currentBlock = null;
     var lastState = null;
     var updateTimer = null;
 
-    function removeWidget() {
-        var widget = document.getElementById('series-widget');
-        if (widget && widget.parentNode) {
-            widget.parentNode.removeChild(widget);
+    function removeBlock() {
+        if (currentBlock && currentBlock.parentNode) {
+            currentBlock.parentNode.removeChild(currentBlock);
         }
-        currentWidget = null;
-        var widgets = document.querySelectorAll('.series-widget');
-        if (widgets.length === 0) {
-            var style = document.getElementById('series-widget-styles');
+        currentBlock = null;
+        var blocks = document.querySelectorAll('.series-block');
+        if (blocks.length === 0) {
+            var style = document.getElementById('series-block-styles');
             if (style) style.remove();
         }
     }
 
-    function updateWidget(card, data) {
-        // Проверяем, что мы на странице сериала
-        var active = activeActivity();
-        if (!active || active.component !== 'full') {
-            removeWidget();
-            return;
-        }
+    function insertBlock() {
+        try {
+            // Проверяем, что мы на странице сериала
+            var active = activeActivity();
+            if (!active || active.component !== 'full') {
+                removeBlock();
+                return;
+            }
 
-        var settings = getSettings();
-        if (!settings.enabled || !settings.show_widget) {
-            removeWidget();
-            return;
-        }
+            var settings = getSettings();
+            if (!settings.enabled || !settings.show_block) {
+                removeBlock();
+                return;
+            }
 
-        if (!card) {
-            removeWidget();
-            return;
-        }
+            var card = active.card || (active.object && active.object.card) || null;
+            if (!card) {
+                removeBlock();
+                return;
+            }
 
-        if (mediaType(card) !== 'tv') {
-            removeWidget();
-            return;
-        }
+            if (mediaType(card) !== 'tv') {
+                removeBlock();
+                return;
+            }
 
-        var state = resolveSeriesPlayback(card, data || {});
-        if (!state || !state.current) {
-            removeWidget();
-            return;
-        }
+            var render = getCurrentRender();
+            if (!render || !render.length) {
+                return;
+            }
 
-        var signature = [
-            contentId(card),
-            state.current ? episodeCoordinates(state.current.episode).season : '',
-            state.current ? episodeCoordinates(state.current.episode).episode : '',
-            Math.round(state.current.timeline.percent || 0),
-            state.status
-        ].join('|');
-
-        // Если виджет уже есть и состояние не изменилось — обновляем прогресс
-        var existingWidget = document.getElementById('series-widget');
-        if (existingWidget && lastState === signature) {
-            var bar = existingWidget.querySelector('.sw-progress-bar');
-            if (bar && state.current) {
-                var progress = Math.round(state.current.timeline.percent || 0);
-                bar.style.width = Math.max(0, Math.min(100, progress)) + '%';
-                
-                var statusEl = existingWidget.querySelector('.sw-status');
-                if (statusEl) {
-                    var statusText = '';
-                    var statusIcon = '';
-                    if (state.status === 'complete') {
-                        statusText = 'Просмотрено';
-                        statusIcon = '✓';
-                    } else if (state.status === 'upcoming') {
-                        statusText = 'Ожидается';
-                        statusIcon = '⏳';
-                    } else if (progress > 0 && progress < 100) {
-                        statusText = 'Продолжить';
-                        statusIcon = '▶';
-                    } else {
-                        statusText = 'Смотреть';
-                        statusIcon = '▶';
-                    }
-                    statusEl.textContent = statusIcon + ' ' + statusText;
+            // Ищем контейнер .applecation__content-wrapper
+            var contentWrapper = render.find('.applecation__content-wrapper');
+            if (!contentWrapper.length) {
+                // Если нет, ищем .applecation__wrapper или .applecation__left
+                contentWrapper = render.find('.applecation__wrapper');
+                if (!contentWrapper.length) {
+                    contentWrapper = render.find('.applecation__left');
                 }
-                
-                var remaining = formatRemainingTime(state.current.timeline);
-                var remainingEl = existingWidget.querySelector('.sw-remaining');
-                if (remainingEl) {
-                    remainingEl.textContent = remaining ? '⏱ ' + remaining : '';
+                if (!contentWrapper.length) {
+                    return;
                 }
             }
-            return;
-        }
 
-        lastState = signature;
-        removeWidget();
+            var data = active.data || null;
+            var state = resolveSeriesPlayback(card, data || {});
+            if (!state || !state.current) {
+                removeBlock();
+                return;
+            }
 
-        var widget = createWidget(state);
-        if (widget) {
-            document.body.appendChild(widget);
-            currentWidget = widget;
+            var signature = [
+                contentId(card),
+                state.current ? episodeCoordinates(state.current.episode).season : '',
+                state.current ? episodeCoordinates(state.current.episode).episode : '',
+                Math.round(state.current.timeline.percent || 0),
+                state.status
+            ].join('|');
+
+            // Если блок уже есть и состояние не изменилось — обновляем прогресс
+            var existingBlock = document.querySelector('.series-block');
+            if (existingBlock && lastState === signature) {
+                var bar = existingBlock.querySelector('.series-block .sw-progress-bar');
+                if (bar && state.current) {
+                    var progress = Math.round(state.current.timeline.percent || 0);
+                    bar.style.width = Math.max(0, Math.min(100, progress)) + '%';
+                    
+                    var statusEl = existingBlock.querySelector('.series-block .sw-status');
+                    if (statusEl) {
+                        var statusText = '';
+                        var statusIcon = '';
+                        if (state.status === 'complete') {
+                            statusText = 'Просмотрено';
+                            statusIcon = '✓';
+                        } else if (state.status === 'upcoming') {
+                            statusText = 'Ожидается';
+                            statusIcon = '⏳';
+                        } else if (progress > 0 && progress < 100) {
+                            statusText = 'Продолжить';
+                            statusIcon = '▶';
+                        } else {
+                            statusText = 'Смотреть';
+                            statusIcon = '▶';
+                        }
+                        statusEl.textContent = statusIcon + ' ' + statusText;
+                    }
+                    
+                    var remaining = formatRemainingTime(state.current.timeline);
+                    var remainingEl = existingBlock.querySelector('.series-block .sw-remaining');
+                    if (remainingEl) {
+                        remainingEl.textContent = remaining ? '⏱ ' + remaining : '';
+                    }
+                }
+                return;
+            }
+
+            lastState = signature;
+            removeBlock();
+
+            var block = createBlock(state);
+            if (!block) return;
+
+            // Вставляем блок справа от contentWrapper
+            var parent = contentWrapper.parent();
+            
+            // Если родитель уже flex — просто добавляем
+            if (parent.css('display') === 'flex') {
+                contentWrapper.after(block);
+            } else {
+                // Делаем родителя flex-контейнером
+                parent.css('display', 'flex');
+                parent.css('align-items', 'flex-end');
+                parent.css('flex-wrap', 'wrap');
+                parent.css('gap', '0.5em');
+                contentWrapper.after(block);
+            }
+
+            currentBlock = block;
+
+            console.log('[Series Manager PRO] Блок добавлен справа');
+
+        } catch (e) {
+            console.error('[Series Manager PRO] Ошибка вставки блока:', e);
         }
     }
 
     // =============================================
-    // ОБРАБОТЧИКИ СОБЫТИЙ
+    // ОБРАБОТЧИКИ СОБЫТИЙ (из версии 2.0.0)
     // =============================================
 
     function onFull(event) {
         if (!event) return;
         
-        if (event.type === 'complite') {
-            var card = null;
-            if (event.data && event.data.movie) {
-                card = event.data.movie;
-            } else if (event.object && (event.object.card || event.object)) {
-                card = event.object.card || event.object;
-            }
-
-            if (card) {
-                clearTimeout(updateTimer);
-                updateTimer = setTimeout(function () {
-                    updateWidget(card, event.data || {});
-                }, 300);
-            }
+        if (event.type === 'complite' || event.type === 'start') {
+            clearTimeout(updateTimer);
+            updateTimer = setTimeout(function () {
+                insertBlock();
+            }, 400);
         }
     }
 
     function onTimeline() {
         var active = activeActivity();
         if (active && active.component === 'full') {
-            var card = active.card || (active.object && active.object.card) || null;
-            if (card && mediaType(card) === 'tv') {
-                clearTimeout(updateTimer);
-                updateTimer = setTimeout(function () {
-                    updateWidget(card, active.data || {});
-                }, 200);
-            }
+            clearTimeout(updateTimer);
+            updateTimer = setTimeout(function () {
+                insertBlock();
+            }, 300);
         }
     }
 
@@ -849,14 +679,10 @@
         if (event.component === 'full') {
             clearTimeout(updateTimer);
             updateTimer = setTimeout(function () {
-                var card = activeActivity() ? (activeActivity().card || null) : null;
-                var data = activeActivity() ? (activeActivity().data || null) : null;
-                if (card) {
-                    updateWidget(card, data || {});
-                }
-            }, 400);
+                insertBlock();
+            }, 500);
         } else {
-            removeWidget();
+            removeBlock();
             lastState = null;
         }
     }
@@ -880,14 +706,8 @@
 
             // Проверяем текущую страницу
             setTimeout(function () {
-                var active = activeActivity();
-                if (active && active.component === 'full') {
-                    var card = active.card || (active.object && active.object.card) || null;
-                    if (card && mediaType(card) === 'tv') {
-                        updateWidget(card, active.data || {});
-                    }
-                }
-            }, 800);
+                insertBlock();
+            }, 1000);
 
         } catch (e) {
             console.error('[Series Manager PRO] Ошибка:', e);
@@ -923,15 +743,9 @@
                     settings.enabled = value === 'true' || value === true;
                     setSettings(settings);
                     if (!settings.enabled) {
-                        removeWidget();
+                        removeBlock();
                     } else {
-                        var active = activeActivity();
-                        if (active && active.component === 'full') {
-                            var card = active.card || null;
-                            if (card) {
-                                updateWidget(card, active.data || {});
-                            }
-                        }
+                        insertBlock();
                     }
                 }
             });
@@ -939,27 +753,21 @@
             Lampa.SettingsApi.addParam({
                 component: 'series_manager_pro',
                 param: {
-                    name: 'series_manager_pro_widget',
+                    name: 'series_manager_pro_show_block',
                     type: 'trigger',
                     default: true
                 },
                 field: {
-                    name: 'Показывать виджет'
+                    name: 'Показывать блок продолжения'
                 },
                 onChange: function(value) {
                     var settings = getSettings();
-                    settings.show_widget = value === 'true' || value === true;
+                    settings.show_block = value === 'true' || value === true;
                     setSettings(settings);
-                    if (!settings.show_widget) {
-                        removeWidget();
+                    if (!settings.show_block) {
+                        removeBlock();
                     } else {
-                        var active = activeActivity();
-                        if (active && active.component === 'full') {
-                            var card = active.card || null;
-                            if (card) {
-                                updateWidget(card, active.data || {});
-                            }
-                        }
+                        insertBlock();
                     }
                 }
             });
@@ -972,7 +780,7 @@
                     default: true
                 },
                 field: {
-                    name: 'Автоматически открывать Lampac Balancer'
+                    name: 'Открывать Lampac Balancer при клике'
                 },
                 onChange: function(value) {
                     var settings = getSettings();
@@ -992,13 +800,13 @@
 
     window.__SERIES_MANAGER_PRO__ = {
         version: VERSION,
-        update: updateWidget,
-        remove: removeWidget,
+        update: insertBlock,
+        remove: removeBlock,
         openLampac: openLampacBalancer,
         getState: function () {
             return {
                 version: VERSION,
-                hasWidget: !!document.getElementById('series-widget'),
+                hasBlock: !!currentBlock,
                 settings: getSettings()
             };
         }
