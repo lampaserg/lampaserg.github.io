@@ -1,10 +1,9 @@
-/* Series Manager PRO 3.2.0 — Совместимый с темой SERG */
+/* Series Manager PRO 2.0.0 — Рабочая версия с виджетом */
 (function () {
     'use strict';
 
-    var VERSION = '3.2.0';
-    var MEMORY_KEY = 'series_manager_pro_v3';
-    var WIDGET_ID = 'series-manager-pro-widget';
+    var VERSION = '2.0.0';
+    var MEMORY_KEY = 'series_manager_pro_v2';
 
     // =============================================
     // ПРОВЕРКА ЗАГРУЗКИ LAMPA
@@ -43,47 +42,17 @@
     }
 
     // =============================================
-    // ОПРЕДЕЛЕНИЕ ТЕКУЩЕЙ СТРАНИЦЫ
-    // =============================================
-
-    function isSeriesPage() {
-        try {
-            var active = Lampa.Activity && typeof Lampa.Activity.active === 'function' ? Lampa.Activity.active() : null;
-            if (!active) return false;
-            if (active.component !== 'full') return false;
-            
-            var card = active.card || (active.object && active.object.card) || null;
-            if (!card) return false;
-            
-            return !!(card.name || card.original_name || card.first_air_date || card.number_of_seasons);
-        } catch (e) {
-            return false;
-        }
-    }
-
-    function getCurrentCard() {
-        try {
-            var active = Lampa.Activity && typeof Lampa.Activity.active === 'function' ? Lampa.Activity.active() : null;
-            if (!active) return null;
-            return active.card || (active.object && active.object.card) || null;
-        } catch (e) {
-            return null;
-        }
-    }
-
-    function getCurrentData() {
-        try {
-            var active = Lampa.Activity && typeof Lampa.Activity.active === 'function' ? Lampa.Activity.active() : null;
-            if (!active) return null;
-            return active.data || null;
-        } catch (e) {
-            return null;
-        }
-    }
-
-    // =============================================
     // УТИЛИТЫ
     // =============================================
+
+    function storageGet(name, fallback) {
+        try {
+            if (Lampa.Storage && typeof Lampa.Storage.get === 'function') {
+                return Lampa.Storage.get(name, fallback);
+            }
+        } catch (e) {}
+        return fallback;
+    }
 
     function numberValue(value, fallback) {
         var parsed = Number(value);
@@ -137,6 +106,15 @@
         var hours = Math.floor(minutes / 60);
         var rest = minutes % 60;
         return 'осталось ' + hours + ' ч' + (rest ? ' ' + rest + ' мин' : '');
+    }
+
+    function activeActivity() {
+        try {
+            var active = Lampa.Activity && typeof Lampa.Activity.active === 'function' ? Lampa.Activity.active() : null;
+            return active || null;
+        } catch (error) {
+            return null;
+        }
     }
 
     function episodeAirTimestamp(episode) {
@@ -265,73 +243,63 @@
     }
 
     // =============================================
-    // ОПРЕДЕЛЕНИЕ ПОСЛЕДНЕЙ СЕРИИ
+    // АНАЛИЗ ПРОСМОТРА
     // =============================================
 
-    function findLastWatchedEpisode(card, data) {
-        if (!card) return null;
+    function resolveSeriesPlayback(card, data) {
+        if (!card) return { status: 'empty', episodes: [], current: null, next: null, available: [] };
 
         var episodes = seriesEpisodesFromData(data || {});
         var available = episodes.filter(episodeIsAvailable);
-        
-        if (!available.length) return null;
-
         var entries = available.map(function (episode) {
-            return {
-                episode: episode,
-                timeline: episodeTimeline(card, episode),
-                coords: episodeCoordinates(episode)
-            };
-        }).filter(function (entry) {
-            return entry.coords !== null;
+            return { episode: episode, timeline: episodeTimeline(card, episode) };
         });
 
-        if (!entries.length) return null;
+        var current = null;
+        var memory = readSavedEpisode(card);
+        if (memory) {
+            var hint = memory;
+            current = entries.find(function (entry) {
+                var coords = episodeCoordinates(entry.episode);
+                return coords && coords.season === hint.season && coords.episode === hint.episode && entry.timeline.percent < 60;
+            }) || null;
+        }
 
-        entries.sort(function (a, b) {
-            if (a.coords.season !== b.coords.season) return a.coords.season - b.coords.season;
-            return a.coords.episode - b.coords.episode;
-        });
+        if (!current) {
+            var partial = entries.filter(function (entry) { return entry.timeline.percent > 0 && entry.timeline.percent < 60; });
+            if (partial.length) current = partial[partial.length - 1];
+        }
 
-        var saved = readSavedEpisode(card);
-        if (saved) {
-            var savedEntry = entries.find(function (entry) {
-                return entry.coords.season === saved.season && entry.coords.episode === saved.episode;
+        if (!current) {
+            var lastWatchedIndex = -1;
+            entries.forEach(function (entry, index) {
+                if (entry.timeline.percent >= 60) lastWatchedIndex = index;
             });
-            if (savedEntry) {
-                if (savedEntry.timeline.percent >= 89) {
-                    var nextIndex = entries.indexOf(savedEntry) + 1;
-                    if (nextIndex < entries.length) {
-                        return entries[nextIndex];
-                    }
-                    return savedEntry;
-                }
-                return savedEntry;
-            }
+            current = entries.find(function (entry, index) { return index > lastWatchedIndex && entry.timeline.percent < 60; }) || null;
         }
 
-        var inProgress = entries.filter(function (entry) {
-            return entry.timeline.percent > 0 && entry.timeline.percent < 89;
-        });
+        var allWatched = !!entries.length && entries.every(function (entry) { return entry.timeline.percent >= 60; });
+        if (!current && entries.length) current = entries[allWatched ? entries.length - 1 : 0];
 
-        if (inProgress.length) {
-            return inProgress[inProgress.length - 1];
-        }
+        var currentIndex = current ? entries.indexOf(current) : -1;
+        var next = currentIndex >= 0 ? entries.slice(currentIndex + 1).find(function (entry) { return entry.timeline.percent < 60; }) || null : null;
 
-        var watched = entries.filter(function (entry) {
-            return entry.timeline.percent >= 89;
-        });
+        var seriesTitle = card.title || card.name || card.original_title || card.original_name || '';
+        var totalSeasons = card.number_of_seasons || 0;
+        var totalEpisodes = card.number_of_episodes || 0;
 
-        if (watched.length) {
-            var lastWatched = watched[watched.length - 1];
-            var nextAfterLast = entries.indexOf(lastWatched) + 1;
-            if (nextAfterLast < entries.length) {
-                return entries[nextAfterLast];
-            }
-            return lastWatched;
-        }
-
-        return entries[0];
+        return {
+            card: card,
+            seriesTitle: seriesTitle,
+            totalSeasons: totalSeasons,
+            totalEpisodes: totalEpisodes,
+            episodes: episodes,
+            available: entries,
+            current: current,
+            next: next,
+            allWatched: allWatched,
+            status: !episodes.length ? 'empty' : !entries.length ? 'upcoming' : allWatched ? 'complete' : 'ready'
+        };
     }
 
     // =============================================
@@ -382,28 +350,30 @@
     }
 
     // =============================================
-    // ВИДЖЕТ (справа снизу, совместимый с темой SERG)
+    // ВИДЖЕТ (из версии 2.0.0)
     // =============================================
 
-    function createWidget(entry, card) {
-        if (!entry || !entry.episode) return null;
+    function createWidget(state) {
+        if (!state || !state.current) return null;
 
         var settings = getSettings();
         if (!settings.show_widget) return null;
 
-        var coords = entry.coords;
-        var title = formatEpisodeTitle(entry.episode);
-        var progress = Math.round(entry.timeline.percent || 0);
-        var remaining = formatRemainingTime(entry.timeline);
-
-        var seriesTitle = card.title || card.name || card.original_title || card.original_name || '';
+        var current = state.current;
+        var coords = episodeCoordinates(current.episode);
+        var title = formatEpisodeTitle(current.episode);
+        var progress = Math.round(current.timeline.percent || 0);
+        var remaining = formatRemainingTime(current.timeline);
 
         var statusText = '';
         var statusIcon = '';
-        if (progress >= 89) {
+        if (state.status === 'complete') {
             statusText = 'Просмотрено';
             statusIcon = '✓';
-        } else if (progress > 0 && progress < 89) {
+        } else if (state.status === 'upcoming') {
+            statusText = 'Ожидается';
+            statusIcon = '⏳';
+        } else if (progress > 0 && progress < 100) {
             statusText = 'Продолжить';
             statusIcon = '▶';
         } else {
@@ -412,15 +382,15 @@
         }
 
         // Удаляем старый виджет
-        var oldWidget = document.getElementById(WIDGET_ID);
+        var oldWidget = document.getElementById('series-widget');
         if (oldWidget) oldWidget.remove();
 
         var widget = document.createElement('div');
-        widget.id = WIDGET_ID;
+        widget.id = 'series-widget';
         widget.className = 'series-widget';
-        widget.setAttribute('data-progress', progress);
+        widget.setAttribute('data-status', state.status);
 
-        // Стили виджета — справа снизу
+        // Стили виджета (из версии 2.0.0)
         var style = document.createElement('style');
         style.id = 'series-widget-styles';
         style.textContent = `
@@ -429,15 +399,15 @@
                 bottom: 2.5em !important;
                 right: 2.5em !important;
                 z-index: 9999 !important;
-                max-width: 420px !important;
-                min-width: 280px !important;
+                max-width: 380px !important;
+                min-width: 220px !important;
                 padding: 0.8em 1.2em !important;
-                border-radius: 0.9em !important;
-                background: rgba(7, 10, 16, 0.95) !important;
+                border-radius: 1em !important;
+                background: rgba(7, 10, 16, 0.94) !important;
                 backdrop-filter: blur(24px) !important;
                 -webkit-backdrop-filter: blur(24px) !important;
-                border: 0.1em solid rgba(105, 167, 255, 0.2) !important;
-                box-shadow: 0 1.5em 4em rgba(0, 0, 0, 0.85) !important;
+                border: 0.075em solid rgba(255, 255, 255, 0.1) !important;
+                box-shadow: 0 1.2em 4em rgba(0, 0, 0, 0.8) !important;
                 color: #f6f8fc !important;
                 font-family: "SegoeUI", system-ui, -apple-system, sans-serif !important;
                 transition: opacity 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease !important;
@@ -446,12 +416,11 @@
                 animation: series-widget-in 0.4s cubic-bezier(0.22, 0.72, 0.2, 1) !important;
                 line-height: 1.5 !important;
                 pointer-events: auto !important;
-                font-size: 14px !important;
             }
             .series-widget:hover {
                 transform: scale(1.03) !important;
-                border-color: rgba(105, 167, 255, 0.45) !important;
-                box-shadow: 0 1.8em 5em rgba(0, 0, 0, 0.9) !important;
+                border-color: rgba(105, 167, 255, 0.5) !important;
+                box-shadow: 0 1.5em 5em rgba(0, 0, 0, 0.9) !important;
             }
             .series-widget .sw-header {
                 display: flex !important;
@@ -460,52 +429,56 @@
                 margin-bottom: 0.2em !important;
             }
             .series-widget .sw-title {
-                font-size: 1em !important;
+                font-size: 1.1em !important;
                 font-weight: 700 !important;
                 color: #fff !important;
                 line-height: 1.3 !important;
-                margin-bottom: 0.1em !important;
+                margin-bottom: 0.15em !important;
                 overflow: hidden !important;
                 text-overflow: ellipsis !important;
                 white-space: nowrap !important;
             }
             .series-widget .sw-series-name {
-                font-size: 0.7em !important;
-                color: rgba(255, 255, 255, 0.35) !important;
-                margin-bottom: 0.1em !important;
+                font-size: 0.8em !important;
+                color: rgba(255, 255, 255, 0.4) !important;
+                margin-bottom: 0.15em !important;
                 overflow: hidden !important;
                 text-overflow: ellipsis !important;
                 white-space: nowrap !important;
             }
             .series-widget .sw-status {
-                font-size: 0.6em !important;
+                font-size: 0.65em !important;
                 padding: 0.15em 0.6em !important;
                 border-radius: 99em !important;
-                background: rgba(105, 167, 255, 0.12) !important;
+                background: rgba(105, 167, 255, 0.15) !important;
                 color: #69a7ff !important;
                 font-weight: 700 !important;
                 letter-spacing: 0.05em !important;
                 white-space: nowrap !important;
             }
-            .series-widget[data-progress="100"] .sw-status {
-                background: rgba(46, 204, 113, 0.12) !important;
-                color: #2ecc71 !important;
+            .series-widget[data-status="complete"] .sw-status {
+                background: rgba(105, 167, 255, 0.1) !important;
+                color: rgba(255, 255, 255, 0.3) !important;
+            }
+            .series-widget[data-status="upcoming"] .sw-status {
+                background: rgba(255, 180, 50, 0.15) !important;
+                color: #ffb432 !important;
             }
             .series-widget .sw-meta {
-                font-size: 0.75em !important;
-                color: rgba(255, 255, 255, 0.45) !important;
+                font-size: 0.8em !important;
+                color: rgba(255, 255, 255, 0.5) !important;
                 display: flex !important;
                 align-items: center !important;
-                gap: 0.5em !important;
+                gap: 0.6em !important;
                 flex-wrap: wrap !important;
-                margin-bottom: 0.1em !important;
+                margin-bottom: 0.2em !important;
             }
             .series-widget .sw-progress-wrap {
                 width: 100% !important;
                 height: 0.25em !important;
                 border-radius: 99em !important;
-                background: rgba(255, 255, 255, 0.06) !important;
-                margin: 0.35em 0 0.15em !important;
+                background: rgba(255, 255, 255, 0.08) !important;
+                margin: 0.4em 0 0.2em !important;
                 overflow: hidden !important;
             }
             .series-widget .sw-progress-bar {
@@ -515,40 +488,74 @@
                 transition: width 0.5s ease !important;
             }
             .series-widget .sw-remaining {
-                font-size: 0.7em !important;
-                color: rgba(255, 255, 255, 0.25) !important;
+                font-size: 0.75em !important;
+                color: rgba(255, 255, 255, 0.3) !important;
                 margin-left: auto !important;
                 white-space: nowrap !important;
             }
+            .series-widget .sw-next {
+                font-size: 0.75em !important;
+                color: rgba(255, 255, 255, 0.25) !important;
+                margin-top: 0.25em !important;
+                border-top: 0.05em solid rgba(255, 255, 255, 0.05) !important;
+                padding-top: 0.25em !important;
+                overflow: hidden !important;
+                text-overflow: ellipsis !important;
+                white-space: nowrap !important;
+            }
+            .series-widget .sw-next strong {
+                color: rgba(255, 255, 255, 0.5) !important;
+                font-weight: 600 !important;
+            }
+            .series-widget .sw-total {
+                font-size: 0.7em !important;
+                color: rgba(255, 255, 255, 0.2) !important;
+                margin-top: 0.15em !important;
+                border-top: 0.05em solid rgba(255, 255, 255, 0.03) !important;
+                padding-top: 0.2em !important;
+                display: flex !important;
+                justify-content: space-between !important;
+            }
             .series-widget .sw-click-hint {
                 font-size: 0.55em !important;
-                color: rgba(255, 255, 255, 0.1) !important;
+                color: rgba(255, 255, 255, 0.12) !important;
                 text-align: right !important;
                 margin-top: 0.1em !important;
                 letter-spacing: 0.05em !important;
-                border-top: 0.05em solid rgba(255, 255, 255, 0.04) !important;
-                padding-top: 0.15em !important;
             }
             @keyframes series-widget-in {
                 0% { opacity: 0; transform: translateY(30px) scale(0.92); }
                 100% { opacity: 1; transform: translateY(0) scale(1); }
             }
+            .series-widget.sw-hidden {
+                opacity: 0.3 !important;
+                transform: scale(0.98) !important;
+            }
+            .series-widget.sw-hidden:hover {
+                opacity: 1 !important;
+                transform: scale(1.03) !important;
+            }
             @media (max-width: 720px) {
                 .series-widget {
-                    bottom: 1.5em !important;
-                    right: 1.5em !important;
-                    left: 1.5em !important;
+                    bottom: 1.2em !important;
+                    right: 1.2em !important;
+                    left: 1.2em !important;
                     max-width: none !important;
                     min-width: auto !important;
                     padding: 0.6em 1em !important;
-                    border-radius: 0.8em !important;
-                    font-size: 12px !important;
+                    border-radius: 0.85em !important;
                 }
                 .series-widget .sw-title {
-                    font-size: 0.9em !important;
+                    font-size: 0.95em !important;
                 }
                 .series-widget .sw-meta {
                     font-size: 0.7em !important;
+                }
+                .series-widget .sw-next {
+                    font-size: 0.65em !important;
+                }
+                .series-widget .sw-total {
+                    font-size: 0.6em !important;
                 }
             }
         `;
@@ -565,7 +572,7 @@
 
         var seriesName = document.createElement('div');
         seriesName.className = 'sw-series-name';
-        seriesName.textContent = seriesTitle || 'Сериал';
+        seriesName.textContent = state.seriesTitle || 'Сериал';
 
         var titleEl = document.createElement('div');
         titleEl.className = 'sw-title';
@@ -580,7 +587,7 @@
             meta.appendChild(seasonText);
         }
 
-        if (progress > 0 && progress < 100) {
+        if (progress > 0) {
             var progressText = document.createElement('span');
             progressText.textContent = progress + '%';
             meta.appendChild(progressText);
@@ -600,6 +607,30 @@
         progressBar.style.width = Math.max(0, Math.min(100, progress)) + '%';
         progressWrap.appendChild(progressBar);
 
+        var nextEl = null;
+        if (state.next && state.status !== 'complete' && state.status !== 'upcoming') {
+            nextEl = document.createElement('div');
+            nextEl.className = 'sw-next';
+            var nextTitle = formatEpisodeTitle(state.next.episode);
+            var nextProgress = Math.round(state.next.timeline.percent || 0);
+            nextEl.innerHTML = 'Далее: <strong>' + nextTitle + '</strong>' +
+                (nextProgress > 0 ? ' (' + nextProgress + '%)' : '');
+        }
+
+        var totalEl = document.createElement('div');
+        totalEl.className = 'sw-total';
+        var totalInfo = [];
+        if (state.totalSeasons > 0) {
+            totalInfo.push(state.totalSeasons + ' сезонов');
+        }
+        if (state.totalEpisodes > 0) {
+            totalInfo.push(state.totalEpisodes + ' серий');
+        }
+        if (state.episodes && state.episodes.length > 0) {
+            totalInfo.push('Доступно: ' + state.available.length + ' серий');
+        }
+        totalEl.textContent = totalInfo.join(' · ') || '';
+
         var hint = document.createElement('div');
         hint.className = 'sw-click-hint';
         hint.textContent = '↗ Открыть в Lampac';
@@ -609,16 +640,62 @@
         widget.appendChild(titleEl);
         widget.appendChild(meta);
         widget.appendChild(progressWrap);
+        if (nextEl) widget.appendChild(nextEl);
+        if (totalEl.textContent) widget.appendChild(totalEl);
         widget.appendChild(hint);
 
         // Клик — открываем Lampac Balancer
         widget.addEventListener('click', function (e) {
             e.stopPropagation();
-            if (coords) {
-                saveEpisode(card, entry.episode, 'widget-click');
-                openLampacBalancer(card, coords.season, coords.episode);
+            var card = state.card;
+            var season = coords ? coords.season : undefined;
+            var episode = coords ? coords.episode : undefined;
+
+            if (state.current) {
+                saveEpisode(card, state.current.episode, 'widget-click');
             }
+
+            openLampacBalancer(card, season, episode);
         });
+
+        // Авто-скрытие при нулевом прогрессе
+        if (progress === 0 && !remaining) {
+            var hideTimeout = null;
+            var isHidden = false;
+
+            function hideWidget() {
+                if (!isHidden && widget.parentNode) {
+                    isHidden = true;
+                    widget.classList.add('sw-hidden');
+                }
+            }
+
+            function showWidget() {
+                if (isHidden && widget.parentNode) {
+                    isHidden = false;
+                    widget.classList.remove('sw-hidden');
+                }
+                clearTimeout(hideTimeout);
+            }
+
+            hideTimeout = setTimeout(hideWidget, 5000);
+
+            widget.addEventListener('mouseenter', function () {
+                showWidget();
+                clearTimeout(hideTimeout);
+                hideTimeout = setTimeout(hideWidget, 8000);
+            });
+
+            widget.addEventListener('mouseleave', function () {
+                clearTimeout(hideTimeout);
+                hideTimeout = setTimeout(hideWidget, 3000);
+            });
+
+            widget.addEventListener('click', function () {
+                clearTimeout(hideTimeout);
+                showWidget();
+            });
+        }
 
         return widget;
     }
@@ -627,15 +704,16 @@
     // УПРАВЛЕНИЕ ВИДЖЕТОМ
     // =============================================
 
-    var currentEntry = null;
-    var lastCardId = null;
+    var currentWidget = null;
+    var lastState = null;
     var updateTimer = null;
 
     function removeWidget() {
-        var widget = document.getElementById(WIDGET_ID);
+        var widget = document.getElementById('series-widget');
         if (widget && widget.parentNode) {
             widget.parentNode.removeChild(widget);
         }
+        currentWidget = null;
         var widgets = document.querySelectorAll('.series-widget');
         if (widgets.length === 0) {
             var style = document.getElementById('series-widget-styles');
@@ -643,9 +721,10 @@
         }
     }
 
-    function updateWidget() {
+    function updateWidget(card, data) {
         // Проверяем, что мы на странице сериала
-        if (!isSeriesPage()) {
+        var active = activeActivity();
+        if (!active || active.component !== 'full') {
             removeWidget();
             return;
         }
@@ -656,38 +735,74 @@
             return;
         }
 
-        var card = getCurrentCard();
-        if (!card || mediaType(card) !== 'tv') {
+        if (!card) {
             removeWidget();
             return;
         }
 
-        var cardId = contentId(card);
-        if (lastCardId !== cardId) {
-            removeWidget();
-            lastCardId = cardId;
-        }
-
-        var data = getCurrentData();
-        var entry = findLastWatchedEpisode(card, data || {});
-
-        if (!entry) {
+        if (mediaType(card) !== 'tv') {
             removeWidget();
             return;
         }
 
-        var currentKey = entry.coords.season + ':' + entry.coords.episode + ':' + Math.round(entry.timeline.percent);
-        var oldKey = currentEntry ? 
-            currentEntry.coords.season + ':' + currentEntry.coords.episode + ':' + Math.round(currentEntry.timeline.percent) : 
-            '';
+        var state = resolveSeriesPlayback(card, data || {});
+        if (!state || !state.current) {
+            removeWidget();
+            return;
+        }
 
-        if (currentKey !== oldKey || !document.getElementById(WIDGET_ID)) {
-            currentEntry = entry;
-            var widget = createWidget(entry, card);
-            if (widget) {
-                removeWidget();
-                document.body.appendChild(widget);
+        var signature = [
+            contentId(card),
+            state.current ? episodeCoordinates(state.current.episode).season : '',
+            state.current ? episodeCoordinates(state.current.episode).episode : '',
+            Math.round(state.current.timeline.percent || 0),
+            state.status
+        ].join('|');
+
+        // Если виджет уже есть и состояние не изменилось — обновляем прогресс
+        var existingWidget = document.getElementById('series-widget');
+        if (existingWidget && lastState === signature) {
+            var bar = existingWidget.querySelector('.sw-progress-bar');
+            if (bar && state.current) {
+                var progress = Math.round(state.current.timeline.percent || 0);
+                bar.style.width = Math.max(0, Math.min(100, progress)) + '%';
+                
+                var statusEl = existingWidget.querySelector('.sw-status');
+                if (statusEl) {
+                    var statusText = '';
+                    var statusIcon = '';
+                    if (state.status === 'complete') {
+                        statusText = 'Просмотрено';
+                        statusIcon = '✓';
+                    } else if (state.status === 'upcoming') {
+                        statusText = 'Ожидается';
+                        statusIcon = '⏳';
+                    } else if (progress > 0 && progress < 100) {
+                        statusText = 'Продолжить';
+                        statusIcon = '▶';
+                    } else {
+                        statusText = 'Смотреть';
+                        statusIcon = '▶';
+                    }
+                    statusEl.textContent = statusIcon + ' ' + statusText;
+                }
+                
+                var remaining = formatRemainingTime(state.current.timeline);
+                var remainingEl = existingWidget.querySelector('.sw-remaining');
+                if (remainingEl) {
+                    remainingEl.textContent = remaining ? '⏱ ' + remaining : '';
+                }
             }
+            return;
+        }
+
+        lastState = signature;
+        removeWidget();
+
+        var widget = createWidget(state);
+        if (widget) {
+            document.body.appendChild(widget);
+            currentWidget = widget;
         }
     }
 
@@ -698,20 +813,33 @@
     function onFull(event) {
         if (!event) return;
         
-        if (event.type === 'complite' || event.type === 'start' || event.type === 'build') {
-            clearTimeout(updateTimer);
-            updateTimer = setTimeout(function () {
-                updateWidget();
-            }, 300);
+        if (event.type === 'complite') {
+            var card = null;
+            if (event.data && event.data.movie) {
+                card = event.data.movie;
+            } else if (event.object && (event.object.card || event.object)) {
+                card = event.object.card || event.object;
+            }
+
+            if (card) {
+                clearTimeout(updateTimer);
+                updateTimer = setTimeout(function () {
+                    updateWidget(card, event.data || {});
+                }, 300);
+            }
         }
     }
 
     function onTimeline() {
-        if (isSeriesPage()) {
-            clearTimeout(updateTimer);
-            updateTimer = setTimeout(function () {
-                updateWidget();
-            }, 200);
+        var active = activeActivity();
+        if (active && active.component === 'full') {
+            var card = active.card || (active.object && active.object.card) || null;
+            if (card && mediaType(card) === 'tv') {
+                clearTimeout(updateTimer);
+                updateTimer = setTimeout(function () {
+                    updateWidget(card, active.data || {});
+                }, 200);
+            }
         }
     }
 
@@ -721,12 +849,15 @@
         if (event.component === 'full') {
             clearTimeout(updateTimer);
             updateTimer = setTimeout(function () {
-                updateWidget();
+                var card = activeActivity() ? (activeActivity().card || null) : null;
+                var data = activeActivity() ? (activeActivity().data || null) : null;
+                if (card) {
+                    updateWidget(card, data || {});
+                }
             }, 400);
         } else {
             removeWidget();
-            currentEntry = null;
-            lastCardId = null;
+            lastState = null;
         }
     }
 
@@ -747,9 +878,14 @@
             Lampa.Listener.follow('timeline', onTimeline);
             Lampa.Listener.follow('activity', onActivity);
 
+            // Проверяем текущую страницу
             setTimeout(function () {
-                if (isSeriesPage()) {
-                    updateWidget();
+                var active = activeActivity();
+                if (active && active.component === 'full') {
+                    var card = active.card || (active.object && active.object.card) || null;
+                    if (card && mediaType(card) === 'tv') {
+                        updateWidget(card, active.data || {});
+                    }
                 }
             }, 800);
 
@@ -789,7 +925,13 @@
                     if (!settings.enabled) {
                         removeWidget();
                     } else {
-                        updateWidget();
+                        var active = activeActivity();
+                        if (active && active.component === 'full') {
+                            var card = active.card || null;
+                            if (card) {
+                                updateWidget(card, active.data || {});
+                            }
+                        }
                     }
                 }
             });
@@ -811,7 +953,13 @@
                     if (!settings.show_widget) {
                         removeWidget();
                     } else {
-                        updateWidget();
+                        var active = activeActivity();
+                        if (active && active.component === 'full') {
+                            var card = active.card || null;
+                            if (card) {
+                                updateWidget(card, active.data || {});
+                            }
+                        }
                     }
                 }
             });
@@ -847,14 +995,10 @@
         update: updateWidget,
         remove: removeWidget,
         openLampac: openLampacBalancer,
-        findLastWatched: findLastWatchedEpisode,
-        isSeriesPage: isSeriesPage,
         getState: function () {
             return {
                 version: VERSION,
-                hasWidget: !!document.getElementById(WIDGET_ID),
-                isSeriesPage: isSeriesPage(),
-                currentEntry: currentEntry,
+                hasWidget: !!document.getElementById('series-widget'),
                 settings: getSettings()
             };
         }
