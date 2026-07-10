@@ -1,17 +1,34 @@
-/* Lampa Series Manager 1.1.0 — Совместимая версия для темы от SERG */
+/* Lampa Series Manager 1.1.1 — Совместимая версия для темы от SERG */
 (function () {
     'use strict';
 
-    var VERSION = '1.1.0';
+    var VERSION = '1.1.1';
     var PLUGIN_ID = 'lampa_series_manager';
     var RUNTIME_KEY = '__LSM_RUNTIME__';
     var MEMORY_KEY = 'lsm_episode_memory_v1';
 
     // =============================================
-    // 1. ПРОВЕРКА СОВМЕСТИМОСТИ
+    // 1. БЕЗОПАСНАЯ ПРОВЕРКА ЗАВИСИМОСТЕЙ
     // =============================================
 
-    // Проверяем, установлена ли тема от SERG
+    // Проверяем, что Lampa загружена
+    if (typeof Lampa === 'undefined') {
+        console.warn('[Series Manager] Lampa не найдена, повторная попытка...');
+        setTimeout(arguments.callee, 500);
+        return;
+    }
+
+    // Проверяем, что Lampa.Listener доступен
+    if (!Lampa.Listener || typeof Lampa.Listener.follow !== 'function') {
+        console.warn('[Series Manager] Lampa.Listener недоступен, повторная попытка...');
+        setTimeout(arguments.callee, 500);
+        return;
+    }
+
+    // =============================================
+    // 2. ПРОВЕРКА СОВМЕСТИМОСТИ С ТЕМОЙ SERG
+    // =============================================
+
     var isSergThemeInstalled = function() {
         try {
             // Проверяем по наличию класса applecation на странице
@@ -26,14 +43,11 @@
         }
     };
 
-    // Если тема SERG установлена, используем её классы
-    var THEME_CLASS = isSergThemeInstalled() ? 'applecation' : 'lampa-theme-engine';
-    var THEME_PREFIX = isSergThemeInstalled() ? 'applecation' : 'lte';
-
-    console.log('[Series Manager] Совместимость с темой SERG:', isSergThemeInstalled());
+    var sergThemeDetected = isSergThemeInstalled();
+    console.log('[Series Manager] Тема SERG обнаружена:', sergThemeDetected);
 
     // =============================================
-    // 2. Утилиты (скопированы из вашей темы для совместимости)
+    // 3. Утилиты
     // =============================================
 
     function storageGet(name, fallback) {
@@ -42,7 +56,7 @@
                 return Lampa.Storage.get(name, fallback);
             }
         } catch (error) {
-            console.warn('[Series Manager] Storage.get failed:', name, error);
+            // Без вывода в консоль
         }
         return fallback;
     }
@@ -54,7 +68,7 @@
                 return true;
             }
         } catch (error) {
-            console.warn('[Series Manager] Storage.set failed:', name, error);
+            // Без вывода в консоль
         }
         return false;
     }
@@ -132,15 +146,15 @@
     }
 
     function activeActivityRoot() {
-        var active = document.querySelector('.activity--active');
-        if (active) return active;
-        var activity = activeActivity();
-        if (activity && activity.activity && activity.activity.render) {
-            try {
+        try {
+            var active = document.querySelector('.activity--active');
+            if (active) return active;
+            var activity = activeActivity();
+            if (activity && activity.activity && activity.activity.render) {
                 var rendered = activity.activity.render(true);
                 if (rendered && rendered.nodeType === 1) return rendered;
-            } catch (error) {}
-        }
+            }
+        } catch (error) {}
         return null;
     }
 
@@ -204,9 +218,7 @@
                     return road;
                 }
             }
-        } catch (error) {
-            console.warn('[Series Manager] Timeline error:', error);
-        }
+        } catch (error) {}
         var embedded = episode.timeline || episode.view || null;
         if (embedded && typeof embedded === 'object') {
             road.percent = numberValue(embedded.percent, 0);
@@ -217,7 +229,7 @@
     }
 
     // =============================================
-    // 3. Память серий (sessionStorage)
+    // 4. Память серий (sessionStorage)
     // =============================================
 
     function detailMemoryStore() {
@@ -233,9 +245,7 @@
     function writeDetailMemory(store) {
         try {
             if (window.sessionStorage) window.sessionStorage.setItem(MEMORY_KEY, JSON.stringify(store || {}));
-        } catch (error) {
-            console.warn('[Series Manager] Memory write error:', error);
-        }
+        } catch (error) {}
     }
 
     function readEpisodeMemory(card) {
@@ -263,12 +273,11 @@
             keys.slice(0, keys.length - 80).forEach(function (oldKey) { delete store[oldKey]; });
         }
         writeDetailMemory(store);
-        console.log('[Series Manager] Remembered:', key, coordinates, reason || '');
         return true;
     }
 
     // =============================================
-    // 4. Анализ просмотра сериала
+    // 5. Анализ просмотра сериала
     // =============================================
 
     function resolveSeriesPlayback(card, data) {
@@ -321,7 +330,7 @@
     }
 
     // =============================================
-    // 5. Компактный виджет (адаптирован под тему SERG)
+    // 6. Компактный виджет
     // =============================================
 
     function createWidget(state) {
@@ -332,11 +341,11 @@
         if (oldStyle) oldStyle.remove();
 
         var widget = document.createElement('div');
-        widget.className = 'lsm-widget ' + THEME_CLASS + '-widget';
+        widget.className = 'lsm-widget';
         widget.setAttribute('data-lsm-status', state.status);
         widget.setAttribute('data-lsm-version', VERSION);
 
-        // Стили виджета (адаптированы под тему SERG)
+        // Стили виджета (безопасно)
         var style = document.createElement('style');
         style.id = 'lsm-widget-style';
         style.textContent = `
@@ -355,21 +364,13 @@
                 border: 0.075em solid rgba(255, 255, 255, 0.1) !important;
                 box-shadow: 0 1.2em 3.6em rgba(0, 0, 0, 0.75) !important;
                 color: #f6f8fc !important;
-                font-family: "SegoeUI", system-ui, -apple-system, sans-serif !important;
+                font-family: system-ui, -apple-system, sans-serif !important;
                 transition: opacity 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease !important;
                 cursor: pointer !important;
                 user-select: none !important;
                 animation: lsm-widget-in 0.35s cubic-bezier(0.22, 0.72, 0.2, 1) !important;
                 pointer-events: auto !important;
                 line-height: 1.4 !important;
-            }
-            /* Адаптация под тему SERG */
-            .applecation .lsm-widget {
-                background: rgba(10, 14, 23, 0.95) !important;
-                border-color: rgba(255, 255, 255, 0.08) !important;
-            }
-            .applecation .lsm-widget:hover {
-                border-color: rgba(105, 167, 255, 0.4) !important;
             }
             .lsm-widget:hover {
                 transform: scale(1.03) !important;
@@ -477,8 +478,6 @@
                 opacity: 1 !important;
                 transform: scale(1.03) !important;
             }
-
-            /* Адаптация под телефон */
             @media (max-width: 720px) {
                 .lsm-widget {
                     bottom: 1.2em !important;
@@ -508,7 +507,7 @@
         var progress = Math.round(current.timeline.percent || 0);
         var remaining = formatRemainingTime(current.timeline);
 
-        // Заголовок с меткой
+        // Заголовок
         var header = document.createElement('div');
         header.className = 'lsm-header';
 
@@ -529,12 +528,12 @@
         header.appendChild(label);
         header.appendChild(statusIcon);
 
-        // Название серии
+        // Название
         var titleEl = document.createElement('div');
         titleEl.className = 'lsm-title';
         titleEl.textContent = title;
 
-        // Мета-информация
+        // Мета
         var meta = document.createElement('div');
         meta.className = 'lsm-meta';
 
@@ -551,7 +550,7 @@
             meta.appendChild(remainingEl);
         }
 
-        // Прогресс-бар
+        // Прогресс
         var progressWrap = document.createElement('div');
         progressWrap.className = 'lsm-progress-wrap';
         var progressBar = document.createElement('div');
@@ -570,12 +569,11 @@
                 (nextProgress > 0 ? ' (' + nextProgress + '%)' : '');
         }
 
-        // Подсказка о клике
+        // Подсказка
         var clickHint = document.createElement('div');
         clickHint.className = 'lsm-click-hint';
         clickHint.textContent = '↗ Открыть эпизоды';
 
-        // Собираем виджет
         widget.appendChild(header);
         widget.appendChild(titleEl);
         widget.appendChild(meta);
@@ -583,13 +581,13 @@
         if (nextEl) widget.appendChild(nextEl);
         widget.appendChild(clickHint);
 
-        // Клик по виджету — переход на страницу эпизодов
+        // Клик
         widget.addEventListener('click', function (e) {
             e.stopPropagation();
             openEpisodesScreen(state.card);
         });
 
-        // Авто-скрытие при нулевом прогрессе
+        // Авто-скрытие
         if (progress === 0 && !remaining) {
             var hideTimeout = null;
             var isHidden = false;
@@ -632,7 +630,7 @@
     }
 
     // =============================================
-    // 6. Открытие страницы эпизодов
+    // 7. Открытие страницы эпизодов
     // =============================================
 
     function openEpisodesScreen(card) {
@@ -640,7 +638,7 @@
         var memory = readEpisodeMemory(card);
         var payload = {
             component: 'episodes',
-            title: window.Lampa && Lampa.Lang && typeof Lampa.Lang.translate === 'function' ? Lampa.Lang.translate('title_episodes') : 'Эпизоды',
+            title: 'Эпизоды',
             card: card,
             source: card.source || storageGet('source', 'tmdb'),
             page: 1
@@ -655,14 +653,12 @@
                 Lampa.Router.call('episodes', card);
                 return true;
             }
-        } catch (error) {
-            console.warn('[Series Manager] Open episodes error:', error);
-        }
+        } catch (error) {}
         return false;
     }
 
     // =============================================
-    // 7. Управление виджетами
+    // 8. Управление виджетами
     // =============================================
 
     function removeOldWidgets() {
@@ -680,7 +676,6 @@
     function updateWidget(card, data) {
         if (runtime.destroyed) return;
 
-        // Проверяем, что это сериал
         if (mediaType(card) !== 'tv') {
             removeOldWidgets();
             currentWidget = null;
@@ -694,7 +689,6 @@
             return;
         }
 
-        // Проверяем, изменилось ли состояние
         var signature = [
             contentId(card),
             state.current ? episodeCoordinates(state.current.episode).season : '',
@@ -706,12 +700,10 @@
         ].join('|');
 
         if (lastState === signature && currentWidget && currentWidget.parentNode) {
-            // Обновляем только прогресс-бар
             var bar = currentWidget.querySelector('.lsm-progress-bar');
             if (bar && state.current) {
                 var progress = Math.round(state.current.timeline.percent || 0);
                 bar.style.width = Math.max(0, Math.min(100, progress)) + '%';
-                // Обновляем статус
                 var statusIcon = currentWidget.querySelector('.lsm-status-icon');
                 if (statusIcon) {
                     if (state.status === 'complete') {
@@ -722,7 +714,6 @@
                         statusIcon.textContent = '▶ ' + (progress > 0 ? progress + '%' : 'Готово');
                     }
                 }
-                // Обновляем remaining
                 var remaining = formatRemainingTime(state.current.timeline);
                 var remainingEl = currentWidget.querySelector('.lsm-remaining');
                 if (remainingEl) {
@@ -735,10 +726,8 @@
         lastState = signature;
         lastCard = card;
 
-        // Удаляем старый виджет
         removeOldWidgets();
 
-        // Создаём новый
         var widget = createWidget(state);
         if (widget) {
             document.body.appendChild(widget);
@@ -747,7 +736,7 @@
     }
 
     // =============================================
-    // 8. Обработчики событий (совместимые с темой SERG)
+    // 9. Обработчики событий (без jQuery)
     // =============================================
 
     function handleDetailEvent(event) {
@@ -762,12 +751,11 @@
             clearTimeout(updateTimer);
             updateTimer = setTimeout(function () {
                 updateWidget(card, data);
-            }, 500); // Увеличил задержку для совместимости с темой SERG
+            }, 500);
         }
     }
 
     function handleTimelineEvent() {
-        // Обновляем виджет при изменении таймлайна
         var active = activeActivity();
         if (active && active.component === 'full') {
             var card = active.card || (active.object && active.object.card) || null;
@@ -783,7 +771,6 @@
     function handleEpisodeSelection(episode, card) {
         if (!episode || !card) return;
         rememberEpisodeSelection(card, episode, 'click');
-        // Обновляем виджет после выбора эпизода
         clearTimeout(updateTimer);
         updateTimer = setTimeout(function () {
             updateWidget(card, {});
@@ -791,7 +778,7 @@
     }
 
     // =============================================
-    // 9. Установка обработчиков (с проверкой на дубли)
+    // 10. Установка обработчиков (безопасно)
     // =============================================
 
     var runtime = {
@@ -812,7 +799,6 @@
             removeOldWidgets();
             currentWidget = null;
             if (window[RUNTIME_KEY] === this) delete window[RUNTIME_KEY];
-            console.log('[Series Manager] Destroyed:', reason || '');
         }
     };
     window[RUNTIME_KEY] = runtime;
@@ -852,7 +838,46 @@
         return true;
     }
 
-    // Проверяем, не установлены ли уже обработчики
+    // Обработчики через DOM (без jQuery)
+    function setupEpisodeClickHandlers() {
+        try {
+            var handler = function(e) {
+                var target = e.currentTarget;
+                var episode = target.card_data || null;
+                var active = activeActivity();
+                var card = active && (active.card || (active.object && active.object.card) || null);
+                if (episode && card && mediaType(card) === 'tv') {
+                    handleEpisodeSelection(episode, card);
+                }
+            };
+
+            // Используем делегирование через document
+            document.addEventListener('click', function(e) {
+                var target = e.target.closest('.full-episode, .season-episode, .card-episode');
+                if (target) {
+                    handler.call(target, e);
+                }
+            });
+
+            // Для hover:enter используем mouseenter + focus
+            document.addEventListener('mouseenter', function(e) {
+                var target = e.target.closest('.full-episode, .season-episode, .card-episode');
+                if (target && target.classList.contains('focus')) {
+                    handler.call(target, e);
+                }
+            }, true);
+
+            // Для фокуса с клавиатуры
+            document.addEventListener('focus', function(e) {
+                var target = e.target.closest('.full-episode, .season-episode, .card-episode');
+                if (target) {
+                    handler.call(target, e);
+                }
+            }, true);
+
+        } catch (error) {}
+    }
+
     var listenersInstalled = false;
 
     function installListeners() {
@@ -861,23 +886,19 @@
 
         listenersInstalled = true;
 
-        // Слушаем события детальной страницы
         followEmitter(Lampa.Listener, 'full', function (event) {
             if (event && (event.type === 'start' || event.type === 'complite' || event.type === 'build')) {
                 handleDetailEvent(event);
             }
         });
 
-        // Слушаем изменения таймлайна
         followEmitter(Lampa.Listener, 'timeline', handleTimelineEvent);
 
-        // Слушаем открытие страницы эпизодов
         followEmitter(Lampa.Listener, 'episodes', function (event) {
             if (event && event.type === 'start' && event.item) {
                 var card = event.data && event.data.movie ? event.data.movie :
                     event.object && (event.object.card || event.object) : null;
                 if (card && mediaType(card) === 'tv') {
-                    // Сохраняем текущий эпизод при открытии страницы эпизодов
                     setTimeout(function () {
                         var root = activeActivityRoot();
                         if (root) {
@@ -894,46 +915,26 @@
             }
         });
 
-        // Слушаем клики по эпизодам через DOM
-        if (window.$) {
-            try {
-                $(document).on('click.lsm hover:enter.lsm', '.full-episode, .season-episode, .card-episode', function () {
-                    var episode = this.card_data || null;
-                    var active = activeActivity();
-                    var card = active && (active.card || (active.object && active.object.card) || null);
-                    if (episode && card && mediaType(card) === 'tv') {
-                        handleEpisodeSelection(episode, card);
-                    }
-                });
-                addDisposer(function () {
-                    try { $(document).off('.lsm'); } catch (error) {}
-                });
-            } catch (error) {
-                console.warn('[Series Manager] DOM click handlers failed:', error);
-            }
-        }
+        setupEpisodeClickHandlers();
 
         return true;
     }
 
     // =============================================
-    // 10. Запуск плагина
+    // 11. Запуск плагина
     // =============================================
 
     function start() {
         if (runtime.destroyed || runtime.started) return;
         if (!window.Lampa || !Lampa.Listener) {
-            setTimeout(start, 100);
+            setTimeout(start, 200);
             return;
         }
 
         runtime.started = true;
-        console.log('[Series Manager] v' + VERSION + ' started (совместимая версия)');
-        console.log('[Series Manager] Тема SERG обнаружена:', isSergThemeInstalled());
 
         installListeners();
 
-        // Проверяем, не открыт ли уже сериал
         setTimeout(function () {
             var active = activeActivity();
             if (active && active.component === 'full') {
@@ -942,11 +943,11 @@
                     updateWidget(card, active.data || {});
                 }
             }
-        }, 800); // Увеличенная задержка для совместимости
+        }, 800);
     }
 
     // =============================================
-    // 11. Экспорт API
+    // 12. Экспорт API
     // =============================================
 
     var api = {
@@ -965,7 +966,7 @@
                 started: runtime.started,
                 hasWidget: !!currentWidget,
                 lastCard: lastCard ? contentId(lastCard) : null,
-                sergThemeDetected: isSergThemeInstalled()
+                sergThemeDetected: sergThemeDetected
             };
         }
     };
@@ -973,12 +974,11 @@
     window.__LSM_API__ = api;
     window[RUNTIME_KEY] = runtime;
 
-    // Запускаем
+    // Запуск
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', start, { once: true });
     } else {
         start();
     }
 
-    console.log('[Series Manager] v' + VERSION + ' loaded (совместимая версия)');
 })();
