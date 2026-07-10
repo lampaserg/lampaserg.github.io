@@ -1,8 +1,8 @@
-/* Series Manager PRO 2.2.0 — Простая и надёжная версия */
+/* Series Manager PRO 2.3.0 — Блок для темы SERG */
 (function () {
     'use strict';
 
-    var VERSION = '2.2.0';
+    var VERSION = '2.3.0';
     var MEMORY_KEY = 'series_manager_pro_v2';
 
     // =============================================
@@ -22,7 +22,6 @@
 
     var DEFAULTS = {
         enabled: true,
-        show_widget: true,
         auto_open_balancer: true
     };
 
@@ -65,6 +64,19 @@
         }
     }
 
+    function getCurrentRender() {
+        try {
+            var active = Lampa.Activity.active();
+            if (!active) return null;
+            if (active.activity && typeof active.activity.render === 'function') {
+                return active.activity.render();
+            }
+            return null;
+        } catch (e) {
+            return null;
+        }
+    }
+
     function isTv(card) {
         if (!card) return false;
         return !!(card.name || card.original_name || card.first_air_date || card.number_of_seasons);
@@ -90,6 +102,12 @@
         var e = String(coords.episode).padStart(2, '0');
         var name = episode && episode.name ? ' · ' + episode.name : '';
         return 'S' + s + ' E' + e + name;
+    }
+
+    function formatEpisodeShort(episode) {
+        var coords = getEpisodeCoords(episode);
+        if (!coords) return '';
+        return 'S' + String(coords.season).padStart(2, '0') + ' E' + String(coords.episode).padStart(2, '0');
     }
 
     function getProgress(card, episode) {
@@ -195,7 +213,7 @@
     }
 
     // =============================================
-    // ПОИСК ПОСЛЕДНЕЙ СЕРИИ (ПРОСТАЯ ВЕРСИЯ)
+    // ПОИСК ПОСЛЕДНЕЙ СЕРИИ
     // =============================================
 
     function findLastEpisode(card, data) {
@@ -204,7 +222,6 @@
         var episodes = getEpisodes(data);
         if (!episodes || episodes.length === 0) return null;
 
-        // Сортируем по сезону и серии
         episodes.sort(function (a, b) {
             var ca = getEpisodeCoords(a);
             var cb = getEpisodeCoords(b);
@@ -220,7 +237,6 @@
                 var coords = getEpisodeCoords(episodes[i]);
                 if (coords && coords.season === saved.season && coords.episode === saved.episode) {
                     var progress = getProgress(card, episodes[i]);
-                    // Если >= 89% — ищем следующую
                     if (progress >= 89) {
                         var nextIndex = i + 1;
                         if (nextIndex < episodes.length) {
@@ -247,7 +263,7 @@
         }
         if (bestEpisode) return bestEpisode;
 
-        // 3. Ищем последнюю полностью просмотренную (>= 89%)
+        // 3. Ищем последнюю полностью просмотренную
         var lastWatched = null;
         var lastIndex = -1;
         for (var k = 0; k < episodes.length; k++) {
@@ -261,7 +277,6 @@
             return episodes[lastIndex + 1];
         }
 
-        // 4. Берём первую доступную серию
         return episodes[0];
     }
 
@@ -309,27 +324,15 @@
     }
 
     // =============================================
-    // ВИДЖЕТ
+    // СОЗДАНИЕ БЛОКА (СТАТИЧНЫЙ)
     // =============================================
 
-    var widgetElement = null;
-    var currentCardId = null;
-    var currentEpisodeKey = null;
-
-    function removeWidget() {
-        if (widgetElement && widgetElement.parentNode) {
-            widgetElement.parentNode.removeChild(widgetElement);
-        }
-        widgetElement = null;
-        var style = document.getElementById('series-widget-styles');
-        if (style) style.remove();
-    }
-
-    function createWidget(card, episode) {
+    function createInfoBlock(card, episode) {
         if (!card || !episode) return null;
 
         var coords = getEpisodeCoords(episode);
         var title = formatEpisode(episode);
+        var shortTitle = formatEpisodeShort(episode);
         var progress = getProgress(card, episode);
         var timeline = getTimeline(card, episode);
         var remaining = getRemaining(timeline);
@@ -337,73 +340,60 @@
         var seriesTitle = card.title || card.name || card.original_title || card.original_name || '';
 
         var statusText = '';
-        var statusIcon = '';
+        var statusColor = '';
         if (progress >= 89) {
-            statusText = 'Просмотрено';
-            statusIcon = '✓';
+            statusText = '✓ Просмотрено';
+            statusColor = '#2ecc71';
         } else if (progress > 0 && progress < 89) {
-            statusText = 'Продолжить';
-            statusIcon = '▶';
+            statusText = '▶ Продолжить';
+            statusColor = '#69a7ff';
         } else {
-            statusText = 'Смотреть';
-            statusIcon = '▶';
+            statusText = '▶ Смотреть';
+            statusColor = '#69a7ff';
         }
 
-        // Удаляем старый виджет
-        removeWidget();
-
-        var widget = document.createElement('div');
-        widget.id = 'series-widget';
-        widget.className = 'series-widget';
-        widget.style.cssText = [
-            'position:fixed!important',
-            'bottom:2.5em!important',
-            'right:2.5em!important',
-            'z-index:9999!important',
-            'max-width:380px!important',
-            'min-width:220px!important',
-            'padding:0.8em 1.2em!important',
-            'border-radius:1em!important',
-            'background:rgba(7,10,16,0.94)!important',
-            'backdrop-filter:blur(20px)!important',
-            'border:2px solid rgba(105,167,255,0.2)!important',
-            'box-shadow:0 1.2em 4em rgba(0,0,0,0.8)!important',
-            'color:#f6f8fc!important',
-            'font-family:system-ui,sans-serif!important',
-            'font-size:14px!important',
-            'cursor:pointer!important',
-            'transition:opacity .3s ease,transform .3s ease!important',
-            'animation:fadeIn .4s ease!important'
+        // Блок
+        var block = document.createElement('div');
+        block.className = 'series-info-block';
+        block.style.cssText = [
+            'margin-top:1em',
+            'padding:0.8em 1.2em',
+            'border-radius:0.8em',
+            'background:rgba(0,0,0,0.3)',
+            'border:1px solid rgba(255,255,255,0.08)',
+            'backdrop-filter:blur(10px)',
+            '-webkit-backdrop-filter:blur(10px)',
+            'transition:all .3s ease',
+            'cursor:pointer'
         ].join(';');
 
-        // Анимация
-        var style = document.createElement('style');
-        style.id = 'series-widget-styles';
-        style.textContent = '@keyframes fadeIn{0%{opacity:0;transform:translateY(20px) scale(0.95)}100%{opacity:1;transform:translateY(0) scale(1)}}';
-        document.head.appendChild(style);
+        // Заголовок блока
+        var header = document.createElement('div');
+        header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:0.3em;';
+
+        var label = document.createElement('span');
+        label.style.cssText = 'font-size:0.65em;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.35);font-weight:600;';
+        label.textContent = 'Продолжить просмотр';
+        header.appendChild(label);
+
+        var status = document.createElement('span');
+        status.style.cssText = 'font-size:0.6em;font-weight:700;color:' + statusColor + ';';
+        status.textContent = statusText;
+        header.appendChild(status);
 
         // Название сериала
-        var seriesName = document.createElement('div');
-        seriesName.style.cssText = 'font-size:0.7em;color:rgba(255,255,255,0.35);margin-bottom:0.1em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
-        seriesName.textContent = seriesTitle;
+        var seriesEl = document.createElement('div');
+        seriesEl.style.cssText = 'font-size:0.7em;color:rgba(255,255,255,0.3);margin-bottom:0.1em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+        seriesEl.textContent = seriesTitle;
 
-        // Заголовок
-        var header = document.createElement('div');
-        header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:0.15em;';
-
+        // Название серии
         var titleEl = document.createElement('div');
-        titleEl.style.cssText = 'font-size:1em;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+        titleEl.style.cssText = 'font-size:0.9em;font-weight:700;color:#fff;margin-bottom:0.2em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
         titleEl.textContent = title;
-        header.appendChild(titleEl);
 
-        var statusEl = document.createElement('span');
-        statusEl.style.cssText = 'font-size:0.6em;padding:0.15em 0.6em;border-radius:99em;background:rgba(105,167,255,0.15);color:#69a7ff;font-weight:700;white-space:nowrap;flex-shrink:0;margin-left:0.5em;';
-        statusEl.textContent = statusIcon + ' ' + statusText;
-        header.appendChild(statusEl);
-
-        // Мета
+        // Мета-информация
         var meta = document.createElement('div');
-        meta.style.cssText = 'font-size:0.75em;color:rgba(255,255,255,0.45);display:flex;align-items:center;gap:0.5em;flex-wrap:wrap;margin-bottom:0.1em;';
+        meta.style.cssText = 'display:flex;align-items:center;gap:0.8em;flex-wrap:wrap;font-size:0.7em;color:rgba(255,255,255,0.45);';
 
         if (coords) {
             var seasonText = document.createElement('span');
@@ -411,7 +401,7 @@
             meta.appendChild(seasonText);
         }
 
-        if (progress > 0 && progress < 100) {
+        if (progress > 0) {
             var progressText = document.createElement('span');
             progressText.textContent = progress + '%';
             meta.appendChild(progressText);
@@ -425,7 +415,7 @@
 
         // Прогресс-бар
         var barWrap = document.createElement('div');
-        barWrap.style.cssText = 'width:100%;height:3px;border-radius:99em;background:rgba(255,255,255,0.06);margin:0.3em 0 0.1em;overflow:hidden;';
+        barWrap.style.cssText = 'width:100%;height:3px;border-radius:99em;background:rgba(255,255,255,0.06);margin:0.4em 0 0.1em;overflow:hidden;';
         var bar = document.createElement('div');
         bar.style.cssText = 'height:100%;border-radius:inherit;background:linear-gradient(90deg,#69a7ff,#91beff);transition:width .5s ease;';
         bar.style.width = Math.min(100, progress) + '%';
@@ -433,27 +423,28 @@
 
         // Подсказка
         var hint = document.createElement('div');
-        hint.style.cssText = 'font-size:0.55em;color:rgba(255,255,255,0.1);text-align:right;margin-top:0.05em;';
+        hint.style.cssText = 'font-size:0.5em;color:rgba(255,255,255,0.12);text-align:right;margin-top:0.1em;';
         hint.textContent = '↗ Открыть в Lampac';
 
-        widget.appendChild(seriesName);
-        widget.appendChild(header);
-        widget.appendChild(meta);
-        widget.appendChild(barWrap);
-        widget.appendChild(hint);
+        block.appendChild(header);
+        block.appendChild(seriesEl);
+        block.appendChild(titleEl);
+        block.appendChild(meta);
+        block.appendChild(barWrap);
+        block.appendChild(hint);
 
         // Ховер
-        widget.addEventListener('mouseenter', function () {
-            this.style.transform = 'scale(1.02)';
-            this.style.borderColor = 'rgba(105,167,255,0.45)';
+        block.addEventListener('mouseenter', function () {
+            this.style.borderColor = 'rgba(105,167,255,0.3)';
+            this.style.background = 'rgba(0,0,0,0.4)';
         });
-        widget.addEventListener('mouseleave', function () {
-            this.style.transform = 'scale(1)';
-            this.style.borderColor = 'rgba(105,167,255,0.2)';
+        block.addEventListener('mouseleave', function () {
+            this.style.borderColor = 'rgba(255,255,255,0.08)';
+            this.style.background = 'rgba(0,0,0,0.3)';
         });
 
         // Клик
-        widget.addEventListener('click', function (e) {
+        block.addEventListener('click', function (e) {
             e.stopPropagation();
             if (coords) {
                 saveEpisode(card, episode);
@@ -461,87 +452,118 @@
             }
         });
 
-        widgetElement = widget;
-        return widget;
+        return block;
     }
 
     // =============================================
-    // ОБНОВЛЕНИЕ ВИДЖЕТА
+    // ВСТАВКА БЛОКА В СТРАНИЦУ
     // =============================================
 
-    var updateTimer = null;
+    var inserted = false;
+    var currentBlock = null;
 
-    function updateWidget() {
+    function removeBlock() {
+        if (currentBlock && currentBlock.parentNode) {
+            currentBlock.parentNode.removeChild(currentBlock);
+        }
+        currentBlock = null;
+        inserted = false;
+    }
+
+    function insertBlock() {
         try {
-            // Проверяем, что мы на странице сериала
+            var settings = getSettings();
+            if (!settings.enabled) {
+                removeBlock();
+                return;
+            }
+
             var active = Lampa.Activity.active();
             if (!active || active.component !== 'full') {
-                removeWidget();
+                removeBlock();
                 return;
             }
 
             var card = getCurrentCard();
             if (!card || !isTv(card)) {
-                removeWidget();
+                removeBlock();
                 return;
             }
 
-            var cardId = getContentId(card);
+            var render = getCurrentRender();
+            if (!render || !render.length) {
+                return;
+            }
+
+            // Ищем контейнер для вставки
+            var container = render.find('.applecation__info');
+            
+            // Если нет контейнера темы SERG, ищем другие варианты
+            if (!container.length) {
+                container = render.find('.full-start-new__details');
+            }
+            if (!container.length) {
+                container = render.find('.full-start-new__right');
+            }
+            if (!container.length) {
+                return;
+            }
+
             var data = getCurrentData();
             var episode = findLastEpisode(card, data || {});
 
             if (!episode) {
-                removeWidget();
+                removeBlock();
                 return;
             }
 
-            var episodeKey = getContentId(card) + ':' + (episode.season_number || episode.season || 0) + ':' + (episode.episode_number || episode.episode || 0);
-            
             // Проверяем, изменилась ли серия
-            if (currentCardId !== cardId || currentEpisodeKey !== episodeKey) {
-                currentCardId = cardId;
-                currentEpisodeKey = episodeKey;
-                var widget = createWidget(card, episode);
-                if (widget) {
-                    removeWidget();
-                    document.body.appendChild(widget);
-                    widgetElement = widget;
+            var episodeKey = getContentId(card) + ':' + (episode.season_number || episode.season || 0) + ':' + (episode.episode_number || episode.episode || 0);
+            if (currentBlock && currentBlock._episodeKey === episodeKey) {
+                // Обновляем прогресс
+                var progress = getProgress(card, episode);
+                var bar = currentBlock.querySelector('.series-info-block .sw-progress-bar');
+                if (bar) {
+                    bar.style.width = Math.min(100, progress) + '%';
                 }
-            } else {
-                // Обновляем прогресс-бар
-                if (widgetElement) {
-                    var progress = getProgress(card, episode);
-                    var bar = widgetElement.querySelector('.sw-progress-bar');
-                    if (bar) {
-                        bar.style.width = Math.min(100, progress) + '%';
+                var statusEl = currentBlock.querySelector('.series-info-block .sw-status');
+                if (statusEl) {
+                    var statusText = '';
+                    var statusColor = '';
+                    if (progress >= 89) {
+                        statusText = '✓ Просмотрено';
+                        statusColor = '#2ecc71';
+                    } else if (progress > 0 && progress < 89) {
+                        statusText = '▶ Продолжить';
+                        statusColor = '#69a7ff';
+                    } else {
+                        statusText = '▶ Смотреть';
+                        statusColor = '#69a7ff';
                     }
-                    var statusEl = widgetElement.querySelector('.sw-status');
-                    if (statusEl) {
-                        var statusText = '';
-                        var statusIcon = '';
-                        if (progress >= 89) {
-                            statusText = 'Просмотрено';
-                            statusIcon = '✓';
-                        } else if (progress > 0 && progress < 89) {
-                            statusText = 'Продолжить';
-                            statusIcon = '▶';
-                        } else {
-                            statusText = 'Смотреть';
-                            statusIcon = '▶';
-                        }
-                        statusEl.textContent = statusIcon + ' ' + statusText;
-                    }
-                    var timeline = getTimeline(card, episode);
-                    var remaining = getRemaining(timeline);
-                    var remainingEl = widgetElement.querySelector('.sw-remaining');
-                    if (remainingEl) {
-                        remainingEl.textContent = remaining ? '⏱ ' + remaining : '';
-                    }
+                    statusEl.textContent = statusText;
+                    statusEl.style.color = statusColor;
                 }
+                return;
             }
 
+            // Создаём новый блок
+            var block = createInfoBlock(card, episode);
+            if (!block) return;
+
+            block._episodeKey = episodeKey;
+
+            // Удаляем старый блок
+            removeBlock();
+
+            // Вставляем блок в контейнер
+            container.append(block);
+            currentBlock = block;
+            inserted = true;
+
+            console.log('[Series Manager PRO] Блок добавлен:', episodeKey);
+
         } catch (e) {
-            console.error('[Series Manager PRO] Ошибка обновления:', e);
+            console.error('[Series Manager PRO] Ошибка вставки блока:', e);
         }
     }
 
@@ -549,25 +571,27 @@
     // СОБЫТИЯ
     // =============================================
 
+    var updateTimer = null;
+
     function onFull(event) {
         if (!event) return;
         if (event.type === 'complite' || event.type === 'start') {
             clearTimeout(updateTimer);
-            updateTimer = setTimeout(updateWidget, 400);
+            updateTimer = setTimeout(insertBlock, 400);
         }
     }
 
     function onTimeline() {
-        if (widgetElement) {
+        if (inserted) {
             clearTimeout(updateTimer);
-            updateTimer = setTimeout(updateWidget, 300);
+            updateTimer = setTimeout(insertBlock, 300);
         }
     }
 
     function onActivity(event) {
         if (!event || event.type !== 'start') return;
         clearTimeout(updateTimer);
-        updateTimer = setTimeout(updateWidget, 500);
+        updateTimer = setTimeout(insertBlock, 500);
     }
 
     // =============================================
@@ -587,7 +611,7 @@
             Lampa.Listener.follow('timeline', onTimeline);
             Lampa.Listener.follow('activity', onActivity);
 
-            setTimeout(updateWidget, 1000);
+            setTimeout(insertBlock, 1000);
 
         } catch (e) {
             console.error('[Series Manager PRO] Ошибка:', e);
@@ -616,38 +640,16 @@
                     default: true
                 },
                 field: {
-                    name: 'Включить Series Manager PRO'
+                    name: 'Включить блок продолжения'
                 },
                 onChange: function(value) {
                     var settings = getSettings();
                     settings.enabled = value === 'true' || value === true;
                     setSettings(settings);
                     if (!settings.enabled) {
-                        removeWidget();
+                        removeBlock();
                     } else {
-                        updateWidget();
-                    }
-                }
-            });
-
-            Lampa.SettingsApi.addParam({
-                component: 'series_manager_pro',
-                param: {
-                    name: 'series_manager_pro_widget',
-                    type: 'trigger',
-                    default: true
-                },
-                field: {
-                    name: 'Показывать виджет'
-                },
-                onChange: function(value) {
-                    var settings = getSettings();
-                    settings.show_widget = value === 'true' || value === true;
-                    setSettings(settings);
-                    if (!settings.show_widget) {
-                        removeWidget();
-                    } else {
-                        updateWidget();
+                        insertBlock();
                     }
                 }
             });
@@ -660,7 +662,7 @@
                     default: true
                 },
                 field: {
-                    name: 'Автоматически открывать Lampac Balancer'
+                    name: 'Открывать Lampac Balancer при клике'
                 },
                 onChange: function(value) {
                     var settings = getSettings();
@@ -680,13 +682,14 @@
 
     window.__SERIES_MANAGER_PRO__ = {
         version: VERSION,
-        update: updateWidget,
-        remove: removeWidget,
+        update: insertBlock,
+        remove: removeBlock,
         openLampac: openLampac,
         getState: function () {
             return {
                 version: VERSION,
-                hasWidget: !!widgetElement && !!widgetElement.parentNode,
+                inserted: inserted,
+                hasBlock: !!currentBlock,
                 settings: getSettings()
             };
         }
