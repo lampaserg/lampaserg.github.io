@@ -1,50 +1,65 @@
-/* Lampa Series Manager 1.1.1 — Совместимая версия для темы от SERG */
+/* Lampa Series Manager 1.1.2 — Рабочая версия */
 (function () {
     'use strict';
 
-    var VERSION = '1.1.1';
+    var VERSION = '1.1.2';
     var PLUGIN_ID = 'lampa_series_manager';
     var RUNTIME_KEY = '__LSM_RUNTIME__';
     var MEMORY_KEY = 'lsm_episode_memory_v1';
 
     // =============================================
-    // 1. БЕЗОПАСНАЯ ПРОВЕРКА ЗАВИСИМОСТЕЙ
+    // 1. БЕЗОПАСНАЯ ИНИЦИАЛИЗАЦИЯ
     // =============================================
 
-    // Проверяем, что Lampa загружена
-    if (typeof Lampa === 'undefined') {
-        console.warn('[Series Manager] Lampa не найдена, повторная попытка...');
-        setTimeout(arguments.callee, 500);
-        return;
-    }
+    var INIT_ATTEMPTS = 0;
+    var MAX_INIT_ATTEMPTS = 20;
 
-    // Проверяем, что Lampa.Listener доступен
-    if (!Lampa.Listener || typeof Lampa.Listener.follow !== 'function') {
-        console.warn('[Series Manager] Lampa.Listener недоступен, повторная попытка...');
-        setTimeout(arguments.callee, 500);
-        return;
-    }
-
-    // =============================================
-    // 2. ПРОВЕРКА СОВМЕСТИМОСТИ С ТЕМОЙ SERG
-    // =============================================
-
-    var isSergThemeInstalled = function() {
+    function safeInit() {
         try {
-            // Проверяем по наличию класса applecation на странице
+            // Проверяем Lampa
+            if (typeof Lampa === 'undefined') {
+                INIT_ATTEMPTS++;
+                if (INIT_ATTEMPTS < MAX_INIT_ATTEMPTS) {
+                    setTimeout(safeInit, 300);
+                }
+                return;
+            }
+
+            // Проверяем Lampa.Listener
+            if (!Lampa.Listener || typeof Lampa.Listener.follow !== 'function') {
+                INIT_ATTEMPTS++;
+                if (INIT_ATTEMPTS < MAX_INIT_ATTEMPTS) {
+                    setTimeout(safeInit, 300);
+                }
+                return;
+            }
+
+            // Запускаем плагин
+            startPlugin();
+
+        } catch (e) {
+            // Тихая ошибка
+            INIT_ATTEMPTS++;
+            if (INIT_ATTEMPTS < MAX_INIT_ATTEMPTS) {
+                setTimeout(safeInit, 500);
+            }
+        }
+    }
+
+    // =============================================
+    // 2. ПРОВЕРКА ТЕМЫ SERG
+    // =============================================
+
+    function isSergThemeInstalled() {
+        try {
             var hasApplecation = document.querySelector('.applecation') !== null;
-            // Проверяем по наличию настроек
-            var hasSettings = Lampa.Storage.get('applecation_enabled') !== undefined;
-            // Проверяем по наличию стилей
+            var hasSettings = Lampa.Storage && Lampa.Storage.get('applecation_enabled') !== undefined;
             var hasStyles = document.getElementById('applecation_plus_css') !== null;
             return hasApplecation || hasSettings || hasStyles;
         } catch (e) {
             return false;
         }
-    };
-
-    var sergThemeDetected = isSergThemeInstalled();
-    console.log('[Series Manager] Тема SERG обнаружена:', sergThemeDetected);
+    }
 
     // =============================================
     // 3. Утилиты
@@ -52,39 +67,26 @@
 
     function storageGet(name, fallback) {
         try {
-            if (window.Lampa && Lampa.Storage && typeof Lampa.Storage.get === 'function') {
+            if (Lampa && Lampa.Storage && typeof Lampa.Storage.get === 'function') {
                 return Lampa.Storage.get(name, fallback);
             }
-        } catch (error) {
-            // Без вывода в консоль
-        }
+        } catch (e) {}
         return fallback;
     }
 
     function storageSet(name, value) {
         try {
-            if (window.Lampa && Lampa.Storage && typeof Lampa.Storage.set === 'function') {
+            if (Lampa && Lampa.Storage && typeof Lampa.Storage.set === 'function') {
                 Lampa.Storage.set(name, value, true);
                 return true;
             }
-        } catch (error) {
-            // Без вывода в консоль
-        }
+        } catch (e) {}
         return false;
-    }
-
-    function asArray(value) {
-        return Array.isArray(value) ? value : [];
     }
 
     function numberValue(value, fallback) {
         var parsed = Number(value);
         return isFinite(parsed) ? parsed : (fallback !== undefined ? fallback : 0);
-    }
-
-    function clone(value) {
-        try { return JSON.parse(JSON.stringify(value)); }
-        catch (error) { return value; }
     }
 
     function mediaType(card) {
@@ -119,9 +121,9 @@
     }
 
     function formatEpisodeTitle(episode) {
-        var coordinates = episodeCoordinates(episode);
-        if (!coordinates) return '';
-        var label = 'S' + padEpisodeNumber(coordinates.season) + ' E' + padEpisodeNumber(coordinates.episode);
+        var coords = episodeCoordinates(episode);
+        if (!coords) return '';
+        var label = 'S' + padEpisodeNumber(coords.season) + ' E' + padEpisodeNumber(coords.episode);
         var name = episode && episode.name ? String(episode.name) : '';
         return name ? label + ' · ' + name : label;
     }
@@ -138,11 +140,11 @@
 
     function activeActivity() {
         try {
-            var active = Lampa.Activity && typeof Lampa.Activity.active === 'function' ? Lampa.Activity.active() : null;
-            return active || null;
-        } catch (error) {
-            return null;
-        }
+            if (Lampa && Lampa.Activity && typeof Lampa.Activity.active === 'function') {
+                return Lampa.Activity.active() || null;
+            }
+        } catch (e) {}
+        return null;
     }
 
     function activeActivityRoot() {
@@ -154,7 +156,7 @@
                 var rendered = activity.activity.render(true);
                 if (rendered && rendered.nodeType === 1) return rendered;
             }
-        } catch (error) {}
+        } catch (e) {}
         return null;
     }
 
@@ -173,7 +175,9 @@
     function collectEpisodes(value, result, depth) {
         if (depth > 5 || value === null || value === undefined) return;
         if (Array.isArray(value)) {
-            value.forEach(function (item) { collectEpisodes(item, result, depth + 1); });
+            for (var i = 0; i < value.length; i++) {
+                collectEpisodes(value[i], result, depth + 1);
+            }
             return;
         }
         if (typeof value !== 'object') return;
@@ -181,36 +185,42 @@
             result.push(value);
             return;
         }
-        ['episodes_original', 'episodes', 'results', 'items'].forEach(function (key) {
-            if (value[key] !== undefined) collectEpisodes(value[key], result, depth + 1);
-        });
+        var keys = ['episodes_original', 'episodes', 'results', 'items'];
+        for (var j = 0; j < keys.length; j++) {
+            if (value[keys[j]] !== undefined) {
+                collectEpisodes(value[keys[j]], result, depth + 1);
+            }
+        }
     }
 
     function seriesEpisodesFromData(data) {
         var collected = [];
         collectEpisodes(data && data.episodes, collected, 0);
         var unique = {};
-        return collected.filter(function (episode) {
-            var coordinates = episodeCoordinates(episode);
-            if (!coordinates) return false;
-            var key = coordinates.season + ':' + coordinates.episode;
-            if (unique[key]) return false;
+        var result = [];
+        for (var i = 0; i < collected.length; i++) {
+            var coords = episodeCoordinates(collected[i]);
+            if (!coords) continue;
+            var key = coords.season + ':' + coords.episode;
+            if (unique[key]) continue;
             unique[key] = true;
-            return true;
-        }).sort(function (left, right) {
-            var a = episodeCoordinates(left);
-            var b = episodeCoordinates(right);
-            return a.season === b.season ? a.episode - b.episode : a.season - b.season;
+            result.push(collected[i]);
+        }
+        result.sort(function (a, b) {
+            var ca = episodeCoordinates(a);
+            var cb = episodeCoordinates(b);
+            return ca.season === cb.season ? ca.episode - cb.episode : ca.season - cb.season;
         });
+        return result;
     }
 
     function episodeTimeline(card, episode) {
-        var coordinates = episodeCoordinates(episode);
+        var coords = episodeCoordinates(episode);
         var road = { percent: 0, time: 0, duration: 0 };
-        if (!coordinates) return road;
+        if (!coords) return road;
         try {
-            if (window.Lampa && Lampa.Timeline && typeof Lampa.Timeline.watchedEpisode === 'function') {
-                var current = Lampa.Timeline.watchedEpisode(card, coordinates.season, coordinates.episode, true);
+            if (Lampa && Lampa.Timeline && typeof Lampa.Timeline.watchedEpisode === 'function') {
+                var current = Lampa.Timeline.watchedEpisode(card, coords.season, coords.episode, true);
                 if (current && typeof current === 'object') {
                     road.percent = numberValue(current.percent, 0);
                     road.time = numberValue(current.time, 0);
@@ -218,7 +228,7 @@
                     return road;
                 }
             }
-        } catch (error) {}
+        } catch (e) {}
         var embedded = episode.timeline || episode.view || null;
         if (embedded && typeof embedded === 'object') {
             road.percent = numberValue(embedded.percent, 0);
@@ -229,7 +239,7 @@
     }
 
     // =============================================
-    // 4. Память серий (sessionStorage)
+    // 4. Память серий
     // =============================================
 
     function detailMemoryStore() {
@@ -237,86 +247,156 @@
             var raw = window.sessionStorage && window.sessionStorage.getItem(MEMORY_KEY);
             var parsed = raw ? JSON.parse(raw) : {};
             return parsed && typeof parsed === 'object' ? parsed : {};
-        } catch (error) {
+        } catch (e) {
             return {};
         }
     }
 
     function writeDetailMemory(store) {
         try {
-            if (window.sessionStorage) window.sessionStorage.setItem(MEMORY_KEY, JSON.stringify(store || {}));
-        } catch (error) {}
+            if (window.sessionStorage) {
+                window.sessionStorage.setItem(MEMORY_KEY, JSON.stringify(store || {}));
+            }
+        } catch (e) {}
     }
 
     function readEpisodeMemory(card) {
         var key = contentId(card);
         if (!key) return null;
-        var value = detailMemoryStore()[key];
+        var store = detailMemoryStore();
+        var value = store[key];
         return value && typeof value === 'object' ? value : null;
     }
 
     function rememberEpisodeSelection(card, episode, reason) {
-        var coordinates = episodeCoordinates(episode);
+        var coords = episodeCoordinates(episode);
         var key = contentId(card);
-        if (!key || !coordinates) return false;
+        if (!key || !coords) return false;
         var store = detailMemoryStore();
         store[key] = {
-            season: coordinates.season,
-            episode: coordinates.episode,
+            season: coords.season,
+            episode: coords.episode,
             updatedAt: Date.now ? Date.now() : new Date().getTime()
         };
         var keys = Object.keys(store);
         if (keys.length > 80) {
-            keys.sort(function (left, right) {
-                return numberValue(store[left] && store[left].updatedAt, 0) - numberValue(store[right] && store[right].updatedAt, 0);
+            keys.sort(function (a, b) {
+                return numberValue(store[a] && store[a].updatedAt, 0) - numberValue(store[b] && store[b].updatedAt, 0);
             });
-            keys.slice(0, keys.length - 80).forEach(function (oldKey) { delete store[oldKey]; });
+            for (var i = 0; i < keys.length - 80; i++) {
+                delete store[keys[i]];
+            }
         }
         writeDetailMemory(store);
         return true;
     }
 
     // =============================================
-    // 5. Анализ просмотра сериала
+    // 5. Анализ просмотра
     // =============================================
 
     function resolveSeriesPlayback(card, data) {
-        if (!card) return { status: 'empty', episodes: [], current: null, next: null, available: [] };
+        if (!card) {
+            return { status: 'empty', episodes: [], current: null, next: null, available: [] };
+        }
 
         var episodes = seriesEpisodesFromData(data || {});
-        var available = episodes.filter(episodeIsAvailable);
-        var entries = available.map(function (episode) {
-            return { episode: episode, timeline: episodeTimeline(card, episode) };
-        });
+        var available = [];
+        for (var i = 0; i < episodes.length; i++) {
+            if (episodeIsAvailable(episodes[i])) {
+                available.push(episodes[i]);
+            }
+        }
+
+        var entries = [];
+        for (var j = 0; j < available.length; j++) {
+            entries.push({
+                episode: available[j],
+                timeline: episodeTimeline(card, available[j])
+            });
+        }
 
         var current = null;
         var memory = readEpisodeMemory(card);
         if (memory) {
-            var hint = memory;
-            current = entries.find(function (entry) {
-                var coords = episodeCoordinates(entry.episode);
-                return coords && coords.season === hint.season && coords.episode === hint.episode && entry.timeline.percent < 60;
-            }) || null;
+            for (var k = 0; k < entries.length; k++) {
+                var coords = episodeCoordinates(entries[k].episode);
+                if (coords && coords.season === memory.season && coords.episode === memory.episode && entries[k].timeline.percent < 60) {
+                    current = entries[k];
+                    break;
+                }
+            }
         }
 
         if (!current) {
-            var partial = entries.filter(function (entry) { return entry.timeline.percent > 0 && entry.timeline.percent < 60; });
-            if (partial.length) current = partial[partial.length - 1];
+            var partial = [];
+            for (var m = 0; m < entries.length; m++) {
+                if (entries[m].timeline.percent > 0 && entries[m].timeline.percent < 60) {
+                    partial.push(entries[m]);
+                }
+            }
+            if (partial.length) {
+                current = partial[partial.length - 1];
+            }
         }
 
         if (!current) {
             var lastWatchedIndex = -1;
-            entries.forEach(function (entry, index) {
-                if (entry.timeline.percent >= 60) lastWatchedIndex = index;
-            });
-            current = entries.find(function (entry, index) { return index > lastWatchedIndex && entry.timeline.percent < 60; }) || null;
+            for (var n = 0; n < entries.length; n++) {
+                if (entries[n].timeline.percent >= 60) {
+                    lastWatchedIndex = n;
+                }
+            }
+            for (var p = 0; p < entries.length; p++) {
+                if (p > lastWatchedIndex && entries[p].timeline.percent < 60) {
+                    current = entries[p];
+                    break;
+                }
+            }
         }
 
-        var allWatched = !!entries.length && entries.every(function (entry) { return entry.timeline.percent >= 60; });
-        if (!current && entries.length) current = entries[allWatched ? entries.length - 1 : 0];
+        var allWatched = entries.length > 0;
+        for (var q = 0; q < entries.length; q++) {
+            if (entries[q].timeline.percent < 60) {
+                allWatched = false;
+                break;
+            }
+        }
 
-        var currentIndex = current ? entries.indexOf(current) : -1;
-        var next = currentIndex >= 0 ? entries.slice(currentIndex + 1).find(function (entry) { return entry.timeline.percent < 60; }) || null : null;
+        if (!current && entries.length) {
+            current = allWatched ? entries[entries.length - 1] : entries[0];
+        }
+
+        var currentIndex = -1;
+        if (current) {
+            for (var r = 0; r < entries.length; r++) {
+                if (entries[r] === current) {
+                    currentIndex = r;
+                    break;
+                }
+            }
+        }
+
+        var next = null;
+        if (currentIndex >= 0) {
+            for (var s = currentIndex + 1; s < entries.length; s++) {
+                if (entries[s].timeline.percent < 60) {
+                    next = entries[s];
+                    break;
+                }
+            }
+        }
+
+        var status = 'empty';
+        if (episodes.length === 0) {
+            status = 'empty';
+        } else if (entries.length === 0) {
+            status = 'upcoming';
+        } else if (allWatched) {
+            status = 'complete';
+        } else {
+            status = 'ready';
+        }
 
         return {
             card: card,
@@ -325,180 +405,93 @@
             current: current,
             next: next,
             allWatched: allWatched,
-            status: !episodes.length ? 'empty' : !entries.length ? 'upcoming' : allWatched ? 'complete' : 'ready'
+            status: status
         };
     }
 
     // =============================================
-    // 6. Компактный виджет
+    // 6. Виджет
     // =============================================
 
     function createWidget(state) {
         if (!state || !state.current) return null;
 
-        // Удаляем старые стили, если есть
         var oldStyle = document.getElementById('lsm-widget-style');
         if (oldStyle) oldStyle.remove();
 
         var widget = document.createElement('div');
         widget.className = 'lsm-widget';
         widget.setAttribute('data-lsm-status', state.status);
-        widget.setAttribute('data-lsm-version', VERSION);
 
-        // Стили виджета (безопасно)
         var style = document.createElement('style');
         style.id = 'lsm-widget-style';
-        style.textContent = `
-            .lsm-widget {
-                position: fixed !important;
-                bottom: 2.5em !important;
-                right: 2.5em !important;
-                z-index: 9999 !important;
-                max-width: 340px !important;
-                min-width: 180px !important;
-                padding: 0.7em 1.1em !important;
-                border-radius: 0.9em !important;
-                background: rgba(7, 10, 16, 0.94) !important;
-                backdrop-filter: blur(20px) !important;
-                -webkit-backdrop-filter: blur(20px) !important;
-                border: 0.075em solid rgba(255, 255, 255, 0.1) !important;
-                box-shadow: 0 1.2em 3.6em rgba(0, 0, 0, 0.75) !important;
-                color: #f6f8fc !important;
-                font-family: system-ui, -apple-system, sans-serif !important;
-                transition: opacity 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease !important;
-                cursor: pointer !important;
-                user-select: none !important;
-                animation: lsm-widget-in 0.35s cubic-bezier(0.22, 0.72, 0.2, 1) !important;
-                pointer-events: auto !important;
-                line-height: 1.4 !important;
-            }
-            .lsm-widget:hover {
-                transform: scale(1.03) !important;
-                border-color: rgba(105, 167, 255, 0.45) !important;
-                box-shadow: 0 1.5em 4.5em rgba(0, 0, 0, 0.85) !important;
-            }
-            .lsm-widget .lsm-header {
-                display: flex !important;
-                align-items: center !important;
-                justify-content: space-between !important;
-                margin-bottom: 0.15em !important;
-            }
-            .lsm-widget .lsm-label {
-                font-size: 0.6em !important;
-                text-transform: uppercase !important;
-                letter-spacing: 0.1em !important;
-                color: rgba(255, 255, 255, 0.4) !important;
-                font-weight: 600 !important;
-            }
-            .lsm-widget .lsm-status-icon {
-                font-size: 0.55em !important;
-                padding: 0.15em 0.45em !important;
-                border-radius: 99em !important;
-                background: rgba(105, 167, 255, 0.15) !important;
-                color: #69a7ff !important;
-                font-weight: 700 !important;
-                letter-spacing: 0.05em !important;
-            }
-            .lsm-widget[data-lsm-status="complete"] .lsm-status-icon {
-                background: rgba(105, 167, 255, 0.1) !important;
-                color: rgba(255, 255, 255, 0.3) !important;
-            }
-            .lsm-widget[data-lsm-status="upcoming"] .lsm-status-icon {
-                background: rgba(255, 180, 50, 0.15) !important;
-                color: #ffb432 !important;
-            }
-            .lsm-widget .lsm-title {
-                font-size: 0.9em !important;
-                font-weight: 700 !important;
-                color: #fff !important;
-                line-height: 1.3 !important;
-                margin: 0.15em 0 0.2em !important;
-                overflow: hidden !important;
-                text-overflow: ellipsis !important;
-                white-space: nowrap !important;
-            }
-            .lsm-widget .lsm-meta {
-                font-size: 0.75em !important;
-                color: rgba(255, 255, 255, 0.55) !important;
-                display: flex !important;
-                align-items: center !important;
-                gap: 0.6em !important;
-                flex-wrap: wrap !important;
-            }
-            .lsm-widget .lsm-progress-wrap {
-                width: 100% !important;
-                height: 0.2em !important;
-                border-radius: 99em !important;
-                background: rgba(255, 255, 255, 0.1) !important;
-                margin: 0.4em 0 0.2em !important;
-                overflow: hidden !important;
-            }
-            .lsm-widget .lsm-progress-bar {
-                height: 100% !important;
-                border-radius: inherit !important;
-                background: linear-gradient(90deg, #69a7ff, #91beff) !important;
-                transition: width 0.4s ease !important;
-            }
-            .lsm-widget .lsm-remaining {
-                font-size: 0.7em !important;
-                color: rgba(255, 255, 255, 0.35) !important;
-                margin-left: auto !important;
-                white-space: nowrap !important;
-            }
-            .lsm-widget .lsm-next {
-                font-size: 0.7em !important;
-                color: rgba(255, 255, 255, 0.3) !important;
-                margin-top: 0.2em !important;
-                border-top: 0.05em solid rgba(255, 255, 255, 0.06) !important;
-                padding-top: 0.25em !important;
-                overflow: hidden !important;
-                text-overflow: ellipsis !important;
-                white-space: nowrap !important;
-            }
-            .lsm-widget .lsm-next strong {
-                color: rgba(255, 255, 255, 0.5) !important;
-                font-weight: 600 !important;
-            }
-            .lsm-widget .lsm-click-hint {
-                font-size: 0.55em !important;
-                color: rgba(255, 255, 255, 0.15) !important;
-                text-align: right !important;
-                margin-top: 0.15em !important;
-                letter-spacing: 0.05em !important;
-            }
-            @keyframes lsm-widget-in {
-                0% { opacity: 0; transform: translateY(25px) scale(0.92); }
-                100% { opacity: 1; transform: translateY(0) scale(1); }
-            }
-            .lsm-widget.lsm-hidden {
-                opacity: 0.35 !important;
-                transform: scale(0.98) !important;
-            }
-            .lsm-widget.lsm-hidden:hover {
-                opacity: 1 !important;
-                transform: scale(1.03) !important;
-            }
-            @media (max-width: 720px) {
-                .lsm-widget {
-                    bottom: 1.2em !important;
-                    right: 1.2em !important;
-                    left: 1.2em !important;
-                    max-width: none !important;
-                    min-width: auto !important;
-                    padding: 0.55em 0.9em !important;
-                    border-radius: 0.8em !important;
-                }
-                .lsm-widget .lsm-title {
-                    font-size: 0.8em !important;
-                }
-                .lsm-widget .lsm-meta {
-                    font-size: 0.7em !important;
-                }
-                .lsm-widget .lsm-next {
-                    font-size: 0.65em !important;
-                }
-            }
-        `;
+        style.textContent = [
+            '.lsm-widget{',
+            'position:fixed!important;bottom:2.5em!important;right:2.5em!important;',
+            'z-index:9999!important;max-width:340px!important;min-width:180px!important;',
+            'padding:0.7em 1.1em!important;border-radius:0.9em!important;',
+            'background:rgba(7,10,16,0.94)!important;',
+            'backdrop-filter:blur(20px)!important;-webkit-backdrop-filter:blur(20px)!important;',
+            'border:0.075em solid rgba(255,255,255,0.1)!important;',
+            'box-shadow:0 1.2em 3.6em rgba(0,0,0,0.75)!important;',
+            'color:#f6f8fc!important;font-family:system-ui,sans-serif!important;',
+            'transition:opacity .3s ease,transform .3s ease!important;',
+            'cursor:pointer!important;user-select:none!important;',
+            'animation:lsm-widget-in .35s cubic-bezier(.22,.72,.2,1)!important;',
+            'line-height:1.4!important;}',
+            '.lsm-widget:hover{transform:scale(1.03)!important;',
+            'border-color:rgba(105,167,255,0.45)!important;}',
+            '.lsm-widget .lsm-header{display:flex!important;',
+            'align-items:center!important;justify-content:space-between!important;',
+            'margin-bottom:0.15em!important;}',
+            '.lsm-widget .lsm-label{font-size:0.6em!important;text-transform:uppercase!important;',
+            'letter-spacing:0.1em!important;color:rgba(255,255,255,0.4)!important;',
+            'font-weight:600!important;}',
+            '.lsm-widget .lsm-status-icon{font-size:0.55em!important;',
+            'padding:0.15em 0.45em!important;border-radius:99em!important;',
+            'background:rgba(105,167,255,0.15)!important;color:#69a7ff!important;',
+            'font-weight:700!important;letter-spacing:0.05em!important;}',
+            '.lsm-widget[data-lsm-status="complete"] .lsm-status-icon{',
+            'background:rgba(105,167,255,0.1)!important;color:rgba(255,255,255,0.3)!important;}',
+            '.lsm-widget[data-lsm-status="upcoming"] .lsm-status-icon{',
+            'background:rgba(255,180,50,0.15)!important;color:#ffb432!important;}',
+            '.lsm-widget .lsm-title{font-size:0.9em!important;font-weight:700!important;',
+            'color:#fff!important;line-height:1.3!important;margin:0.15em 0 0.2em!important;',
+            'overflow:hidden!important;text-overflow:ellipsis!important;',
+            'white-space:nowrap!important;}',
+            '.lsm-widget .lsm-meta{font-size:0.75em!important;',
+            'color:rgba(255,255,255,0.55)!important;display:flex!important;',
+            'align-items:center!important;gap:0.6em!important;flex-wrap:wrap!important;}',
+            '.lsm-widget .lsm-progress-wrap{width:100%!important;height:0.2em!important;',
+            'border-radius:99em!important;background:rgba(255,255,255,0.1)!important;',
+            'margin:0.4em 0 0.2em!important;overflow:hidden!important;}',
+            '.lsm-widget .lsm-progress-bar{height:100%!important;border-radius:inherit!important;',
+            'background:linear-gradient(90deg,#69a7ff,#91beff)!important;',
+            'transition:width .4s ease!important;}',
+            '.lsm-widget .lsm-remaining{font-size:0.7em!important;',
+            'color:rgba(255,255,255,0.35)!important;margin-left:auto!important;',
+            'white-space:nowrap!important;}',
+            '.lsm-widget .lsm-next{font-size:0.7em!important;',
+            'color:rgba(255,255,255,0.3)!important;margin-top:0.2em!important;',
+            'border-top:0.05em solid rgba(255,255,255,0.06)!important;',
+            'padding-top:0.25em!important;overflow:hidden!important;',
+            'text-overflow:ellipsis!important;white-space:nowrap!important;}',
+            '.lsm-widget .lsm-next strong{color:rgba(255,255,255,0.5)!important;',
+            'font-weight:600!important;}',
+            '.lsm-widget .lsm-click-hint{font-size:0.55em!important;',
+            'color:rgba(255,255,255,0.15)!important;text-align:right!important;',
+            'margin-top:0.15em!important;letter-spacing:0.05em!important;}',
+            '@keyframes lsm-widget-in{0%{opacity:0;transform:translateY(25px) scale(0.92);}',
+            '100%{opacity:1;transform:translateY(0) scale(1);}}',
+            '.lsm-widget.lsm-hidden{opacity:0.35!important;transform:scale(0.98)!important;}',
+            '.lsm-widget.lsm-hidden:hover{opacity:1!important;transform:scale(1.03)!important;}',
+            '@media(max-width:720px){.lsm-widget{bottom:1.2em!important;right:1.2em!important;',
+            'left:1.2em!important;max-width:none!important;min-width:auto!important;',
+            'padding:0.55em 0.9em!important;border-radius:0.8em!important;}',
+            '.lsm-widget .lsm-title{font-size:0.8em!important;}',
+            '.lsm-widget .lsm-meta{font-size:0.7em!important;}',
+            '.lsm-widget .lsm-next{font-size:0.65em!important;}}'
+        ].join('');
         document.head.appendChild(style);
 
         var current = state.current;
@@ -507,7 +500,7 @@
         var progress = Math.round(current.timeline.percent || 0);
         var remaining = formatRemainingTime(current.timeline);
 
-        // Заголовок
+        // Header
         var header = document.createElement('div');
         header.className = 'lsm-header';
 
@@ -528,12 +521,12 @@
         header.appendChild(label);
         header.appendChild(statusIcon);
 
-        // Название
+        // Title
         var titleEl = document.createElement('div');
         titleEl.className = 'lsm-title';
         titleEl.textContent = title;
 
-        // Мета
+        // Meta
         var meta = document.createElement('div');
         meta.className = 'lsm-meta';
 
@@ -550,7 +543,7 @@
             meta.appendChild(remainingEl);
         }
 
-        // Прогресс
+        // Progress
         var progressWrap = document.createElement('div');
         progressWrap.className = 'lsm-progress-wrap';
         var progressBar = document.createElement('div');
@@ -558,7 +551,7 @@
         progressBar.style.width = Math.max(0, Math.min(100, progress)) + '%';
         progressWrap.appendChild(progressBar);
 
-        // Следующая серия
+        // Next
         var nextEl = null;
         if (state.next && state.status !== 'complete' && state.status !== 'upcoming') {
             nextEl = document.createElement('div');
@@ -569,7 +562,7 @@
                 (nextProgress > 0 ? ' (' + nextProgress + '%)' : '');
         }
 
-        // Подсказка
+        // Hint
         var clickHint = document.createElement('div');
         clickHint.className = 'lsm-click-hint';
         clickHint.textContent = '↗ Открыть эпизоды';
@@ -581,13 +574,13 @@
         if (nextEl) widget.appendChild(nextEl);
         widget.appendChild(clickHint);
 
-        // Клик
+        // Click
         widget.addEventListener('click', function (e) {
             e.stopPropagation();
             openEpisodesScreen(state.card);
         });
 
-        // Авто-скрытие
+        // Auto-hide
         if (progress === 0 && !remaining) {
             var hideTimeout = null;
             var isHidden = false;
@@ -630,7 +623,7 @@
     }
 
     // =============================================
-    // 7. Открытие страницы эпизодов
+    // 7. Открытие эпизодов
     // =============================================
 
     function openEpisodesScreen(card) {
@@ -645,32 +638,33 @@
         };
         if (memory && memory.season) payload.season = memory.season;
         try {
-            if (window.Lampa && Lampa.Activity && typeof Lampa.Activity.push === 'function') {
+            if (Lampa && Lampa.Activity && typeof Lampa.Activity.push === 'function') {
                 Lampa.Activity.push(payload);
                 return true;
             }
-            if (window.Lampa && Lampa.Router && typeof Lampa.Router.call === 'function') {
+            if (Lampa && Lampa.Router && typeof Lampa.Router.call === 'function') {
                 Lampa.Router.call('episodes', card);
                 return true;
             }
-        } catch (error) {}
+        } catch (e) {}
         return false;
     }
 
     // =============================================
-    // 8. Управление виджетами
+    // 8. Управление виджетом
     // =============================================
 
     function removeOldWidgets() {
         var widgets = document.querySelectorAll('.lsm-widget');
-        widgets.forEach(function (w) {
-            if (w.parentNode) w.parentNode.removeChild(w);
-        });
+        for (var i = 0; i < widgets.length; i++) {
+            if (widgets[i].parentNode) {
+                widgets[i].parentNode.removeChild(widgets[i]);
+            }
+        }
     }
 
     var currentWidget = null;
     var lastState = null;
-    var lastCard = null;
     var updateTimer = null;
 
     function updateWidget(card, data) {
@@ -724,7 +718,6 @@
         }
 
         lastState = signature;
-        lastCard = card;
 
         removeOldWidgets();
 
@@ -736,14 +729,13 @@
     }
 
     // =============================================
-    // 9. Обработчики событий (без jQuery)
+    // 9. Обработчики событий
     // =============================================
 
     function handleDetailEvent(event) {
         if (!event) return;
         var card = event.data && event.data.movie ? event.data.movie :
             event.object && (event.object.card || event.object) : null;
-
         if (!card) return;
 
         if (event.type === 'start' || event.type === 'complite' || event.type === 'build') {
@@ -778,7 +770,7 @@
     }
 
     // =============================================
-    // 10. Установка обработчиков (безопасно)
+    // 10. Установка слушателей
     // =============================================
 
     var runtime = {
@@ -788,42 +780,32 @@
         timerIds: [],
         disposers: [],
 
-        destroy: function (reason) {
+        destroy: function () {
             if (this.destroyed) return;
             this.destroyed = true;
-            this.timerIds.forEach(clearTimeout);
+            for (var i = 0; i < this.timerIds.length; i++) {
+                clearTimeout(this.timerIds[i]);
+            }
             this.timerIds = [];
-            this.disposers.forEach(function (d) { try { d(); } catch (error) {} });
+            for (var j = 0; j < this.disposers.length; j++) {
+                try { this.disposers[j](); } catch (e) {}
+            }
             this.disposers = [];
             clearTimeout(updateTimer);
             removeOldWidgets();
             currentWidget = null;
-            if (window[RUNTIME_KEY] === this) delete window[RUNTIME_KEY];
+            if (window[RUNTIME_KEY] === this) {
+                delete window[RUNTIME_KEY];
+            }
         }
     };
     window[RUNTIME_KEY] = runtime;
 
-    function setTimeout(callback, delay) {
-        if (runtime.destroyed) return 0;
-        var id = window.setTimeout(function () {
-            var index = runtime.timerIds.indexOf(id);
-            if (index >= 0) runtime.timerIds.splice(index, 1);
-            if (!runtime.destroyed) callback();
-        }, delay || 0);
-        runtime.timerIds.push(id);
-        return id;
-    }
-
-    function clearTimeout(id) {
-        if (!id) return;
-        window.clearTimeout(id);
-        var index = runtime.timerIds.indexOf(id);
-        if (index >= 0) runtime.timerIds.splice(index, 1);
-    }
-
-    function addDisposer(disposer) {
-        if (typeof disposer === 'function') runtime.disposers.push(disposer);
-        return disposer;
+    function addDisposer(fn) {
+        if (typeof fn === 'function') {
+            runtime.disposers.push(fn);
+        }
+        return fn;
     }
 
     function followEmitter(emitter, event, handler) {
@@ -831,58 +813,49 @@
         emitter.follow(event, handler);
         addDisposer(function () {
             try {
-                if (typeof emitter.remove === 'function') emitter.remove(event, handler);
-                else if (typeof emitter.unfollow === 'function') emitter.unfollow(event, handler);
-            } catch (error) {}
+                if (typeof emitter.remove === 'function') {
+                    emitter.remove(event, handler);
+                } else if (typeof emitter.unfollow === 'function') {
+                    emitter.unfollow(event, handler);
+                }
+            } catch (e) {}
         });
         return true;
     }
 
-    // Обработчики через DOM (без jQuery)
     function setupEpisodeClickHandlers() {
         try {
-            var handler = function(e) {
-                var target = e.currentTarget;
+            function handler(target) {
                 var episode = target.card_data || null;
                 var active = activeActivity();
                 var card = active && (active.card || (active.object && active.object.card) || null);
                 if (episode && card && mediaType(card) === 'tv') {
                     handleEpisodeSelection(episode, card);
                 }
-            };
+            }
 
-            // Используем делегирование через document
             document.addEventListener('click', function(e) {
                 var target = e.target.closest('.full-episode, .season-episode, .card-episode');
                 if (target) {
-                    handler.call(target, e);
+                    handler(target);
                 }
             });
 
-            // Для hover:enter используем mouseenter + focus
-            document.addEventListener('mouseenter', function(e) {
-                var target = e.target.closest('.full-episode, .season-episode, .card-episode');
-                if (target && target.classList.contains('focus')) {
-                    handler.call(target, e);
-                }
-            }, true);
-
-            // Для фокуса с клавиатуры
             document.addEventListener('focus', function(e) {
                 var target = e.target.closest('.full-episode, .season-episode, .card-episode');
-                if (target) {
-                    handler.call(target, e);
+                if (target && target.classList.contains('focus')) {
+                    handler(target);
                 }
             }, true);
 
-        } catch (error) {}
+        } catch (e) {}
     }
 
     var listenersInstalled = false;
 
     function installListeners() {
         if (listenersInstalled) return true;
-        if (!window.Lampa || !Lampa.Listener) return false;
+        if (!Lampa || !Lampa.Listener) return false;
 
         listenersInstalled = true;
 
@@ -924,14 +897,11 @@
     // 11. Запуск плагина
     // =============================================
 
-    function start() {
+    function startPlugin() {
         if (runtime.destroyed || runtime.started) return;
-        if (!window.Lampa || !Lampa.Listener) {
-            setTimeout(start, 200);
-            return;
-        }
 
         runtime.started = true;
+        console.log('[Series Manager] v' + VERSION + ' started');
 
         installListeners();
 
@@ -947,12 +917,12 @@
     }
 
     // =============================================
-    // 12. Экспорт API
+    // 12. API
     // =============================================
 
     var api = {
         version: VERSION,
-        isSergThemeCompatible: isSergThemeInstalled,
+        isSergThemeInstalled: isSergThemeInstalled,
         updateWidget: updateWidget,
         resolveSeriesPlayback: resolveSeriesPlayback,
         rememberEpisode: rememberEpisodeSelection,
@@ -964,9 +934,7 @@
                 version: VERSION,
                 destroyed: runtime.destroyed,
                 started: runtime.started,
-                hasWidget: !!currentWidget,
-                lastCard: lastCard ? contentId(lastCard) : null,
-                sergThemeDetected: sergThemeDetected
+                hasWidget: !!currentWidget
             };
         }
     };
@@ -974,11 +942,14 @@
     window.__LSM_API__ = api;
     window[RUNTIME_KEY] = runtime;
 
-    // Запуск
+    // =============================================
+    // 13. СТАРТ
+    // =============================================
+
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', start, { once: true });
+        document.addEventListener('DOMContentLoaded', safeInit, { once: true });
     } else {
-        start();
+        safeInit();
     }
 
 })();
