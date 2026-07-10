@@ -1,8 +1,8 @@
-/* Series Manager PRO 4.0.0 — Финальная версия */
+/* Series Manager PRO 4.1.0 — Блок привязан к .applecation__left */
 (function () {
     'use strict';
 
-    var VERSION = '4.0.0';
+    var VERSION = '4.1.0';
     var MEMORY_KEY = 'lmui_detail_episode_v1';
 
     // =============================================
@@ -368,7 +368,7 @@
     }
 
     // =============================================
-    // СОЗДАНИЕ БЛОКА (С ИЗМЕНЁННОЙ ШИРИНОЙ)
+    // СОЗДАНИЕ БЛОКА (ПРИВЯЗАН К .applecation__left)
     // =============================================
 
     function createBlock(state, card) {
@@ -407,19 +407,17 @@
             statusColor = '#69a7ff';
         }
 
-        var viewportWidth = getViewportWidth();
-        var blockWidth = Math.max(viewportWidth * 0.65, Math.min(viewportWidth * 0.85, 600));
-
         var block = document.createElement('div');
         block.className = 'series-info-block';
         block.id = 'series-info-block';
         block.setAttribute('data-card-id', contentId(card));
 
+        // Ширина блока = ширина .applecation__left
+        // Стили применяются динамически через JS
         block.style.cssText = [
             'display:flex',
             'flex-direction:column',
-            'width:' + blockWidth + 'px',
-            'max-width:95%',
+            'width:100%',
             'padding:1.2em 1.6em',
             'border-radius:1em',
             'background:rgba(0,0,0,0.5)',
@@ -432,10 +430,11 @@
             'font-family:"SegoeUI",system-ui,sans-serif',
             'font-size:16px',
             'box-shadow:0 8px 40px rgba(0,0,0,0.6)',
-            'margin:0 auto 0.5em auto',
+            'margin:0',
             'flex-shrink:0',
             'position:relative',
-            'overflow:hidden'
+            'overflow:hidden',
+            'box-sizing:border-box'
         ].join(';');
 
         // Декоративный верхний градиент
@@ -606,7 +605,6 @@
     var currentCard = null;
     var currentData = null;
     var isOnSeriesPage = false;
-    var rightContainerCreated = false;
     var observer = null;
 
     function removeBlock() {
@@ -615,6 +613,23 @@
             block.parentNode.removeChild(block);
         }
         currentBlock = null;
+    }
+
+    function updateBlockWidth(block) {
+        // Получаем ширину .applecation__left
+        var render = getActiveRender();
+        if (!render || !render.length) return;
+
+        var left = render.find('.applecation__left');
+        if (!left.length) return;
+
+        var leftWidth = left.outerWidth();
+        if (leftWidth > 0) {
+            // Устанавливаем ширину блока равной ширине левой части
+            block.style.width = leftWidth + 'px';
+            block.style.maxWidth = leftWidth + 'px';
+            block.style.minWidth = Math.min(leftWidth, 300) + 'px';
+        }
     }
 
     function createRightContainer(render) {
@@ -634,17 +649,16 @@
         newRight.css({
             'display': 'flex',
             'flex-direction': 'column',
-            'align-items': 'center',
+            'align-items': 'flex-start',
             'justify-content': 'flex-end',
-            'width': '100%',
+            'width': 'auto',
             'margin-top': 'auto',
             'padding': '0.5em 0',
             'flex-shrink': '0',
-            'min-height': '80px'
+            'min-height': '60px'
         });
 
         right.append(newRight);
-        rightContainerCreated = true;
 
         return newRight;
     }
@@ -714,6 +728,8 @@
                     var progress = Math.round(state.current.timeline.percent || 0);
                     bar.style.width = Math.max(0, Math.min(100, progress)) + '%';
                 }
+                // Обновляем ширину при изменении размера
+                updateBlockWidth(existingBlock);
                 return;
             }
 
@@ -729,6 +745,9 @@
 
             var block = createBlock(state, currentCard);
             if (!block) return;
+
+            // Устанавливаем ширину блока
+            updateBlockWidth(block);
 
             container.find('.series-info-block').remove();
             container.append(block);
@@ -751,20 +770,25 @@
         observer = new MutationObserver(function(mutations) {
             mutations.forEach(function(mutation) {
                 if (mutation.type === 'childList' && mutation.addedNodes.length) {
-                    // Проверяем, появился ли .applecation__left
                     var active = activeActivity();
                     if (active && active.component === 'full') {
                         var render = getActiveRender();
                         if (render && render.length) {
                             var left = render.find('.applecation__left');
-                            if (left.length && !document.getElementById('series-info-block')) {
-                                // .applecation__left появился, а блока нет — восстанавливаем
+                            if (left.length) {
+                                // .applecation__left появился
                                 var card = active.card || (active.object && active.object.card) || null;
                                 var data = active.data || null;
-                                if (card && mediaType(card) === 'tv') {
+                                
+                                // Проверяем, есть ли блок
+                                var block = document.getElementById('series-info-block');
+                                if (!block && card && mediaType(card) === 'tv') {
                                     setTimeout(function() {
                                         insertBlock(card, data);
                                     }, 200);
+                                } else if (block) {
+                                    // Обновляем ширину блока
+                                    updateBlockWidth(block);
                                 }
                             }
                         }
@@ -877,6 +901,14 @@
                 }
             }, 800);
 
+            // Обработчик изменения размера окна
+            window.addEventListener('resize', function() {
+                var block = document.getElementById('series-info-block');
+                if (block) {
+                    updateBlockWidth(block);
+                }
+            });
+
         } catch (e) {
             console.error('[Series Manager PRO] Ошибка:', e);
         }
@@ -976,7 +1008,6 @@
                 version: VERSION,
                 hasBlock: !!document.getElementById('series-info-block'),
                 isOnSeriesPage: isOnSeriesPage,
-                rightContainerCreated: rightContainerCreated,
                 settings: getSettings()
             };
         }
