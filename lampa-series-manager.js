@@ -1,8 +1,8 @@
-/* Series Manager PRO 3.5.0 — Полноценный блок справа */
+/* Series Manager PRO 3.6.0 — Правильный блок справа */
 (function () {
     'use strict';
 
-    var VERSION = '3.5.0';
+    var VERSION = '3.6.0';
     var MEMORY_KEY = 'lmui_detail_episode_v1';
 
     // =============================================
@@ -84,6 +84,15 @@
         return name ? label + ' · ' + name : label;
     }
 
+    function formatTime(seconds) {
+        if (!seconds || seconds < 0) return '0 мин';
+        var mins = Math.round(seconds / 60);
+        if (mins < 60) return mins + ' мин';
+        var hours = Math.floor(mins / 60);
+        var rest = mins % 60;
+        return hours + ' ч ' + rest + ' мин';
+    }
+
     function formatRemainingTime(timeline) {
         if (!timeline || !timeline.duration || timeline.duration <= timeline.time) return '';
         var seconds = Math.max(0, timeline.duration - timeline.time);
@@ -92,6 +101,17 @@
         var hours = Math.floor(minutes / 60);
         var rest = minutes % 60;
         return 'осталось ' + hours + ' ч' + (rest ? ' ' + rest + ' мин' : '');
+    }
+
+    function formatWatchedTime(timeline) {
+        if (!timeline || !timeline.time || timeline.time < 0) return '';
+        var seconds = Math.round(timeline.time);
+        var minutes = Math.round(seconds / 60);
+        if (minutes < 1) return '< 1 мин';
+        if (minutes < 60) return minutes + ' мин';
+        var hours = Math.floor(minutes / 60);
+        var rest = minutes % 60;
+        return hours + ' ч ' + rest + ' мин';
     }
 
     function numberValue(value, fallback) {
@@ -331,7 +351,7 @@
     }
 
     // =============================================
-    // СОЗДАНИЕ БОЛЬШОГО БЛОКА СПРАВА
+    // СОЗДАНИЕ БЛОКА СПРАВА
     // =============================================
 
     function createBlock(state, card) {
@@ -345,6 +365,7 @@
         var title = formatEpisodeTitle(current.episode);
         var progress = Math.round(current.timeline.percent || 0);
         var remaining = formatRemainingTime(current.timeline);
+        var watchedTime = formatWatchedTime(current.timeline);
 
         var seriesTitle = card.title || card.name || card.original_title || card.original_name || '';
 
@@ -373,154 +394,140 @@
         block.className = 'series-info-block';
         block.id = 'series-info-block';
 
-        // БОЛЬШОЙ БЛОК КАК .applecation__info
         block.style.cssText = [
             'display:flex',
             'flex-direction:column',
             'width:100%',
-            'min-width:320px',
-            'max-width:420px',
-            'padding:1.6em 2em',
-            'border-radius:1.2em',
-            'background:rgba(0,0,0,0.35)',
-            'border:1.5px solid rgba(105,167,255,0.2)',
-            'backdrop-filter:blur(16px)',
-            '-webkit-backdrop-filter:blur(16px)',
+            'min-width:300px',
+            'max-width:400px',
+            'padding:1.2em 1.6em',
+            'border-radius:1em',
+            'background:rgba(0,0,0,0.3)',
+            'border:1px solid rgba(255,255,255,0.06)',
+            'backdrop-filter:blur(12px)',
+            '-webkit-backdrop-filter:blur(12px)',
             'transition:all .3s ease',
             'cursor:pointer',
             'color:#f6f8fc',
             'font-family:"SegoeUI",system-ui,sans-serif',
-            'font-size:16px',
-            'box-shadow:0 8px 32px rgba(0,0,0,0.4)',
+            'font-size:14px',
+            'box-shadow:0 4px 24px rgba(0,0,0,0.3)',
             'margin:0',
-            'flex-shrink:0',
-            'align-self:flex-start',
-            'position:relative',
-            'overflow:hidden'
+            'flex-shrink:0'
         ].join(';');
 
-        // Декоративный градиент сверху
-        var gradient = document.createElement('div');
-        gradient.style.cssText = [
-            'position:absolute',
-            'top:0',
-            'left:0',
-            'right:0',
-            'height:3px',
-            'background:linear-gradient(90deg, #69a7ff, #91beff)',
-            'opacity:0.6'
-        ].join(';');
-        block.appendChild(gradient);
-
-        // Шапка с иконкой и статусом
+        // Заголовок
         var header = document.createElement('div');
-        header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:0.4em;';
+        header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:0.3em;';
 
         var leftHeader = document.createElement('div');
-        leftHeader.style.cssText = 'display:flex;align-items:center;gap:0.6em;';
+        leftHeader.style.cssText = 'display:flex;align-items:center;gap:0.5em;';
 
         var icon = document.createElement('span');
-        icon.style.cssText = 'font-size:1.2em;color:#69a7ff;';
+        icon.style.cssText = 'font-size:0.9em;color:#69a7ff;';
         icon.textContent = '▶';
         leftHeader.appendChild(icon);
 
         var eyebrow = document.createElement('span');
-        eyebrow.style.cssText = 'font-size:0.65em;text-transform:uppercase;letter-spacing:0.12em;color:rgba(255,255,255,0.45);font-weight:700;';
-        eyebrow.textContent = 'ПРОДОЛЖИТЬ ПРОСМОТР';
+        eyebrow.style.cssText = 'font-size:0.55em;text-transform:uppercase;letter-spacing:0.1em;color:rgba(255,255,255,0.35);font-weight:600;';
+        eyebrow.textContent = 'ПРОДОЛЖИТЬ';
         leftHeader.appendChild(eyebrow);
 
         header.appendChild(leftHeader);
 
         var statusEl = document.createElement('span');
-        statusEl.style.cssText = 'font-size:0.6em;font-weight:700;color:' + statusColor + ';padding:0.25em 0.9em;border-radius:99em;background:rgba(0,0,0,0.35);white-space:nowrap;border:1px solid ' + statusColor + '30;';
+        statusEl.style.cssText = 'font-size:0.55em;font-weight:700;color:' + statusColor + ';padding:0.15em 0.7em;border-radius:99em;background:rgba(0,0,0,0.3);white-space:nowrap;';
         statusEl.textContent = statusIcon + ' ' + statusText;
         header.appendChild(statusEl);
 
         block.appendChild(header);
 
-        // Название сериала (крупное)
+        // Название сериала
         var seriesName = document.createElement('div');
-        seriesName.style.cssText = 'font-size:1.5em;font-weight:700;color:#fff;margin-bottom:0.1em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.2;';
+        seriesName.style.cssText = 'font-size:0.75em;color:rgba(255,255,255,0.3);margin-bottom:0.05em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
         seriesName.textContent = seriesTitle || 'Сериал';
         block.appendChild(seriesName);
 
         // Название серии
         var titleEl = document.createElement('div');
-        titleEl.style.cssText = 'font-size:1.1em;font-weight:600;color:rgba(255,255,255,0.8);margin-bottom:0.3em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+        titleEl.style.cssText = 'font-size:1em;font-weight:700;color:#fff;margin-bottom:0.15em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
         titleEl.textContent = title;
         block.appendChild(titleEl);
 
-        // Разделитель
-        var divider = document.createElement('div');
-        divider.style.cssText = 'width:100%;height:1px;background:rgba(255,255,255,0.06);margin:0.2em 0 0.4em;';
-        block.appendChild(divider);
-
-        // Мета-информация (как в .applecation__info)
+        // Мета: сезон + эпизод
         var meta = document.createElement('div');
-        meta.style.cssText = 'display:flex;align-items:center;gap:0.8em;flex-wrap:wrap;font-size:0.85em;color:rgba(255,255,255,0.5);';
+        meta.style.cssText = 'display:flex;align-items:center;gap:0.6em;flex-wrap:wrap;font-size:0.7em;color:rgba(255,255,255,0.4);margin-bottom:0.1em;';
 
         if (coords) {
             var seasonText = document.createElement('span');
-            seasonText.style.cssText = 'background:rgba(255,255,255,0.06);padding:0.2em 0.7em;border-radius:0.4em;';
             seasonText.textContent = 'Сезон ' + coords.season + ' · Эпизод ' + coords.episode;
             meta.appendChild(seasonText);
         }
 
-        if (progress > 0) {
-            var progressText = document.createElement('span');
-            progressText.style.cssText = 'background:rgba(105,167,255,0.12);padding:0.2em 0.7em;border-radius:0.4em;color:#69a7ff;';
-            progressText.textContent = progress + '%';
-            meta.appendChild(progressText);
-        }
+        block.appendChild(meta);
+
+        // Прогресс-бар с временем
+        var progressWrap = document.createElement('div');
+        progressWrap.style.cssText = 'display:flex;align-items:center;gap:0.8em;margin:0.3em 0 0.1em;';
+
+        var barWrap = document.createElement('div');
+        barWrap.style.cssText = 'flex:1;height:4px;border-radius:99em;background:rgba(255,255,255,0.06);overflow:hidden;';
+        var progressBar = document.createElement('div');
+        progressBar.className = 'sw-progress-bar';
+        progressBar.style.cssText = 'height:100%;border-radius:inherit;background:linear-gradient(90deg,#69a7ff,#91beff);transition:width .5s ease;';
+        progressBar.style.width = Math.max(0, Math.min(100, progress)) + '%';
+        barWrap.appendChild(progressBar);
+        progressWrap.appendChild(barWrap);
+
+        // Проценты
+        var percentText = document.createElement('span');
+        percentText.style.cssText = 'font-size:0.7em;font-weight:600;color:#69a7ff;min-width:2.5em;text-align:right;';
+        percentText.textContent = progress + '%';
+        progressWrap.appendChild(percentText);
+
+        block.appendChild(progressWrap);
+
+        // Время просмотра и осталось
+        var timeRow = document.createElement('div');
+        timeRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;font-size:0.6em;color:rgba(255,255,255,0.25);margin-top:0.1em;';
+
+        var watchedEl = document.createElement('span');
+        watchedEl.textContent = '👁 ' + watchedTime;
+        timeRow.appendChild(watchedEl);
 
         if (remaining) {
             var remainingEl = document.createElement('span');
-            remainingEl.style.cssText = 'background:rgba(255,255,255,0.06);padding:0.2em 0.7em;border-radius:0.4em;';
             remainingEl.textContent = '⏱ ' + remaining;
-            meta.appendChild(remainingEl);
+            timeRow.appendChild(remainingEl);
         }
 
-        // Информация о следующей серии
+        block.appendChild(timeRow);
+
+        // Следующая серия
         if (state.next && state.status !== 'complete' && state.status !== 'upcoming') {
             var nextCoords = episodeCoordinates(state.next.episode);
             if (nextCoords) {
-                var nextText = document.createElement('span');
-                nextText.style.cssText = 'background:rgba(255,255,255,0.04);padding:0.2em 0.7em;border-radius:0.4em;color:rgba(255,255,255,0.3);';
-                nextText.textContent = 'Далее: S' + padEpisodeNumber(nextCoords.season) + ' E' + padEpisodeNumber(nextCoords.episode);
-                meta.appendChild(nextText);
+                var nextRow = document.createElement('div');
+                nextRow.style.cssText = 'font-size:0.65em;color:rgba(255,255,255,0.2);margin-top:0.2em;padding-top:0.2em;border-top:1px solid rgba(255,255,255,0.04);';
+                nextRow.textContent = 'Далее: S' + padEpisodeNumber(nextCoords.season) + ' E' + padEpisodeNumber(nextCoords.episode);
+                block.appendChild(nextRow);
             }
         }
 
-        block.appendChild(meta);
-
-        // Прогресс-бар (большой)
-        var progressWrap = document.createElement('div');
-        progressWrap.style.cssText = 'width:100%;height:6px;border-radius:99em;background:rgba(255,255,255,0.06);margin:0.6em 0 0.2em;overflow:hidden;';
-        var progressBar = document.createElement('div');
-        progressBar.className = 'sw-progress-bar';
-        progressBar.style.cssText = 'height:100%;border-radius:inherit;background:linear-gradient(90deg,#69a7ff,#91beff);transition:width .6s ease;';
-        progressBar.style.width = Math.max(0, Math.min(100, progress)) + '%';
-        progressWrap.appendChild(progressBar);
-        block.appendChild(progressWrap);
-
         // Подсказка
         var hint = document.createElement('div');
-        hint.style.cssText = 'font-size:0.6em;color:rgba(255,255,255,0.15);text-align:right;margin-top:0.2em;letter-spacing:0.05em;';
-        hint.textContent = '↗ Нажмите, чтобы открыть в Lampac';
+        hint.style.cssText = 'font-size:0.5em;color:rgba(255,255,255,0.08);text-align:right;margin-top:0.1em;';
+        hint.textContent = '↗ Открыть в Lampac';
         block.appendChild(hint);
 
         // Ховер
         block.addEventListener('mouseenter', function () {
-            this.style.borderColor = 'rgba(105,167,255,0.5)';
-            this.style.background = 'rgba(0,0,0,0.45)';
-            this.style.transform = 'scale(1.02)';
-            this.style.boxShadow = '0 12px 48px rgba(0,0,0,0.6)';
+            this.style.borderColor = 'rgba(105,167,255,0.2)';
+            this.style.background = 'rgba(0,0,0,0.4)';
         });
         block.addEventListener('mouseleave', function () {
-            this.style.borderColor = 'rgba(105,167,255,0.2)';
-            this.style.background = 'rgba(0,0,0,0.35)';
-            this.style.transform = 'scale(1)';
-            this.style.boxShadow = '0 8px 32px rgba(0,0,0,0.4)';
+            this.style.borderColor = 'rgba(255,255,255,0.06)';
+            this.style.background = 'rgba(0,0,0,0.3)';
         });
 
         // Клик
@@ -549,7 +556,6 @@
     var currentCard = null;
     var currentData = null;
     var isOnSeriesPage = false;
-    var checkInterval = null;
 
     function removeBlock() {
         var block = document.getElementById('series-info-block');
@@ -599,10 +605,10 @@
                 return;
             }
 
-            // Ищем или создаём .applecation__right
+            // Ищем контейнер справа от кнопок
             var container = render.find('.applecation__right');
             if (!container.length) {
-                // Ищем .applecation__wrapper
+                // Ищем .applecation__wrapper или .applecation__left
                 var wrapper = render.find('.applecation__wrapper');
                 if (!wrapper.length) {
                     wrapper = render.find('.applecation__left');
@@ -619,12 +625,11 @@
                     'display': 'flex',
                     'flex-direction': 'column',
                     'flex-shrink': '0',
-                    'min-width': '320px',
-                    'max-width': '420px',
-                    'margin-left': '2em',
+                    'min-width': '300px',
+                    'max-width': '400px',
+                    'margin-left': '1.5em',
                     'align-items': 'flex-start',
-                    'justify-content': 'flex-end',
-                    'padding': '0.5em 0'
+                    'justify-content': 'flex-end'
                 });
 
                 // Делаем родителя flex
@@ -656,10 +661,26 @@
 
             var existingBlock = document.getElementById('series-info-block');
             if (existingBlock && lastState === signature) {
+                // Обновляем прогресс и время
                 var bar = existingBlock.querySelector('.sw-progress-bar');
                 if (bar && state.current) {
                     var progress = Math.round(state.current.timeline.percent || 0);
                     bar.style.width = Math.max(0, Math.min(100, progress)) + '%';
+                }
+                var percentEl = existingBlock.querySelector('.sw-percent');
+                if (percentEl && state.current) {
+                    percentEl.textContent = Math.round(state.current.timeline.percent || 0) + '%';
+                }
+                var watchedEl = existingBlock.querySelector('.sw-watched');
+                if (watchedEl && state.current) {
+                    watchedEl.textContent = '👁 ' + formatWatchedTime(state.current.timeline);
+                }
+                var remainingEl = existingBlock.querySelector('.sw-remaining');
+                if (remainingEl && state.current) {
+                    var rem = formatRemainingTime(state.current.timeline);
+                    if (rem) {
+                        remainingEl.textContent = '⏱ ' + rem;
+                    }
                 }
                 return;
             }
@@ -670,6 +691,7 @@
             var block = createBlock(state, currentCard);
             if (!block) return;
 
+            // Очищаем контейнер и вставляем блок
             container.empty();
             container.append(block);
             currentBlock = block;
@@ -680,7 +702,7 @@
     }
 
     // =============================================
-    // ОБРАБОТЧИКИ СОБЫТИЙ
+    // ОБРАБОТЧИКИ СОБЫТИЙ (ТОЛЬКО ПО СОБЫТИЯМ)
     // =============================================
 
     var listenersInstalled = false;
@@ -711,9 +733,14 @@
     }
 
     function onTimeline() {
-        if (isOnSeriesPage) {
+        if (isOnSeriesPage && currentCard) {
             clearTimeout(updateTimer);
             updateTimer = setTimeout(function () {
+                // Обновляем данные из активности
+                var active = activeActivity();
+                if (active && active.data) {
+                    currentData = active.data;
+                }
                 insertBlock(currentCard, currentData);
             }, 200);
         }
@@ -728,6 +755,9 @@
             updateTimer = setTimeout(function () {
                 insertBlock();
             }, 300);
+        } else {
+            // При переходе на другую страницу не удаляем блок,
+            // он останется, но при возврате обновится
         }
     }
 
@@ -756,6 +786,7 @@
 
             installListeners();
 
+            // Проверяем текущую страницу при старте
             setTimeout(function () {
                 var active = activeActivity();
                 if (active && active.component === 'full') {
@@ -767,19 +798,6 @@
                     }
                 }
             }, 800);
-
-            // Периодическая проверка
-            if (checkInterval) clearInterval(checkInterval);
-            checkInterval = setInterval(function () {
-                var active = activeActivity();
-                if (active && active.component === 'full') {
-                    if (!document.getElementById('series-info-block') && currentCard) {
-                        insertBlock(currentCard, currentData);
-                    }
-                } else if (active && active.component !== 'full') {
-                    // Не удаляем блок, он останется, но при возврате обновится
-                }
-            }, 2000);
 
         } catch (e) {
             console.error('[Series Manager PRO] Ошибка:', e);
