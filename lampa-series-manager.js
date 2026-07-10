@@ -1,23 +1,76 @@
-/* Lampa Series Manager 1.3.0 — Портирован из Lampa Modern UI */
+/* Lampa Series Manager 1.4.0 — Оригинальный код из Lampa Modern UI 0.13.4 */
 (function () {
     'use strict';
 
-    var VERSION = '1.3.0';
-    var PLUGIN_ID = 'lampa_series_manager';
+    var VERSION = '0.13.4';
     var RUNTIME_KEY = '__LSM_RUNTIME__';
     var DETAIL_MEMORY_KEY = 'lmui_detail_episode_v1';
 
-    // =============================================
-    // 1. УНИЧТОЖЕНИЕ СТАРОГО ИНСТАНСА
-    // =============================================
-
+    // Уничтожаем старый инстанс
     var previous = window[RUNTIME_KEY];
     if (previous && typeof previous.destroy === 'function') {
         try { previous.destroy('replace'); } catch (error) {}
     }
 
+    var nativeSetTimeout = window.setTimeout.bind(window);
+    var nativeClearTimeout = window.clearTimeout.bind(window);
+
+    var runtime = {
+        version: VERSION,
+        started: false,
+        destroyed: false,
+        timerIds: [],
+        disposers: [],
+        patches: [],
+        destroy: destroyRuntime
+    };
+    window[RUNTIME_KEY] = runtime;
+
+    function setTimeout(callback, delay) {
+        if (runtime.destroyed) return 0;
+        var id = nativeSetTimeout(function () {
+            var index = runtime.timerIds.indexOf(id);
+            if (index >= 0) runtime.timerIds.splice(index, 1);
+            if (!runtime.destroyed) callback();
+        }, delay || 0);
+        runtime.timerIds.push(id);
+        return id;
+    }
+
+    function clearTimeout(id) {
+        if (!id) return;
+        nativeClearTimeout(id);
+        var index = runtime.timerIds.indexOf(id);
+        if (index >= 0) runtime.timerIds.splice(index, 1);
+    }
+
+    function addDisposer(disposer) {
+        if (typeof disposer === 'function') runtime.disposers.push(disposer);
+        return disposer;
+    }
+
+    function followEmitter(emitter, event, handler) {
+        if (!emitter || typeof emitter.follow !== 'function') return false;
+        emitter.follow(event, handler);
+        addDisposer(function () {
+            try {
+                if (typeof emitter.remove === 'function') emitter.remove(event, handler);
+                else if (typeof emitter.unfollow === 'function') emitter.unfollow(event, handler);
+            } catch (error) {}
+        });
+        return true;
+    }
+
+    function installPatch(target, key, wrapped) {
+        if (!target || typeof wrapped !== 'function') return false;
+        var original = target[key];
+        target[key] = wrapped;
+        runtime.patches.push({ target: target, key: key, original: original, wrapped: wrapped });
+        return true;
+    }
+
     // =============================================
-    // 2. ОСНОВНЫЕ УТИЛИТЫ (из оригинального кода)
+    // УТИЛИТЫ (оригинальные из Lampa Modern UI)
     // =============================================
 
     function storageGet(name, fallback) {
@@ -25,27 +78,32 @@
             if (window.Lampa && Lampa.Storage && typeof Lampa.Storage.get === 'function') {
                 return Lampa.Storage.get(name, fallback);
             }
-        } catch (error) {}
+        } catch (error) {
+            console.warn('[Lampa Modern UI] Storage.get failed:', name, error);
+        }
         return fallback;
     }
 
-    function storageSet(name, value) {
+    function storageSet(name, value, force) {
         try {
             if (window.Lampa && Lampa.Storage && typeof Lampa.Storage.set === 'function') {
+                if (!force && typeof Lampa.Storage.get === 'function' && Lampa.Storage.get(name, undefined) === value) return false;
                 Lampa.Storage.set(name, value, true);
                 return true;
             }
-        } catch (error) {}
+        } catch (error) {
+            console.warn('[Lampa Modern UI] Storage.set failed:', name, error);
+        }
         return false;
+    }
+
+    function asArray(value) {
+        return Array.isArray(value) ? value : [];
     }
 
     function clone(value) {
         try { return JSON.parse(JSON.stringify(value)); }
         catch (error) { return value; }
-    }
-
-    function asArray(value) {
-        return Array.isArray(value) ? value : [];
     }
 
     function numberValue(value, fallback) {
@@ -136,58 +194,6 @@
         return !timestamp || timestamp <= (Date.now ? Date.now() : new Date().getTime());
     }
 
-    // =============================================
-    // 3. ПАМЯТЬ СЕРИЙ (как в оригинале)
-    // =============================================
-
-    function detailMemoryStore() {
-        try {
-            var raw = window.sessionStorage && window.sessionStorage.getItem(DETAIL_MEMORY_KEY);
-            var parsed = raw ? JSON.parse(raw) : {};
-            return parsed && typeof parsed === 'object' ? parsed : {};
-        } catch (error) {
-            return {};
-        }
-    }
-
-    function writeDetailMemory(store) {
-        try {
-            if (window.sessionStorage) window.sessionStorage.setItem(DETAIL_MEMORY_KEY, JSON.stringify(store || {}));
-        } catch (error) {}
-    }
-
-    function readEpisodeMemory(card) {
-        var key = contentId(card);
-        if (!key) return null;
-        var value = detailMemoryStore()[key];
-        return value && typeof value === 'object' ? value : null;
-    }
-
-    function rememberEpisodeSelection(card, episode, reason) {
-        var coordinates = episodeCoordinates(episode);
-        var key = contentId(card);
-        if (!key || !coordinates) return false;
-        var store = detailMemoryStore();
-        store[key] = {
-            season: coordinates.season,
-            episode: coordinates.episode,
-            updatedAt: Date.now ? Date.now() : new Date().getTime()
-        };
-        var keys = Object.keys(store);
-        if (keys.length > 80) {
-            keys.sort(function (left, right) {
-                return numberValue(store[left] && store[left].updatedAt, 0) - numberValue(store[right] && store[right].updatedAt, 0);
-            });
-            keys.slice(0, keys.length - 80).forEach(function (oldKey) { delete store[oldKey]; });
-        }
-        writeDetailMemory(store);
-        return true;
-    }
-
-    // =============================================
-    // 4. СБОР ЭПИЗОДОВ (как в оригинале)
-    // =============================================
-
     function collectEpisodes(value, result, depth) {
         if (depth > 5 || value === null || value === undefined) return;
         if (Array.isArray(value)) {
@@ -236,7 +242,9 @@
                     return road;
                 }
             }
-        } catch (error) {}
+        } catch (error) {
+            console.warn('[Lampa Modern UI] Timeline error:', error);
+        }
         var embedded = episode.timeline || episode.view || null;
         if (embedded && typeof embedded === 'object') {
             road.percent = numberValue(embedded.percent, 0);
@@ -245,6 +253,61 @@
         }
         return road;
     }
+
+    // =============================================
+    // ПАМЯТЬ СЕРИЙ (оригинальная из Lampa Modern UI)
+    // =============================================
+
+    function detailMemoryStore() {
+        try {
+            var raw = window.sessionStorage && window.sessionStorage.getItem(DETAIL_MEMORY_KEY);
+            var parsed = raw ? JSON.parse(raw) : {};
+            return parsed && typeof parsed === 'object' ? parsed : {};
+        } catch (error) {
+            return {};
+        }
+    }
+
+    function writeDetailMemory(store) {
+        try {
+            if (window.sessionStorage) window.sessionStorage.setItem(DETAIL_MEMORY_KEY, JSON.stringify(store || {}));
+        } catch (error) {
+            console.warn('[Lampa Modern UI] Memory write error:', error);
+        }
+    }
+
+    function readEpisodeMemory(card) {
+        var key = contentId(card);
+        if (!key) return null;
+        var value = detailMemoryStore()[key];
+        return value && typeof value === 'object' ? value : null;
+    }
+
+    function rememberEpisodeSelection(card, episode, reason) {
+        var coordinates = episodeCoordinates(episode);
+        var key = contentId(card);
+        if (!key || !coordinates) return false;
+        var store = detailMemoryStore();
+        store[key] = {
+            season: coordinates.season,
+            episode: coordinates.episode,
+            updatedAt: Date.now ? Date.now() : new Date().getTime()
+        };
+        var keys = Object.keys(store);
+        if (keys.length > 80) {
+            keys.sort(function (left, right) {
+                return numberValue(store[left] && store[left].updatedAt, 0) - numberValue(store[right] && store[right].updatedAt, 0);
+            });
+            keys.slice(0, keys.length - 80).forEach(function (oldKey) { delete store[oldKey]; });
+        }
+        writeDetailMemory(store);
+        console.log('[Lampa Modern UI] Remembered episode:', key, coordinates, reason || '');
+        return true;
+    }
+
+    // =============================================
+    // АНАЛИЗ ПРОСМОТРА (оригинальный из Lampa Modern UI)
+    // =============================================
 
     function resolveSeriesPlayback(card, data) {
         if (!card) return { status: 'empty', episodes: [], current: null, next: null, available: [] };
@@ -296,7 +359,7 @@
     }
 
     // =============================================
-    // 5. ВИДЖЕТ В ПРАВОМ НИЖНЕМ УГЛУ
+    // РЕНДЕРИНГ ВИДЖЕТА В ПРАВОМ НИЖНЕМ УГЛУ
     // =============================================
 
     function createWidget(state) {
@@ -306,7 +369,6 @@
         widget.className = 'lsm-widget';
         widget.setAttribute('data-lsm-status', state.status);
 
-        // Стили
         var style = document.createElement('style');
         style.id = 'lsm-widget-style';
         style.textContent = `
@@ -589,7 +651,7 @@
     }
 
     // =============================================
-    // 6. ОТКРЫТИЕ ЭПИЗОДОВ
+    // ОТКРЫТИЕ ЭПИЗОДОВ
     // =============================================
 
     function openEpisodesScreen(card) {
@@ -612,12 +674,14 @@
                 Lampa.Router.call('episodes', card);
                 return true;
             }
-        } catch (error) {}
+        } catch (error) {
+            console.warn('[Lampa Modern UI] Open episodes error:', error);
+        }
         return false;
     }
 
     // =============================================
-    // 7. УПРАВЛЕНИЕ ВИДЖЕТОМ
+    // УПРАВЛЕНИЕ ВИДЖЕТОМ
     // =============================================
 
     function removeOldWidgets() {
@@ -627,65 +691,9 @@
         });
     }
 
-    var runtime = {
-        version: VERSION,
-        started: false,
-        destroyed: false,
-        timerIds: [],
-        disposers: [],
-        currentWidget: null,
-        lastState: null,
-        lastCard: null,
-
-        destroy: function (reason) {
-            if (this.destroyed) return;
-            this.destroyed = true;
-            this.timerIds.forEach(clearTimeout);
-            this.timerIds = [];
-            this.disposers.forEach(function (d) { try { d(); } catch (error) {} });
-            this.disposers = [];
-            removeOldWidgets();
-            this.currentWidget = null;
-            if (window[RUNTIME_KEY] === this) delete window[RUNTIME_KEY];
-        }
-    };
-    window[RUNTIME_KEY] = runtime;
-
-    function setTimeout(callback, delay) {
-        if (runtime.destroyed) return 0;
-        var id = window.setTimeout(function () {
-            var index = runtime.timerIds.indexOf(id);
-            if (index >= 0) runtime.timerIds.splice(index, 1);
-            if (!runtime.destroyed) callback();
-        }, delay || 0);
-        runtime.timerIds.push(id);
-        return id;
-    }
-
-    function clearTimeout(id) {
-        if (!id) return;
-        window.clearTimeout(id);
-        var index = runtime.timerIds.indexOf(id);
-        if (index >= 0) runtime.timerIds.splice(index, 1);
-    }
-
-    function addDisposer(disposer) {
-        if (typeof disposer === 'function') runtime.disposers.push(disposer);
-        return disposer;
-    }
-
-    function followEmitter(emitter, event, handler) {
-        if (!emitter || typeof emitter.follow !== 'function') return false;
-        emitter.follow(event, handler);
-        addDisposer(function () {
-            try {
-                if (typeof emitter.remove === 'function') emitter.remove(event, handler);
-                else if (typeof emitter.unfollow === 'function') emitter.unfollow(event, handler);
-            } catch (error) {}
-        });
-        return true;
-    }
-
+    var currentWidget = null;
+    var lastState = null;
+    var lastCard = null;
     var updateTimer = null;
 
     function updateWidget(card, data) {
@@ -693,14 +701,14 @@
 
         if (mediaType(card) !== 'tv') {
             removeOldWidgets();
-            runtime.currentWidget = null;
+            currentWidget = null;
             return;
         }
 
         var state = resolveSeriesPlayback(card, data || {});
         if (!state || !state.current) {
             removeOldWidgets();
-            runtime.currentWidget = null;
+            currentWidget = null;
             return;
         }
 
@@ -714,12 +722,12 @@
             state.status
         ].join('|');
 
-        if (runtime.lastState === signature && runtime.currentWidget && runtime.currentWidget.parentNode) {
-            var bar = runtime.currentWidget.querySelector('.lsm-progress-bar');
+        if (lastState === signature && currentWidget && currentWidget.parentNode) {
+            var bar = currentWidget.querySelector('.lsm-progress-bar');
             if (bar && state.current) {
                 var progress = Math.round(state.current.timeline.percent || 0);
                 bar.style.width = Math.max(0, Math.min(100, progress)) + '%';
-                var statusIcon = runtime.currentWidget.querySelector('.lsm-status-icon');
+                var statusIcon = currentWidget.querySelector('.lsm-status-icon');
                 if (statusIcon) {
                     if (state.status === 'complete') {
                         statusIcon.textContent = '✓ Всё';
@@ -730,7 +738,7 @@
                     }
                 }
                 var remaining = formatRemainingTime(state.current.timeline);
-                var remainingEl = runtime.currentWidget.querySelector('.lsm-remaining');
+                var remainingEl = currentWidget.querySelector('.lsm-remaining');
                 if (remainingEl) {
                     remainingEl.textContent = remaining ? '⏱ ' + remaining : '';
                 }
@@ -738,20 +746,20 @@
             return;
         }
 
-        runtime.lastState = signature;
-        runtime.lastCard = card;
+        lastState = signature;
+        lastCard = card;
 
         removeOldWidgets();
 
         var widget = createWidget(state);
         if (widget) {
             document.body.appendChild(widget);
-            runtime.currentWidget = widget;
+            currentWidget = widget;
         }
     }
 
     // =============================================
-    // 8. ОБРАБОТЧИКИ СОБЫТИЙ
+    // ОБРАБОТЧИКИ СОБЫТИЙ (оригинальные)
     // =============================================
 
     function handleDetailEvent(event) {
@@ -766,7 +774,7 @@
             clearTimeout(updateTimer);
             updateTimer = setTimeout(function () {
                 updateWidget(card, data);
-            }, 500);
+            }, 300);
         }
     }
 
@@ -778,7 +786,7 @@
                 clearTimeout(updateTimer);
                 updateTimer = setTimeout(function () {
                     updateWidget(card, active.data || {});
-                }, 300);
+                }, 200);
             }
         }
     }
@@ -789,11 +797,11 @@
         clearTimeout(updateTimer);
         updateTimer = setTimeout(function () {
             updateWidget(card, {});
-        }, 200);
+        }, 100);
     }
 
     // =============================================
-    // 9. УСТАНОВКА СЛУШАТЕЛЕЙ
+    // УСТАНОВКА СЛУШАТЕЛЕЙ
     // =============================================
 
     function installListeners() {
@@ -823,12 +831,11 @@
                                 }
                             }
                         }
-                    }, 200);
+                    }, 100);
                 }
             }
         });
 
-        // Клики по эпизодам
         if (window.$) {
             try {
                 $(document).on('click.lsm hover:enter.lsm', '.full-episode, .season-episode, .card-episode', function () {
@@ -842,25 +849,27 @@
                 addDisposer(function () {
                     try { $(document).off('.lsm'); } catch (error) {}
                 });
-            } catch (error) {}
+            } catch (error) {
+                console.warn('[Lampa Modern UI] DOM click handlers failed:', error);
+            }
         }
 
         return true;
     }
 
     // =============================================
-    // 10. ЗАПУСК
+    // ЗАПУСК
     // =============================================
 
     function start() {
         if (runtime.destroyed || runtime.started) return;
         if (!window.Lampa || !Lampa.Listener) {
-            setTimeout(start, 200);
+            setTimeout(start, 100);
             return;
         }
 
         runtime.started = true;
-        console.log('[Series Manager] v' + VERSION + ' started');
+        console.log('[Lampa Modern UI] Series Manager v' + VERSION + ' started');
 
         installListeners();
 
@@ -872,11 +881,11 @@
                     updateWidget(card, active.data || {});
                 }
             }
-        }, 800);
+        }, 500);
     }
 
     // =============================================
-    // 11. API
+    // API
     // =============================================
 
     var api = {
@@ -886,14 +895,14 @@
         rememberEpisode: rememberEpisodeSelection,
         readMemory: readEpisodeMemory,
         openEpisodes: openEpisodesScreen,
-        destroy: runtime.destroy.bind(runtime),
+        destroy: destroyRuntime,
         getState: function () {
             return {
                 version: VERSION,
                 destroyed: runtime.destroyed,
                 started: runtime.started,
-                hasWidget: !!runtime.currentWidget,
-                lastCard: runtime.lastCard ? contentId(runtime.lastCard) : null
+                hasWidget: !!currentWidget,
+                lastCard: lastCard ? contentId(lastCard) : null
             };
         }
     };
@@ -902,7 +911,42 @@
     window[RUNTIME_KEY] = runtime;
 
     // =============================================
-    // 12. СТАРТ
+    // DESTROY
+    // =============================================
+
+    function destroyRuntime(reason) {
+        if (runtime.destroyed) return;
+        runtime.destroyed = true;
+        runtime.started = false;
+
+        while (runtime.timerIds.length) {
+            nativeClearTimeout(runtime.timerIds.pop());
+        }
+
+        while (runtime.disposers.length) {
+            try { runtime.disposers.pop()(); } catch (error) {}
+        }
+
+        while (runtime.patches.length) {
+            var patch = runtime.patches.pop();
+            try {
+                if (patch.target && patch.target[patch.key] === patch.wrapped) {
+                    patch.target[patch.key] = patch.original;
+                }
+            } catch (error) {}
+        }
+
+        removeOldWidgets();
+        currentWidget = null;
+
+        if (window[RUNTIME_KEY] === runtime) delete window[RUNTIME_KEY];
+        if (window.__LSM_API__ === api) delete window.__LSM_API__;
+
+        console.log('[Lampa Modern UI] Series Manager destroyed:', reason || '');
+    }
+
+    // =============================================
+    // СТАРТ
     // =============================================
 
     if (document.readyState === 'loading') {
