@@ -1,20 +1,39 @@
-/* Lampa Series Manager 1.0.0 — Компактный виджет сериалов */
+/* Lampa Series Manager 1.1.0 — Совместимая версия для темы от SERG */
 (function () {
     'use strict';
 
-    var VERSION = '1.0.0';
+    var VERSION = '1.1.0';
     var PLUGIN_ID = 'lampa_series_manager';
     var RUNTIME_KEY = '__LSM_RUNTIME__';
     var MEMORY_KEY = 'lsm_episode_memory_v1';
 
-    // Уничтожаем старый инстанс
-    var previous = window[RUNTIME_KEY];
-    if (previous && typeof previous.destroy === 'function') {
-        try { previous.destroy('replace'); } catch (error) {}
-    }
+    // =============================================
+    // 1. ПРОВЕРКА СОВМЕСТИМОСТИ
+    // =============================================
+
+    // Проверяем, установлена ли тема от SERG
+    var isSergThemeInstalled = function() {
+        try {
+            // Проверяем по наличию класса applecation на странице
+            var hasApplecation = document.querySelector('.applecation') !== null;
+            // Проверяем по наличию настроек
+            var hasSettings = Lampa.Storage.get('applecation_enabled') !== undefined;
+            // Проверяем по наличию стилей
+            var hasStyles = document.getElementById('applecation_plus_css') !== null;
+            return hasApplecation || hasSettings || hasStyles;
+        } catch (e) {
+            return false;
+        }
+    };
+
+    // Если тема SERG установлена, используем её классы
+    var THEME_CLASS = isSergThemeInstalled() ? 'applecation' : 'lampa-theme-engine';
+    var THEME_PREFIX = isSergThemeInstalled() ? 'applecation' : 'lte';
+
+    console.log('[Series Manager] Совместимость с темой SERG:', isSergThemeInstalled());
 
     // =============================================
-    // 1. Утилиты
+    // 2. Утилиты (скопированы из вашей темы для совместимости)
     // =============================================
 
     function storageGet(name, fallback) {
@@ -198,7 +217,7 @@
     }
 
     // =============================================
-    // 2. Память серий (sessionStorage)
+    // 3. Память серий (sessionStorage)
     // =============================================
 
     function detailMemoryStore() {
@@ -249,7 +268,7 @@
     }
 
     // =============================================
-    // 3. Анализ просмотра сериала
+    // 4. Анализ просмотра сериала
     // =============================================
 
     function resolveSeriesPlayback(card, data) {
@@ -302,7 +321,7 @@
     }
 
     // =============================================
-    // 4. Компактный виджет в правом нижнем углу
+    // 5. Компактный виджет (адаптирован под тему SERG)
     // =============================================
 
     function createWidget(state) {
@@ -313,11 +332,11 @@
         if (oldStyle) oldStyle.remove();
 
         var widget = document.createElement('div');
-        widget.className = 'lsm-widget';
+        widget.className = 'lsm-widget ' + THEME_CLASS + '-widget';
         widget.setAttribute('data-lsm-status', state.status);
         widget.setAttribute('data-lsm-version', VERSION);
 
-        // Стили виджета
+        // Стили виджета (адаптированы под тему SERG)
         var style = document.createElement('style');
         style.id = 'lsm-widget-style';
         style.textContent = `
@@ -343,6 +362,14 @@
                 animation: lsm-widget-in 0.35s cubic-bezier(0.22, 0.72, 0.2, 1) !important;
                 pointer-events: auto !important;
                 line-height: 1.4 !important;
+            }
+            /* Адаптация под тему SERG */
+            .applecation .lsm-widget {
+                background: rgba(10, 14, 23, 0.95) !important;
+                border-color: rgba(255, 255, 255, 0.08) !important;
+            }
+            .applecation .lsm-widget:hover {
+                border-color: rgba(105, 167, 255, 0.4) !important;
             }
             .lsm-widget:hover {
                 transform: scale(1.03) !important;
@@ -586,7 +613,6 @@
 
             widget.addEventListener('mouseenter', function () {
                 showWidget();
-                // Показываем дольше при наведении
                 clearTimeout(hideTimeout);
                 hideTimeout = setTimeout(hideWidget, 8000);
             });
@@ -606,7 +632,7 @@
     }
 
     // =============================================
-    // 5. Открытие страницы эпизодов
+    // 6. Открытие страницы эпизодов
     // =============================================
 
     function openEpisodesScreen(card) {
@@ -636,7 +662,7 @@
     }
 
     // =============================================
-    // 6. Управление виджетами
+    // 7. Управление виджетами
     // =============================================
 
     function removeOldWidgets() {
@@ -721,7 +747,7 @@
     }
 
     // =============================================
-    // 7. Обработчики событий
+    // 8. Обработчики событий (совместимые с темой SERG)
     // =============================================
 
     function handleDetailEvent(event) {
@@ -736,7 +762,7 @@
             clearTimeout(updateTimer);
             updateTimer = setTimeout(function () {
                 updateWidget(card, data);
-            }, 300);
+            }, 500); // Увеличил задержку для совместимости с темой SERG
         }
     }
 
@@ -749,7 +775,7 @@
                 clearTimeout(updateTimer);
                 updateTimer = setTimeout(function () {
                     updateWidget(card, active.data || {});
-                }, 200);
+                }, 300);
             }
         }
     }
@@ -761,11 +787,11 @@
         clearTimeout(updateTimer);
         updateTimer = setTimeout(function () {
             updateWidget(card, {});
-        }, 100);
+        }, 200);
     }
 
     // =============================================
-    // 8. Установка обработчиков
+    // 9. Установка обработчиков (с проверкой на дубли)
     // =============================================
 
     var runtime = {
@@ -826,8 +852,14 @@
         return true;
     }
 
+    // Проверяем, не установлены ли уже обработчики
+    var listenersInstalled = false;
+
     function installListeners() {
+        if (listenersInstalled) return true;
         if (!window.Lampa || !Lampa.Listener) return false;
+
+        listenersInstalled = true;
 
         // Слушаем события детальной страницы
         followEmitter(Lampa.Listener, 'full', function (event) {
@@ -857,7 +889,7 @@
                                 }
                             }
                         }
-                    }, 100);
+                    }, 200);
                 }
             }
         });
@@ -885,7 +917,7 @@
     }
 
     // =============================================
-    // 9. Запуск плагина
+    // 10. Запуск плагина
     // =============================================
 
     function start() {
@@ -896,7 +928,8 @@
         }
 
         runtime.started = true;
-        console.log('[Series Manager] v' + VERSION + ' started');
+        console.log('[Series Manager] v' + VERSION + ' started (совместимая версия)');
+        console.log('[Series Manager] Тема SERG обнаружена:', isSergThemeInstalled());
 
         installListeners();
 
@@ -909,15 +942,16 @@
                     updateWidget(card, active.data || {});
                 }
             }
-        }, 500);
+        }, 800); // Увеличенная задержка для совместимости
     }
 
     // =============================================
-    // 10. Экспорт API
+    // 11. Экспорт API
     // =============================================
 
     var api = {
         version: VERSION,
+        isSergThemeCompatible: isSergThemeInstalled,
         updateWidget: updateWidget,
         resolveSeriesPlayback: resolveSeriesPlayback,
         rememberEpisode: rememberEpisodeSelection,
@@ -930,7 +964,8 @@
                 destroyed: runtime.destroyed,
                 started: runtime.started,
                 hasWidget: !!currentWidget,
-                lastCard: lastCard ? contentId(lastCard) : null
+                lastCard: lastCard ? contentId(lastCard) : null,
+                sergThemeDetected: isSergThemeInstalled()
             };
         }
     };
@@ -945,5 +980,5 @@
         start();
     }
 
-    console.log('[Series Manager] v' + VERSION + ' loaded');
+    console.log('[Series Manager] v' + VERSION + ' loaded (совместимая версия)');
 })();
