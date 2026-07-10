@@ -1,8 +1,8 @@
-/* Series Manager PRO 2.7.0 — Блок в .applecation__right */
+/* Series Manager PRO 2.8.0 — Совместимый с Lampa Modern UI */
 (function () {
     'use strict';
 
-    var VERSION = '2.7.0';
+    var VERSION = '2.8.0';
     var MEMORY_KEY = 'series_manager_pro_v2';
 
     // =============================================
@@ -15,6 +15,18 @@
     }
 
     console.log('[Series Manager PRO] v' + VERSION + ' загружается...');
+
+    // =============================================
+    // ОБНАРУЖЕНИЕ LAMPA MODERN UI
+    // =============================================
+
+    var hasModernUI = !!(window.__LMUI_RUNTIME__ || document.querySelector('.lampa-modern-ui'));
+
+    if (hasModernUI) {
+        console.log('[Series Manager PRO] Lampa Modern UI обнаружен — работаем в совместимом режиме');
+    } else {
+        console.log('[Series Manager PRO] Lampa Modern UI не обнаружен');
+    }
 
     // =============================================
     // НАСТРОЙКИ
@@ -150,8 +162,10 @@
     }
 
     // =============================================
-    // ПАМЯТЬ СЕРИЙ
+    // ПАМЯТЬ СЕРИЙ (используем ту же, что в Lampa Modern UI)
     // =============================================
+
+    var MEMORY_KEY = hasModernUI ? 'lmui_detail_episode_v1' : 'series_manager_pro_v2';
 
     function getMemoryStore() {
         try {
@@ -370,7 +384,7 @@
     }
 
     // =============================================
-    // СОЗДАНИЕ БЛОКА (как в Lampa Modern UI)
+    // СОЗДАНИЕ БЛОКА "Сейчас смотрите" (как в Lampa Modern UI)
     // =============================================
 
     function createBlock(state) {
@@ -408,8 +422,8 @@
 
         // Основной блок
         var block = document.createElement('div');
-        block.className = 'series-info-block';
-        block.setAttribute('data-status', state.status);
+        block.className = 'lmui-series-summary';
+        block.setAttribute('data-lsm-status', state.status);
         block.style.cssText = [
             'display:flex',
             'flex-direction:column',
@@ -424,32 +438,27 @@
             'cursor:pointer',
             'color:#f6f8fc',
             'font-family:"SegoeUI",system-ui,sans-serif',
-            'font-size:13px'
+            'font-size:13px',
+            'margin-bottom:0.5em'
         ].join(';');
 
-        // Заголовок
-        var header = document.createElement('div');
-        header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:0.15em;';
-
-        var label = document.createElement('span');
-        label.style.cssText = 'font-size:0.5em;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.25);font-weight:600;';
-        label.textContent = 'Продолжить просмотр';
-        header.appendChild(label);
-
-        var statusEl = document.createElement('span');
-        statusEl.style.cssText = 'font-size:0.5em;font-weight:700;color:' + statusColor + ';';
-        statusEl.textContent = statusIcon + ' ' + statusText;
-        header.appendChild(statusEl);
+        // Eyebrow (как в Lampa Modern UI)
+        var eyebrow = document.createElement('div');
+        eyebrow.style.cssText = 'font-size:0.5em;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.25);font-weight:600;margin-bottom:0.1em;';
+        eyebrow.textContent = 'Сейчас смотрите';
+        block.appendChild(eyebrow);
 
         // Название сериала
         var seriesName = document.createElement('div');
-        seriesName.style.cssText = 'font-size:0.6em;color:rgba(255,255,255,0.25);margin-bottom:0.05em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+        seriesName.style.cssText = 'font-size:0.7em;color:rgba(255,255,255,0.3);margin-bottom:0.05em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
         seriesName.textContent = state.seriesTitle || 'Сериал';
+        block.appendChild(seriesName);
 
         // Название серии
         var titleEl = document.createElement('div');
         titleEl.style.cssText = 'font-size:0.85em;font-weight:700;color:#fff;margin-bottom:0.1em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
         titleEl.textContent = title;
+        block.appendChild(titleEl);
 
         // Мета
         var meta = document.createElement('div');
@@ -473,24 +482,27 @@
             meta.appendChild(remainingEl);
         }
 
-        // Прогресс-бар
+        // Статус
+        var statusEl = document.createElement('span');
+        statusEl.style.cssText = 'font-size:0.55em;font-weight:700;color:' + statusColor + ';margin-left:auto;';
+        statusEl.textContent = statusIcon + ' ' + statusText;
+        meta.appendChild(statusEl);
+
+        block.appendChild(meta);
+
+        // Прогресс-бар (как в Lampa Modern UI)
         var progressWrap = document.createElement('div');
         progressWrap.style.cssText = 'width:100%;height:2px;border-radius:99em;background:rgba(255,255,255,0.05);margin:0.25em 0 0.05em;overflow:hidden;';
         var progressBar = document.createElement('div');
         progressBar.style.cssText = 'height:100%;border-radius:inherit;background:linear-gradient(90deg,#69a7ff,#91beff);transition:width .5s ease;';
         progressBar.style.width = Math.max(0, Math.min(100, progress)) + '%';
         progressWrap.appendChild(progressBar);
+        block.appendChild(progressWrap);
 
         // Подсказка
         var hint = document.createElement('div');
         hint.style.cssText = 'font-size:0.4em;color:rgba(255,255,255,0.06);text-align:right;margin-top:0.05em;';
         hint.textContent = '↗ Открыть в Lampac';
-
-        block.appendChild(header);
-        block.appendChild(seriesName);
-        block.appendChild(titleEl);
-        block.appendChild(meta);
-        block.appendChild(progressWrap);
         block.appendChild(hint);
 
         // Ховер
@@ -521,7 +533,7 @@
     }
 
     // =============================================
-    // ВСТАВКА В .applecation__right
+    // ВСТАВКА БЛОКА
     // =============================================
 
     var currentBlock = null;
@@ -533,10 +545,13 @@
             currentBlock.parentNode.removeChild(currentBlock);
         }
         currentBlock = null;
-        var blocks = document.querySelectorAll('.series-info-block');
+        var blocks = document.querySelectorAll('.lmui-series-summary');
         blocks.forEach(function (b) {
-            if (b.parentNode) {
-                b.parentNode.removeChild(b);
+            // Удаляем только те, что созданы нами (с атрибутом)
+            if (b.getAttribute('data-lsm-status') !== null) {
+                if (b.parentNode) {
+                    b.parentNode.removeChild(b);
+                }
             }
         });
     }
@@ -567,34 +582,56 @@
                 return;
             }
 
-            // Ищем .applecation__right
-            var rightContainer = render.find('.applecation__right');
-            
-            // Если нет .applecation__right, создаём его
-            if (!rightContainer.length) {
-                // Ищем .applecation__left или .applecation__wrapper
-                var leftContainer = render.find('.applecation__left');
-                if (!leftContainer.length) {
-                    leftContainer = render.find('.applecation__wrapper');
-                }
-                if (!leftContainer.length) {
-                    leftContainer = render.find('.full-start-new__right');
-                }
-                if (!leftContainer.length) {
-                    return;
-                }
+            // Ищем контейнер для вставки
+            // Если есть Lampa Modern UI, используем его структуру
+            var container = null;
 
-                // Создаём .applecation__right
-                rightContainer = $('<div class="applecation__right"></div>');
-                rightContainer.css({
-                    'display': 'flex',
-                    'flex-direction': 'column',
-                    'flex-shrink': '0',
-                    'min-width': '200px',
-                    'max-width': '320px',
-                    'margin-left': '1.5em'
-                });
-                leftContainer.after(rightContainer);
+            if (hasModernUI) {
+                // В Lampa Modern UI блок должен быть в .full-start-new__buttons
+                container = render.find('.full-start-new__buttons');
+                if (container.length) {
+                    // Вставляем перед кнопками
+                    var parent = container.parent();
+                    var blockContainer = $('<div class="lmui-series-summary-container" style="width:100%;margin-bottom:0.5em;"></div>');
+                    
+                    // Проверяем, есть ли уже наш контейнер
+                    var existingContainer = parent.find('.lmui-series-summary-container');
+                    if (existingContainer.length) {
+                        container = existingContainer;
+                    } else {
+                        // Вставляем перед buttons
+                        container.before(blockContainer);
+                        container = blockContainer;
+                    }
+                } else {
+                    container = render.find('.full-start-new__right');
+                }
+            } else {
+                // Без Lampa Modern UI — ищем .applecation__right или создаём
+                container = render.find('.applecation__right');
+                if (!container.length) {
+                    var leftContainer = render.find('.applecation__left');
+                    if (!leftContainer.length) {
+                        leftContainer = render.find('.full-start-new__right');
+                    }
+                    if (leftContainer.length) {
+                        var newContainer = $('<div class="applecation__right"></div>');
+                        newContainer.css({
+                            'display': 'flex',
+                            'flex-direction': 'column',
+                            'flex-shrink': '0',
+                            'min-width': '200px',
+                            'max-width': '320px',
+                            'margin-left': '1.5em'
+                        });
+                        leftContainer.after(newContainer);
+                        container = newContainer;
+                    }
+                }
+            }
+
+            if (!container || !container.length) {
+                return;
             }
 
             var data = getCurrentData();
@@ -613,7 +650,7 @@
             ].join('|');
 
             // Проверяем существующий блок
-            var existingBlock = rightContainer.find('.series-info-block');
+            var existingBlock = container.find('.lmui-series-summary[data-lsm-status]');
             if (existingBlock.length && lastState === signature) {
                 // Обновляем прогресс
                 var bar = existingBlock.find('.sw-progress-bar');
@@ -662,12 +699,12 @@
             var block = createBlock(state);
             if (!block) return;
 
-            // Очищаем .applecation__right и вставляем блок
-            rightContainer.empty();
-            rightContainer.append(block);
+            // Очищаем контейнер и вставляем блок
+            container.empty();
+            container.append(block);
             currentBlock = block;
 
-            console.log('[Series Manager PRO] Блок добавлен в .applecation__right');
+            console.log('[Series Manager PRO] Блок "Сейчас смотрите" добавлен');
 
         } catch (e) {
             console.error('[Series Manager PRO] Ошибка:', e);
@@ -714,6 +751,7 @@
             }
 
             console.log('[Series Manager PRO] v' + VERSION + ' запущен');
+            console.log('[Series Manager PRO] Lampa Modern UI обнаружен:', hasModernUI);
 
             Lampa.Listener.follow('full', onFull);
             Lampa.Listener.follow('timeline', onTimeline);
@@ -770,7 +808,7 @@
                     default: true
                 },
                 field: {
-                    name: 'Показывать блок продолжения'
+                    name: 'Показывать блок "Сейчас смотрите"'
                 },
                 onChange: function(value) {
                     var settings = getSettings();
@@ -815,10 +853,12 @@
         update: insertBlock,
         remove: removeBlock,
         openLampac: openLampacBalancer,
+        hasModernUI: hasModernUI,
         getState: function () {
             return {
                 version: VERSION,
                 hasBlock: !!currentBlock,
+                hasModernUI: hasModernUI,
                 settings: getSettings()
             };
         }
