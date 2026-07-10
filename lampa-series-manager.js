@@ -1,8 +1,8 @@
-/* Series Manager PRO 3.4.0 — Увеличенный блок справа */
+/* Series Manager PRO 3.5.0 — Полноценный блок справа */
 (function () {
     'use strict';
 
-    var VERSION = '3.4.0';
+    var VERSION = '3.5.0';
     var MEMORY_KEY = 'lmui_detail_episode_v1';
 
     // =============================================
@@ -331,7 +331,7 @@
     }
 
     // =============================================
-    // СОЗДАНИЕ БЛОКА (УВЕЛИЧЕННЫЙ, СПРАВА)
+    // СОЗДАНИЕ БОЛЬШОГО БЛОКА СПРАВА
     // =============================================
 
     function createBlock(state, card) {
@@ -372,19 +372,18 @@
         var block = document.createElement('div');
         block.className = 'series-info-block';
         block.id = 'series-info-block';
-        block.setAttribute('data-status', state.status);
 
-        // УВЕЛИЧЕННЫЕ СТИЛИ
+        // БОЛЬШОЙ БЛОК КАК .applecation__info
         block.style.cssText = [
             'display:flex',
             'flex-direction:column',
             'width:100%',
             'min-width:320px',
-            'max-width:400px',
-            'padding:1.4em 1.8em',
+            'max-width:420px',
+            'padding:1.6em 2em',
             'border-radius:1.2em',
-            'background:rgba(0,0,0,0.4)',
-            'border:2px solid rgba(105,167,255,0.2)',
+            'background:rgba(0,0,0,0.35)',
+            'border:1.5px solid rgba(105,167,255,0.2)',
             'backdrop-filter:blur(16px)',
             '-webkit-backdrop-filter:blur(16px)',
             'transition:all .3s ease',
@@ -392,102 +391,136 @@
             'color:#f6f8fc',
             'font-family:"SegoeUI",system-ui,sans-serif',
             'font-size:16px',
+            'box-shadow:0 8px 32px rgba(0,0,0,0.4)',
             'margin:0',
-            'box-shadow:0 6px 30px rgba(0,0,0,0.4)',
+            'flex-shrink:0',
+            'align-self:flex-start',
             'position:relative',
-            'align-self:flex-start'
+            'overflow:hidden'
         ].join(';');
 
-        // Заголовок с иконкой
-        var header = document.createElement('div');
-        header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:0.3em;';
+        // Декоративный градиент сверху
+        var gradient = document.createElement('div');
+        gradient.style.cssText = [
+            'position:absolute',
+            'top:0',
+            'left:0',
+            'right:0',
+            'height:3px',
+            'background:linear-gradient(90deg, #69a7ff, #91beff)',
+            'opacity:0.6'
+        ].join(';');
+        block.appendChild(gradient);
 
-        var titleLeft = document.createElement('div');
-        titleLeft.style.cssText = 'display:flex;align-items:center;gap:0.5em;';
+        // Шапка с иконкой и статусом
+        var header = document.createElement('div');
+        header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:0.4em;';
+
+        var leftHeader = document.createElement('div');
+        leftHeader.style.cssText = 'display:flex;align-items:center;gap:0.6em;';
 
         var icon = document.createElement('span');
-        icon.style.cssText = 'font-size:1em;';
+        icon.style.cssText = 'font-size:1.2em;color:#69a7ff;';
         icon.textContent = '▶';
-        titleLeft.appendChild(icon);
+        leftHeader.appendChild(icon);
 
         var eyebrow = document.createElement('span');
-        eyebrow.style.cssText = 'font-size:0.6em;text-transform:uppercase;letter-spacing:0.1em;color:rgba(255,255,255,0.5);font-weight:700;';
-        eyebrow.textContent = 'СЕЙЧАС СМОТРИТЕ';
-        titleLeft.appendChild(eyebrow);
+        eyebrow.style.cssText = 'font-size:0.65em;text-transform:uppercase;letter-spacing:0.12em;color:rgba(255,255,255,0.45);font-weight:700;';
+        eyebrow.textContent = 'ПРОДОЛЖИТЬ ПРОСМОТР';
+        leftHeader.appendChild(eyebrow);
 
-        header.appendChild(titleLeft);
+        header.appendChild(leftHeader);
 
         var statusEl = document.createElement('span');
-        statusEl.style.cssText = 'font-size:0.55em;font-weight:700;color:' + statusColor + ';padding:0.2em 0.8em;border-radius:99em;background:rgba(0,0,0,0.3);white-space:nowrap;';
+        statusEl.style.cssText = 'font-size:0.6em;font-weight:700;color:' + statusColor + ';padding:0.25em 0.9em;border-radius:99em;background:rgba(0,0,0,0.35);white-space:nowrap;border:1px solid ' + statusColor + '30;';
         statusEl.textContent = statusIcon + ' ' + statusText;
         header.appendChild(statusEl);
 
         block.appendChild(header);
 
-        // Название сериала
+        // Название сериала (крупное)
         var seriesName = document.createElement('div');
-        seriesName.style.cssText = 'font-size:0.8em;color:rgba(255,255,255,0.35);margin-bottom:0.1em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+        seriesName.style.cssText = 'font-size:1.5em;font-weight:700;color:#fff;margin-bottom:0.1em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.2;';
         seriesName.textContent = seriesTitle || 'Сериал';
         block.appendChild(seriesName);
 
-        // Название серии (крупное)
+        // Название серии
         var titleEl = document.createElement('div');
-        titleEl.style.cssText = 'font-size:1.15em;font-weight:700;color:#fff;margin-bottom:0.2em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+        titleEl.style.cssText = 'font-size:1.1em;font-weight:600;color:rgba(255,255,255,0.8);margin-bottom:0.3em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
         titleEl.textContent = title;
         block.appendChild(titleEl);
 
-        // Мета (увеличенная)
+        // Разделитель
+        var divider = document.createElement('div');
+        divider.style.cssText = 'width:100%;height:1px;background:rgba(255,255,255,0.06);margin:0.2em 0 0.4em;';
+        block.appendChild(divider);
+
+        // Мета-информация (как в .applecation__info)
         var meta = document.createElement('div');
-        meta.style.cssText = 'display:flex;align-items:center;gap:0.8em;flex-wrap:wrap;font-size:0.8em;color:rgba(255,255,255,0.45);';
+        meta.style.cssText = 'display:flex;align-items:center;gap:0.8em;flex-wrap:wrap;font-size:0.85em;color:rgba(255,255,255,0.5);';
 
         if (coords) {
             var seasonText = document.createElement('span');
+            seasonText.style.cssText = 'background:rgba(255,255,255,0.06);padding:0.2em 0.7em;border-radius:0.4em;';
             seasonText.textContent = 'Сезон ' + coords.season + ' · Эпизод ' + coords.episode;
             meta.appendChild(seasonText);
         }
 
         if (progress > 0) {
             var progressText = document.createElement('span');
+            progressText.style.cssText = 'background:rgba(105,167,255,0.12);padding:0.2em 0.7em;border-radius:0.4em;color:#69a7ff;';
             progressText.textContent = progress + '%';
             meta.appendChild(progressText);
         }
 
         if (remaining) {
             var remainingEl = document.createElement('span');
+            remainingEl.style.cssText = 'background:rgba(255,255,255,0.06);padding:0.2em 0.7em;border-radius:0.4em;';
             remainingEl.textContent = '⏱ ' + remaining;
             meta.appendChild(remainingEl);
         }
 
+        // Информация о следующей серии
+        if (state.next && state.status !== 'complete' && state.status !== 'upcoming') {
+            var nextCoords = episodeCoordinates(state.next.episode);
+            if (nextCoords) {
+                var nextText = document.createElement('span');
+                nextText.style.cssText = 'background:rgba(255,255,255,0.04);padding:0.2em 0.7em;border-radius:0.4em;color:rgba(255,255,255,0.3);';
+                nextText.textContent = 'Далее: S' + padEpisodeNumber(nextCoords.season) + ' E' + padEpisodeNumber(nextCoords.episode);
+                meta.appendChild(nextText);
+            }
+        }
+
         block.appendChild(meta);
 
-        // Прогресс-бар (толще)
+        // Прогресс-бар (большой)
         var progressWrap = document.createElement('div');
-        progressWrap.style.cssText = 'width:100%;height:5px;border-radius:99em;background:rgba(255,255,255,0.08);margin:0.5em 0 0.15em;overflow:hidden;';
+        progressWrap.style.cssText = 'width:100%;height:6px;border-radius:99em;background:rgba(255,255,255,0.06);margin:0.6em 0 0.2em;overflow:hidden;';
         var progressBar = document.createElement('div');
         progressBar.className = 'sw-progress-bar';
-        progressBar.style.cssText = 'height:100%;border-radius:inherit;background:linear-gradient(90deg,#69a7ff,#91beff);transition:width .5s ease;';
+        progressBar.style.cssText = 'height:100%;border-radius:inherit;background:linear-gradient(90deg,#69a7ff,#91beff);transition:width .6s ease;';
         progressBar.style.width = Math.max(0, Math.min(100, progress)) + '%';
         progressWrap.appendChild(progressBar);
         block.appendChild(progressWrap);
 
         // Подсказка
         var hint = document.createElement('div');
-        hint.style.cssText = 'font-size:0.55em;color:rgba(255,255,255,0.15);text-align:right;margin-top:0.15em;letter-spacing:0.05em;';
+        hint.style.cssText = 'font-size:0.6em;color:rgba(255,255,255,0.15);text-align:right;margin-top:0.2em;letter-spacing:0.05em;';
         hint.textContent = '↗ Нажмите, чтобы открыть в Lampac';
         block.appendChild(hint);
 
         // Ховер
         block.addEventListener('mouseenter', function () {
             this.style.borderColor = 'rgba(105,167,255,0.5)';
-            this.style.background = 'rgba(0,0,0,0.5)';
+            this.style.background = 'rgba(0,0,0,0.45)';
             this.style.transform = 'scale(1.02)';
-            this.style.boxShadow = '0 8px 40px rgba(0,0,0,0.6)';
+            this.style.boxShadow = '0 12px 48px rgba(0,0,0,0.6)';
         });
         block.addEventListener('mouseleave', function () {
             this.style.borderColor = 'rgba(105,167,255,0.2)';
-            this.style.background = 'rgba(0,0,0,0.4)';
+            this.style.background = 'rgba(0,0,0,0.35)';
             this.style.transform = 'scale(1)';
-            this.style.boxShadow = '0 6px 30px rgba(0,0,0,0.4)';
+            this.style.boxShadow = '0 8px 32px rgba(0,0,0,0.4)';
         });
 
         // Клик
@@ -507,7 +540,7 @@
     }
 
     // =============================================
-    // УПРАВЛЕНИЕ БЛОКОМ (СТАБИЛЬНОЕ)
+    // УПРАВЛЕНИЕ БЛОКОМ
     // =============================================
 
     var currentBlock = null;
@@ -528,13 +561,11 @@
 
     function insertBlock(card, data) {
         try {
-            // Если переданы данные — используем их
             if (card) {
                 currentCard = card;
                 currentData = data;
             }
 
-            // Если нет — пробуем получить из активности
             if (!currentCard) {
                 var active = activeActivity();
                 if (!active || active.component !== 'full') {
@@ -558,7 +589,6 @@
                 return;
             }
 
-            // Получаем render
             var render = null;
             var active = activeActivity();
             if (active && active.activity && typeof active.activity.render === 'function') {
@@ -569,17 +599,18 @@
                 return;
             }
 
-            // Ищем или создаём контейнер справа
+            // Ищем или создаём .applecation__right
             var container = render.find('.applecation__right');
             if (!container.length) {
-                var leftContainer = render.find('.applecation__left');
-                if (!leftContainer.length) {
-                    leftContainer = render.find('.applecation__wrapper');
+                // Ищем .applecation__wrapper
+                var wrapper = render.find('.applecation__wrapper');
+                if (!wrapper.length) {
+                    wrapper = render.find('.applecation__left');
                 }
-                if (!leftContainer.length) {
-                    leftContainer = render.find('.full-start-new__right');
+                if (!wrapper.length) {
+                    wrapper = render.find('.full-start-new__right');
                 }
-                if (!leftContainer.length) {
+                if (!wrapper.length) {
                     return;
                 }
 
@@ -592,18 +623,20 @@
                     'max-width': '420px',
                     'margin-left': '2em',
                     'align-items': 'flex-start',
-                    'justify-content': 'flex-end'
+                    'justify-content': 'flex-end',
+                    'padding': '0.5em 0'
                 });
-                leftContainer.after(container);
-                
-                // Убеждаемся, что родитель flex
-                var parent = leftContainer.parent();
+
+                // Делаем родителя flex
+                var parent = wrapper.parent();
                 if (parent.css('display') !== 'flex') {
                     parent.css('display', 'flex');
                     parent.css('align-items', 'flex-end');
                     parent.css('flex-wrap', 'wrap');
-                    parent.css('gap', '1em');
+                    parent.css('gap', '0.5em');
                 }
+
+                wrapper.after(container);
             }
 
             // Анализируем просмотр
@@ -621,10 +654,8 @@
                 state.status
             ].join('|');
 
-            // Проверяем существующий блок
             var existingBlock = document.getElementById('series-info-block');
             if (existingBlock && lastState === signature) {
-                // Обновляем прогресс
                 var bar = existingBlock.querySelector('.sw-progress-bar');
                 if (bar && state.current) {
                     var progress = Math.round(state.current.timeline.percent || 0);
@@ -696,28 +727,7 @@
             clearTimeout(updateTimer);
             updateTimer = setTimeout(function () {
                 insertBlock();
-            }, 400);
-        } else {
-            // Не удаляем блок сразу при переходе на другую страницу
-            // Блок останется, но будет скрыт при возврате
-            if (event.component !== 'full') {
-                // Пометим, что мы не на странице сериала, но блок пока оставим
-                // При возврате на full он обновится
-            }
-        }
-    }
-
-    function onActivityBack(event) {
-        // Специальный обработчик для возврата
-        if (event && event.type === 'back') {
-            var active = activeActivity();
-            if (active && active.component === 'full') {
-                isOnSeriesPage = true;
-                clearTimeout(updateTimer);
-                updateTimer = setTimeout(function () {
-                    insertBlock();
-                }, 300);
-            }
+            }, 300);
         }
     }
 
@@ -729,11 +739,6 @@
         Lampa.Listener.follow('full', onFull);
         Lampa.Listener.follow('timeline', onTimeline);
         Lampa.Listener.follow('activity', onActivity);
-        
-        // Слушаем возврат
-        try {
-            Lampa.Listener.follow('activity', onActivityBack);
-        } catch (e) {}
     }
 
     // =============================================
@@ -751,7 +756,6 @@
 
             installListeners();
 
-            // Проверяем текущую страницу
             setTimeout(function () {
                 var active = activeActivity();
                 if (active && active.component === 'full') {
@@ -764,7 +768,7 @@
                 }
             }, 800);
 
-            // Периодическая проверка (каждые 2 секунды)
+            // Периодическая проверка
             if (checkInterval) clearInterval(checkInterval);
             checkInterval = setInterval(function () {
                 var active = activeActivity();
@@ -772,6 +776,8 @@
                     if (!document.getElementById('series-info-block') && currentCard) {
                         insertBlock(currentCard, currentData);
                     }
+                } else if (active && active.component !== 'full') {
+                    // Не удаляем блок, он останется, но при возврате обновится
                 }
             }, 2000);
 
