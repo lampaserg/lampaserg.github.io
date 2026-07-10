@@ -1,4 +1,4 @@
-/* Lampa Series Manager 1.0.0 — Умное управление сериалами */
+/* Lampa Series Manager 1.0.0 — Компактный виджет сериалов */
 (function () {
     'use strict';
 
@@ -244,7 +244,7 @@
             keys.slice(0, keys.length - 80).forEach(function (oldKey) { delete store[oldKey]; });
         }
         writeDetailMemory(store);
-        console.log('[Series Manager] Remembered:', key, coordinates);
+        console.log('[Series Manager] Remembered:', key, coordinates, reason || '');
         return true;
     }
 
@@ -302,123 +302,174 @@
     }
 
     // =============================================
-    // 4. Виджет в правом нижнем углу
+    // 4. Компактный виджет в правом нижнем углу
     // =============================================
 
     function createWidget(state) {
         if (!state || !state.current) return null;
 
+        // Удаляем старые стили, если есть
+        var oldStyle = document.getElementById('lsm-widget-style');
+        if (oldStyle) oldStyle.remove();
+
         var widget = document.createElement('div');
         widget.className = 'lsm-widget';
         widget.setAttribute('data-lsm-status', state.status);
+        widget.setAttribute('data-lsm-version', VERSION);
 
-        // Стили виджета (инлайн + классы)
+        // Стили виджета
         var style = document.createElement('style');
+        style.id = 'lsm-widget-style';
         style.textContent = `
             .lsm-widget {
-                position: fixed;
-                bottom: 2.5em;
-                right: 2.5em;
-                z-index: 9999;
-                max-width: 320px;
-                min-width: 180px;
-                padding: 0.8em 1.2em;
-                border-radius: 1em;
-                background: rgba(7, 10, 16, 0.92);
-                backdrop-filter: blur(16px);
-                -webkit-backdrop-filter: blur(16px);
-                border: 0.075em solid rgba(255, 255, 255, 0.12);
-                box-shadow: 0 1.2em 3.6em rgba(0, 0, 0, 0.7);
-                color: #f6f8fc;
-                font-family: "SegoeUI", system-ui, -apple-system, sans-serif;
-                transition: opacity 0.3s ease, transform 0.3s ease;
-                cursor: pointer;
-                user-select: none;
-                animation: lsm-widget-in 0.4s cubic-bezier(0.22, 0.72, 0.2, 1);
+                position: fixed !important;
+                bottom: 2.5em !important;
+                right: 2.5em !important;
+                z-index: 9999 !important;
+                max-width: 340px !important;
+                min-width: 180px !important;
+                padding: 0.7em 1.1em !important;
+                border-radius: 0.9em !important;
+                background: rgba(7, 10, 16, 0.94) !important;
+                backdrop-filter: blur(20px) !important;
+                -webkit-backdrop-filter: blur(20px) !important;
+                border: 0.075em solid rgba(255, 255, 255, 0.1) !important;
+                box-shadow: 0 1.2em 3.6em rgba(0, 0, 0, 0.75) !important;
+                color: #f6f8fc !important;
+                font-family: "SegoeUI", system-ui, -apple-system, sans-serif !important;
+                transition: opacity 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease !important;
+                cursor: pointer !important;
+                user-select: none !important;
+                animation: lsm-widget-in 0.35s cubic-bezier(0.22, 0.72, 0.2, 1) !important;
+                pointer-events: auto !important;
+                line-height: 1.4 !important;
             }
             .lsm-widget:hover {
-                transform: scale(1.02);
-                border-color: rgba(105, 167, 255, 0.4);
+                transform: scale(1.03) !important;
+                border-color: rgba(105, 167, 255, 0.45) !important;
+                box-shadow: 0 1.5em 4.5em rgba(0, 0, 0, 0.85) !important;
+            }
+            .lsm-widget .lsm-header {
+                display: flex !important;
+                align-items: center !important;
+                justify-content: space-between !important;
+                margin-bottom: 0.15em !important;
             }
             .lsm-widget .lsm-label {
-                font-size: 0.7em;
-                text-transform: uppercase;
-                letter-spacing: 0.08em;
-                color: rgba(255, 255, 255, 0.5);
-                margin-bottom: 0.2em;
+                font-size: 0.6em !important;
+                text-transform: uppercase !important;
+                letter-spacing: 0.1em !important;
+                color: rgba(255, 255, 255, 0.4) !important;
+                font-weight: 600 !important;
+            }
+            .lsm-widget .lsm-status-icon {
+                font-size: 0.55em !important;
+                padding: 0.15em 0.45em !important;
+                border-radius: 99em !important;
+                background: rgba(105, 167, 255, 0.15) !important;
+                color: #69a7ff !important;
+                font-weight: 700 !important;
+                letter-spacing: 0.05em !important;
+            }
+            .lsm-widget[data-lsm-status="complete"] .lsm-status-icon {
+                background: rgba(105, 167, 255, 0.1) !important;
+                color: rgba(255, 255, 255, 0.3) !important;
+            }
+            .lsm-widget[data-lsm-status="upcoming"] .lsm-status-icon {
+                background: rgba(255, 180, 50, 0.15) !important;
+                color: #ffb432 !important;
             }
             .lsm-widget .lsm-title {
-                font-size: 0.95em;
-                font-weight: 700;
-                color: #fff;
-                line-height: 1.3;
-                margin-bottom: 0.3em;
+                font-size: 0.9em !important;
+                font-weight: 700 !important;
+                color: #fff !important;
+                line-height: 1.3 !important;
+                margin: 0.15em 0 0.2em !important;
+                overflow: hidden !important;
+                text-overflow: ellipsis !important;
+                white-space: nowrap !important;
             }
             .lsm-widget .lsm-meta {
-                font-size: 0.8em;
-                color: rgba(255, 255, 255, 0.6);
-                display: flex;
-                align-items: center;
-                gap: 0.6em;
+                font-size: 0.75em !important;
+                color: rgba(255, 255, 255, 0.55) !important;
+                display: flex !important;
+                align-items: center !important;
+                gap: 0.6em !important;
+                flex-wrap: wrap !important;
             }
-            .lsm-widget .lsm-progress {
-                width: 100%;
-                height: 0.25em;
-                border-radius: 99em;
-                background: rgba(255, 255, 255, 0.15);
-                margin-top: 0.5em;
-                overflow: hidden;
+            .lsm-widget .lsm-progress-wrap {
+                width: 100% !important;
+                height: 0.2em !important;
+                border-radius: 99em !important;
+                background: rgba(255, 255, 255, 0.1) !important;
+                margin: 0.4em 0 0.2em !important;
+                overflow: hidden !important;
             }
             .lsm-widget .lsm-progress-bar {
-                height: 100%;
-                border-radius: inherit;
-                background: linear-gradient(90deg, #69a7ff, #91beff);
-                transition: width 0.4s ease;
+                height: 100% !important;
+                border-radius: inherit !important;
+                background: linear-gradient(90deg, #69a7ff, #91beff) !important;
+                transition: width 0.4s ease !important;
             }
             .lsm-widget .lsm-remaining {
-                font-size: 0.7em;
-                color: rgba(255, 255, 255, 0.4);
-                margin-left: auto;
+                font-size: 0.7em !important;
+                color: rgba(255, 255, 255, 0.35) !important;
+                margin-left: auto !important;
+                white-space: nowrap !important;
             }
             .lsm-widget .lsm-next {
-                font-size: 0.75em;
-                color: rgba(255, 255, 255, 0.35);
-                margin-top: 0.2em;
-                border-top: 0.05em solid rgba(255, 255, 255, 0.06);
-                padding-top: 0.3em;
+                font-size: 0.7em !important;
+                color: rgba(255, 255, 255, 0.3) !important;
+                margin-top: 0.2em !important;
+                border-top: 0.05em solid rgba(255, 255, 255, 0.06) !important;
+                padding-top: 0.25em !important;
+                overflow: hidden !important;
+                text-overflow: ellipsis !important;
+                white-space: nowrap !important;
             }
             .lsm-widget .lsm-next strong {
-                color: rgba(255, 255, 255, 0.6);
-                font-weight: 600;
+                color: rgba(255, 255, 255, 0.5) !important;
+                font-weight: 600 !important;
             }
-            .lsm-widget[data-lsm-status="complete"] {
-                border-color: rgba(105, 167, 255, 0.3);
-            }
-            .lsm-widget[data-lsm-status="complete"] .lsm-title {
-                opacity: 0.6;
-            }
-            .lsm-widget[data-lsm-status="upcoming"] {
-                border-color: rgba(255, 180, 50, 0.3);
+            .lsm-widget .lsm-click-hint {
+                font-size: 0.55em !important;
+                color: rgba(255, 255, 255, 0.15) !important;
+                text-align: right !important;
+                margin-top: 0.15em !important;
+                letter-spacing: 0.05em !important;
             }
             @keyframes lsm-widget-in {
-                0% { opacity: 0; transform: translateY(20px) scale(0.95); }
+                0% { opacity: 0; transform: translateY(25px) scale(0.92); }
                 100% { opacity: 1; transform: translateY(0) scale(1); }
             }
+            .lsm-widget.lsm-hidden {
+                opacity: 0.35 !important;
+                transform: scale(0.98) !important;
+            }
+            .lsm-widget.lsm-hidden:hover {
+                opacity: 1 !important;
+                transform: scale(1.03) !important;
+            }
+
+            /* Адаптация под телефон */
             @media (max-width: 720px) {
                 .lsm-widget {
-                    bottom: 1.2em;
-                    right: 1.2em;
-                    left: 1.2em;
-                    max-width: none;
-                    min-width: auto;
-                    padding: 0.6em 1em;
-                    border-radius: 0.85em;
+                    bottom: 1.2em !important;
+                    right: 1.2em !important;
+                    left: 1.2em !important;
+                    max-width: none !important;
+                    min-width: auto !important;
+                    padding: 0.55em 0.9em !important;
+                    border-radius: 0.8em !important;
                 }
                 .lsm-widget .lsm-title {
-                    font-size: 0.85em;
+                    font-size: 0.8em !important;
                 }
                 .lsm-widget .lsm-meta {
-                    font-size: 0.7em;
+                    font-size: 0.7em !important;
+                }
+                .lsm-widget .lsm-next {
+                    font-size: 0.65em !important;
                 }
             }
         `;
@@ -430,49 +481,80 @@
         var progress = Math.round(current.timeline.percent || 0);
         var remaining = formatRemainingTime(current.timeline);
 
-        var label = document.createElement('div');
+        // Заголовок с меткой
+        var header = document.createElement('div');
+        header.className = 'lsm-header';
+
+        var label = document.createElement('span');
         label.className = 'lsm-label';
         label.textContent = state.status === 'complete' ? 'Просмотрено' : 'Сейчас смотрите';
 
+        var statusIcon = document.createElement('span');
+        statusIcon.className = 'lsm-status-icon';
+        if (state.status === 'complete') {
+            statusIcon.textContent = '✓ Всё';
+        } else if (state.status === 'upcoming') {
+            statusIcon.textContent = '⏳ Ожидается';
+        } else {
+            statusIcon.textContent = '▶ ' + (progress > 0 ? progress + '%' : 'Готово');
+        }
+
+        header.appendChild(label);
+        header.appendChild(statusIcon);
+
+        // Название серии
         var titleEl = document.createElement('div');
         titleEl.className = 'lsm-title';
         titleEl.textContent = title;
 
+        // Мета-информация
         var meta = document.createElement('div');
         meta.className = 'lsm-meta';
 
-        var progressText = document.createElement('span');
-        progressText.textContent = progress > 0 ? progress + '%' : 'Готово';
+        if (coords) {
+            var seasonText = document.createElement('span');
+            seasonText.textContent = 'Сезон ' + coords.season + ' · Эпизод ' + coords.episode;
+            meta.appendChild(seasonText);
+        }
 
-        var remainingEl = document.createElement('span');
-        remainingEl.className = 'lsm-remaining';
-        remainingEl.textContent = remaining || '';
+        if (remaining) {
+            var remainingEl = document.createElement('span');
+            remainingEl.className = 'lsm-remaining';
+            remainingEl.textContent = '⏱ ' + remaining;
+            meta.appendChild(remainingEl);
+        }
 
-        meta.appendChild(progressText);
-        if (remaining) meta.appendChild(remainingEl);
-
+        // Прогресс-бар
+        var progressWrap = document.createElement('div');
+        progressWrap.className = 'lsm-progress-wrap';
         var progressBar = document.createElement('div');
-        progressBar.className = 'lsm-progress';
-        var bar = document.createElement('div');
-        bar.className = 'lsm-progress-bar';
-        bar.style.width = Math.max(0, Math.min(100, progress)) + '%';
-        progressBar.appendChild(bar);
+        progressBar.className = 'lsm-progress-bar';
+        progressBar.style.width = Math.max(0, Math.min(100, progress)) + '%';
+        progressWrap.appendChild(progressBar);
 
-        widget.appendChild(label);
-        widget.appendChild(titleEl);
-        widget.appendChild(meta);
-        widget.appendChild(progressBar);
-
-        // Информация о следующей серии
-        if (state.next && state.status !== 'complete') {
-            var nextEl = document.createElement('div');
+        // Следующая серия
+        var nextEl = null;
+        if (state.next && state.status !== 'complete' && state.status !== 'upcoming') {
+            nextEl = document.createElement('div');
             nextEl.className = 'lsm-next';
             var nextTitle = formatEpisodeTitle(state.next.episode);
             var nextProgress = Math.round(state.next.timeline.percent || 0);
             nextEl.innerHTML = 'Далее: <strong>' + nextTitle + '</strong>' +
                 (nextProgress > 0 ? ' (' + nextProgress + '%)' : '');
-            widget.appendChild(nextEl);
         }
+
+        // Подсказка о клике
+        var clickHint = document.createElement('div');
+        clickHint.className = 'lsm-click-hint';
+        clickHint.textContent = '↗ Открыть эпизоды';
+
+        // Собираем виджет
+        widget.appendChild(header);
+        widget.appendChild(titleEl);
+        widget.appendChild(meta);
+        widget.appendChild(progressWrap);
+        if (nextEl) widget.appendChild(nextEl);
+        widget.appendChild(clickHint);
 
         // Клик по виджету — переход на страницу эпизодов
         widget.addEventListener('click', function (e) {
@@ -480,28 +562,43 @@
             openEpisodesScreen(state.card);
         });
 
-        // Авто-скрытие через 5 секунд, если нет прогресса
+        // Авто-скрытие при нулевом прогрессе
         if (progress === 0 && !remaining) {
-            var hideTimer = setTimeout(function () {
-                if (widget.parentNode) {
-                    widget.style.opacity = '0.4';
-                    widget.style.transform = 'scale(0.98)';
+            var hideTimeout = null;
+            var isHidden = false;
+
+            function hideWidget() {
+                if (!isHidden && widget.parentNode) {
+                    isHidden = true;
+                    widget.classList.add('lsm-hidden');
                 }
-            }, 5000);
+            }
+
+            function showWidget() {
+                if (isHidden && widget.parentNode) {
+                    isHidden = false;
+                    widget.classList.remove('lsm-hidden');
+                }
+                clearTimeout(hideTimeout);
+            }
+
+            hideTimeout = setTimeout(hideWidget, 5000);
 
             widget.addEventListener('mouseenter', function () {
-                clearTimeout(hideTimer);
-                widget.style.opacity = '1';
-                widget.style.transform = 'scale(1)';
+                showWidget();
+                // Показываем дольше при наведении
+                clearTimeout(hideTimeout);
+                hideTimeout = setTimeout(hideWidget, 8000);
             });
 
             widget.addEventListener('mouseleave', function () {
-                hideTimer = setTimeout(function () {
-                    if (widget.parentNode) {
-                        widget.style.opacity = '0.4';
-                        widget.style.transform = 'scale(0.98)';
-                    }
-                }, 2000);
+                clearTimeout(hideTimeout);
+                hideTimeout = setTimeout(hideWidget, 3000);
+            });
+
+            widget.addEventListener('click', function () {
+                clearTimeout(hideTimeout);
+                showWidget();
             });
         }
 
@@ -539,7 +636,7 @@
     }
 
     // =============================================
-    // 6. Удаление старых виджетов
+    // 6. Управление виджетами
     // =============================================
 
     function removeOldWidgets() {
@@ -549,8 +646,126 @@
         });
     }
 
+    var currentWidget = null;
+    var lastState = null;
+    var lastCard = null;
+    var updateTimer = null;
+
+    function updateWidget(card, data) {
+        if (runtime.destroyed) return;
+
+        // Проверяем, что это сериал
+        if (mediaType(card) !== 'tv') {
+            removeOldWidgets();
+            currentWidget = null;
+            return;
+        }
+
+        var state = resolveSeriesPlayback(card, data || {});
+        if (!state || !state.current) {
+            removeOldWidgets();
+            currentWidget = null;
+            return;
+        }
+
+        // Проверяем, изменилось ли состояние
+        var signature = [
+            contentId(card),
+            state.current ? episodeCoordinates(state.current.episode).season : '',
+            state.current ? episodeCoordinates(state.current.episode).episode : '',
+            Math.round(state.current.timeline.percent || 0),
+            state.next ? episodeCoordinates(state.next.episode).season : '',
+            state.next ? episodeCoordinates(state.next.episode).episode : '',
+            state.status
+        ].join('|');
+
+        if (lastState === signature && currentWidget && currentWidget.parentNode) {
+            // Обновляем только прогресс-бар
+            var bar = currentWidget.querySelector('.lsm-progress-bar');
+            if (bar && state.current) {
+                var progress = Math.round(state.current.timeline.percent || 0);
+                bar.style.width = Math.max(0, Math.min(100, progress)) + '%';
+                // Обновляем статус
+                var statusIcon = currentWidget.querySelector('.lsm-status-icon');
+                if (statusIcon) {
+                    if (state.status === 'complete') {
+                        statusIcon.textContent = '✓ Всё';
+                    } else if (state.status === 'upcoming') {
+                        statusIcon.textContent = '⏳ Ожидается';
+                    } else {
+                        statusIcon.textContent = '▶ ' + (progress > 0 ? progress + '%' : 'Готово');
+                    }
+                }
+                // Обновляем remaining
+                var remaining = formatRemainingTime(state.current.timeline);
+                var remainingEl = currentWidget.querySelector('.lsm-remaining');
+                if (remainingEl) {
+                    remainingEl.textContent = remaining ? '⏱ ' + remaining : '';
+                }
+            }
+            return;
+        }
+
+        lastState = signature;
+        lastCard = card;
+
+        // Удаляем старый виджет
+        removeOldWidgets();
+
+        // Создаём новый
+        var widget = createWidget(state);
+        if (widget) {
+            document.body.appendChild(widget);
+            currentWidget = widget;
+        }
+    }
+
     // =============================================
-    // 7. Основная логика
+    // 7. Обработчики событий
+    // =============================================
+
+    function handleDetailEvent(event) {
+        if (!event) return;
+        var card = event.data && event.data.movie ? event.data.movie :
+            event.object && (event.object.card || event.object) : null;
+
+        if (!card) return;
+
+        if (event.type === 'start' || event.type === 'complite' || event.type === 'build') {
+            var data = event.data || null;
+            clearTimeout(updateTimer);
+            updateTimer = setTimeout(function () {
+                updateWidget(card, data);
+            }, 300);
+        }
+    }
+
+    function handleTimelineEvent() {
+        // Обновляем виджет при изменении таймлайна
+        var active = activeActivity();
+        if (active && active.component === 'full') {
+            var card = active.card || (active.object && active.object.card) || null;
+            if (card && mediaType(card) === 'tv') {
+                clearTimeout(updateTimer);
+                updateTimer = setTimeout(function () {
+                    updateWidget(card, active.data || {});
+                }, 200);
+            }
+        }
+    }
+
+    function handleEpisodeSelection(episode, card) {
+        if (!episode || !card) return;
+        rememberEpisodeSelection(card, episode, 'click');
+        // Обновляем виджет после выбора эпизода
+        clearTimeout(updateTimer);
+        updateTimer = setTimeout(function () {
+            updateWidget(card, {});
+        }, 100);
+    }
+
+    // =============================================
+    // 8. Установка обработчиков
     // =============================================
 
     var runtime = {
@@ -559,9 +774,6 @@
         destroyed: false,
         timerIds: [],
         disposers: [],
-        currentWidget: null,
-        lastCard: null,
-        lastState: null,
 
         destroy: function (reason) {
             if (this.destroyed) return;
@@ -570,8 +782,9 @@
             this.timerIds = [];
             this.disposers.forEach(function (d) { try { d(); } catch (error) {} });
             this.disposers = [];
+            clearTimeout(updateTimer);
             removeOldWidgets();
-            this.currentWidget = null;
+            currentWidget = null;
             if (window[RUNTIME_KEY] === this) delete window[RUNTIME_KEY];
             console.log('[Series Manager] Destroyed:', reason || '');
         }
@@ -613,91 +826,6 @@
         return true;
     }
 
-    function updateWidget(card, data) {
-        if (runtime.destroyed) return;
-
-        // Проверяем, что это сериал
-        if (mediaType(card) !== 'tv') {
-            removeOldWidgets();
-            runtime.currentWidget = null;
-            return;
-        }
-
-        var state = resolveSeriesPlayback(card, data || {});
-        if (!state || !state.current) {
-            removeOldWidgets();
-            runtime.currentWidget = null;
-            return;
-        }
-
-        // Проверяем, изменилось ли состояние
-        var signature = [
-            contentId(card),
-            state.current ? episodeCoordinates(state.current.episode).season : '',
-            state.current ? episodeCoordinates(state.current.episode).episode : '',
-            Math.round(state.current.timeline.percent || 0),
-            state.next ? episodeCoordinates(state.next.episode).season : '',
-            state.next ? episodeCoordinates(state.next.episode).episode : ''
-        ].join('|');
-
-        if (runtime.lastState === signature && runtime.currentWidget && runtime.currentWidget.parentNode) {
-            return;
-        }
-
-        runtime.lastState = signature;
-        runtime.lastCard = card;
-
-        // Удаляем старый виджет
-        removeOldWidgets();
-
-        // Создаём новый
-        var widget = createWidget(state);
-        if (widget) {
-            document.body.appendChild(widget);
-            runtime.currentWidget = widget;
-        }
-    }
-
-    function handleDetailEvent(event) {
-        if (!event) return;
-        var card = event.data && event.data.movie ? event.data.movie :
-            event.object && (event.object.card || event.object) : null;
-
-        if (!card) return;
-
-        if (event.type === 'start' || event.type === 'complite' || event.type === 'build') {
-            var data = event.data || null;
-            setTimeout(function () {
-                updateWidget(card, data);
-            }, 300);
-        }
-    }
-
-    function handleTimelineEvent() {
-        // Обновляем виджет при изменении таймлайна
-        var active = activeActivity();
-        if (active && active.component === 'full') {
-            var card = active.card || (active.object && active.object.card) || null;
-            if (card && mediaType(card) === 'tv') {
-                setTimeout(function () {
-                    updateWidget(card, active.data || {});
-                }, 200);
-            }
-        }
-    }
-
-    function handleEpisodeClick(episode, card) {
-        rememberEpisodeSelection(card, episode, 'click');
-        // Обновляем виджет после выбора эпизода
-        setTimeout(function () {
-            updateWidget(card, {});
-        }, 100);
-    }
-
-    // =============================================
-    // 8. Установка обработчиков
-    // =============================================
-
     function installListeners() {
         if (!window.Lampa || !Lampa.Listener) return false;
 
@@ -711,7 +839,7 @@
         // Слушаем изменения таймлайна
         followEmitter(Lampa.Listener, 'timeline', handleTimelineEvent);
 
-        // Слушаем клики по эпизодам
+        // Слушаем открытие страницы эпизодов
         followEmitter(Lampa.Listener, 'episodes', function (event) {
             if (event && event.type === 'start' && event.item) {
                 var card = event.data && event.data.movie ? event.data.movie :
@@ -742,7 +870,7 @@
                     var active = activeActivity();
                     var card = active && (active.card || (active.object && active.object.card) || null);
                     if (episode && card && mediaType(card) === 'tv') {
-                        handleEpisodeClick(episode, card);
+                        handleEpisodeSelection(episode, card);
                     }
                 });
                 addDisposer(function () {
@@ -794,14 +922,15 @@
         resolveSeriesPlayback: resolveSeriesPlayback,
         rememberEpisode: rememberEpisodeSelection,
         readMemory: readEpisodeMemory,
+        openEpisodes: openEpisodesScreen,
         destroy: runtime.destroy.bind(runtime),
         getState: function () {
             return {
                 version: VERSION,
                 destroyed: runtime.destroyed,
                 started: runtime.started,
-                hasWidget: !!runtime.currentWidget,
-                lastCard: runtime.lastCard ? contentId(runtime.lastCard) : null
+                hasWidget: !!currentWidget,
+                lastCard: lastCard ? contentId(lastCard) : null
             };
         }
     };
