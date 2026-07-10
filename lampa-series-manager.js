@@ -1,8 +1,8 @@
-/* Series Manager PRO 3.0.0 — Диагностическая версия */
+/* Series Manager PRO 3.1.0 — Исправленный сбор эпизодов */
 (function () {
     'use strict';
 
-    var VERSION = '3.0.0';
+    var VERSION = '3.1.0';
     var MEMORY_KEY = 'series_manager_pro_v3';
 
     // =============================================
@@ -15,15 +15,6 @@
     }
 
     console.log('[Series Manager PRO] v' + VERSION + ' загружается...');
-    console.log('[Series Manager PRO] ДИАГНОСТИЧЕСКАЯ ВЕРСИЯ');
-
-    // =============================================
-    // ДИАГНОСТИКА
-    // =============================================
-
-    function log(msg, data) {
-        console.log('[Series Manager PRO] ' + msg, data || '');
-    }
 
     // =============================================
     // НАСТРОЙКИ
@@ -44,6 +35,12 @@
         }
     }
 
+    function setSettings(settings) {
+        try {
+            Lampa.Storage.set('series_manager_pro_settings', settings);
+        } catch (e) {}
+    }
+
     // =============================================
     // УТИЛИТЫ
     // =============================================
@@ -51,15 +48,9 @@
     function getCurrentCard() {
         try {
             var active = Lampa.Activity.active();
-            if (!active) {
-                log('Нет активной активности');
-                return null;
-            }
-            var card = active.card || (active.object && active.object.card) || null;
-            log('Получена карточка:', card ? card.title || card.name || card.id : null);
-            return card;
+            if (!active) return null;
+            return active.card || (active.object && active.object.card) || null;
         } catch (e) {
-            log('Ошибка получения карточки:', e);
             return null;
         }
     }
@@ -68,11 +59,8 @@
         try {
             var active = Lampa.Activity.active();
             if (!active) return null;
-            var data = active.data || null;
-            log('Получены данные:', data ? Object.keys(data) : null);
-            return data;
+            return active.data || null;
         } catch (e) {
-            log('Ошибка получения данных:', e);
             return null;
         }
     }
@@ -82,23 +70,17 @@
             var active = Lampa.Activity.active();
             if (!active) return null;
             if (active.activity && typeof active.activity.render === 'function') {
-                var render = active.activity.render();
-                log('Получен render:', render ? render.length : 0);
-                return render;
+                return active.activity.render();
             }
-            log('Нет метода render');
             return null;
         } catch (e) {
-            log('Ошибка получения render:', e);
             return null;
         }
     }
 
     function isTv(card) {
         if (!card) return false;
-        var result = !!(card.name || card.original_name || card.first_air_date || card.number_of_seasons);
-        log('isTv:', result);
-        return result;
+        return !!(card.name || card.original_name || card.first_air_date || card.number_of_seasons);
     }
 
     function mediaType(card) {
@@ -175,10 +157,8 @@
         try {
             var raw = window.sessionStorage && window.sessionStorage.getItem(MEMORY_KEY);
             var parsed = raw ? JSON.parse(raw) : {};
-            log('Память:', parsed);
             return parsed && typeof parsed === 'object' ? parsed : {};
         } catch (error) {
-            log('Ошибка чтения памяти:', error);
             return {};
         }
     }
@@ -188,10 +168,7 @@
             if (window.sessionStorage) {
                 window.sessionStorage.setItem(MEMORY_KEY, JSON.stringify(store || {}));
             }
-            log('Память сохранена');
-        } catch (error) {
-            log('Ошибка записи памяти:', error);
-        }
+        } catch (error) {}
     }
 
     function readSavedEpisode(card) {
@@ -199,7 +176,6 @@
         if (!key) return null;
         var store = getMemoryStore();
         var value = store[key];
-        log('Сохранённая серия:', value);
         return value && typeof value === 'object' ? value : null;
     }
 
@@ -221,52 +197,183 @@
             keys.slice(0, keys.length - 80).forEach(function (oldKey) { delete store[oldKey]; });
         }
         writeMemoryStore(store);
-        log('Сериал сохранён:', key, coords);
         return true;
     }
 
     // =============================================
-    // СБОР ЭПИЗОДОВ
+    // СБОР ЭПИЗОДОВ — ИСПРАВЛЕННАЯ ВЕРСИЯ
     // =============================================
 
-    function collectEpisodes(value, result, depth) {
-        if (depth > 5 || value === null || value === undefined) return;
-        if (Array.isArray(value)) {
-            value.forEach(function (item) { collectEpisodes(item, result, depth + 1); });
-            return;
+    function getEpisodesFromData(data) {
+        console.log('[Series Manager PRO] Поиск эпизодов в данных...');
+        console.log('[Series Manager PRO] data:', data);
+        
+        var result = [];
+        
+        if (!data) {
+            console.log('[Series Manager PRO] Данные отсутствуют');
+            return result;
         }
-        if (typeof value !== 'object') return;
-        if (episodeCoordinates(value)) {
-            result.push(value);
-            return;
+
+        // 1. Проверяем data.episodes
+        if (data.episodes) {
+            console.log('[Series Manager PRO] Найден data.episodes:', typeof data.episodes);
+            if (Array.isArray(data.episodes)) {
+                console.log('[Series Manager PRO] data.episodes - массив, длина:', data.episodes.length);
+                result = result.concat(data.episodes);
+            } else if (data.episodes.episodes && Array.isArray(data.episodes.episodes)) {
+                console.log('[Series Manager PRO] data.episodes.episodes - массив, длина:', data.episodes.episodes.length);
+                result = result.concat(data.episodes.episodes);
+            } else if (typeof data.episodes === 'object') {
+                // Рекурсивно ищем эпизоды в объекте
+                for (var key in data.episodes) {
+                    if (data.episodes.hasOwnProperty(key) && Array.isArray(data.episodes[key])) {
+                        console.log('[Series Manager PRO] data.episodes.' + key + ' - массив, длина:', data.episodes[key].length);
+                        result = result.concat(data.episodes[key]);
+                    }
+                }
+            }
         }
-        ['episodes_original', 'episodes', 'results', 'items'].forEach(function (key) {
-            if (value[key] !== undefined) collectEpisodes(value[key], result, depth + 1);
-        });
+
+        // 2. Проверяем data.movie.seasons (структура темы SERG)
+        if (data.movie && data.movie.seasons) {
+            console.log('[Series Manager PRO] Найден data.movie.seasons:', data.movie.seasons.length);
+            for (var i = 0; i < data.movie.seasons.length; i++) {
+                var season = data.movie.seasons[i];
+                if (season.episodes && Array.isArray(season.episodes)) {
+                    console.log('[Series Manager PRO] Сезон ' + season.season_number + ' содержит ' + season.episodes.length + ' эпизодов');
+                    result = result.concat(season.episodes);
+                }
+            }
+        }
+
+        // 3. Проверяем data.movie (если есть вложенная структура)
+        if (data.movie && data.movie.episodes) {
+            console.log('[Series Manager PRO] Найден data.movie.episodes');
+            if (Array.isArray(data.movie.episodes)) {
+                result = result.concat(data.movie.episodes);
+            } else if (data.movie.episodes.episodes && Array.isArray(data.movie.episodes.episodes)) {
+                result = result.concat(data.movie.episodes.episodes);
+            }
+        }
+
+        // 4. Проверяем results (если есть)
+        if (data.results && Array.isArray(data.results)) {
+            console.log('[Series Manager PRO] Найден data.results, длина:', data.results.length);
+            for (var j = 0; j < data.results.length; j++) {
+                if (episodeCoordinates(data.results[j])) {
+                    result.push(data.results[j]);
+                }
+            }
+        }
+
+        // 5. Проверяем items (если есть)
+        if (data.items && Array.isArray(data.items)) {
+            console.log('[Series Manager PRO] Найден data.items, длина:', data.items.length);
+            for (var k = 0; k < data.items.length; k++) {
+                if (episodeCoordinates(data.items[k])) {
+                    result.push(data.items[k]);
+                }
+            }
+        }
+
+        // Удаляем дубликаты
+        var unique = {};
+        var finalResult = [];
+        for (var m = 0; m < result.length; m++) {
+            var coords = episodeCoordinates(result[m]);
+            if (coords) {
+                var key = coords.season + ':' + coords.episode;
+                if (!unique[key]) {
+                    unique[key] = true;
+                    finalResult.push(result[m]);
+                }
+            }
+        }
+
+        console.log('[Series Manager PRO] Всего найдено эпизодов:', finalResult.length);
+        return finalResult;
     }
 
-    function seriesEpisodesFromData(data) {
-        var collected = [];
-        log('Поиск эпизодов в данных...');
-        collectEpisodes(data && data.episodes, collected, 0);
-        log('Найдено эпизодов:', collected.length);
+    // =============================================
+    // АНАЛИЗ ПРОСМОТРА
+    // =============================================
+
+    function resolveSeriesPlayback(card, data) {
+        console.log('[Series Manager PRO] Анализ просмотра...');
+        if (!card) {
+            console.log('[Series Manager PRO] Нет карточки');
+            return { status: 'empty', episodes: [], current: null, next: null, available: [] };
+        }
+
+        // Получаем эпизоды через исправленную функцию
+        var episodes = getEpisodesFromData(data || {});
+        console.log('[Series Manager PRO] Эпизодов после сбора:', episodes.length);
         
-        var unique = {};
-        var result = collected.filter(function (episode) {
-            var coordinates = episodeCoordinates(episode);
-            if (!coordinates) return false;
-            var key = coordinates.season + ':' + coordinates.episode;
-            if (unique[key]) return false;
-            unique[key] = true;
-            return true;
+        var available = episodes.filter(episodeIsAvailable);
+        console.log('[Series Manager PRO] Доступных эпизодов:', available.length);
+        
+        var entries = available.map(function (episode) {
+            return { episode: episode, timeline: episodeTimeline(card, episode) };
         });
-        log('Уникальных эпизодов:', result.length);
-        return result.sort(function (left, right) {
-            var a = episodeCoordinates(left);
-            var b = episodeCoordinates(right);
-            return a.season === b.season ? a.episode - b.episode : a.season - b.season;
-        });
+
+        var current = null;
+        var memory = readSavedEpisode(card);
+        if (memory) {
+            var hint = memory;
+            current = entries.find(function (entry) {
+                var coords = episodeCoordinates(entry.episode);
+                return coords && coords.season === hint.season && coords.episode === hint.episode && entry.timeline.percent < 60;
+            }) || null;
+            console.log('[Series Manager PRO] Поиск по сохранённой серии:', current ? 'найдена' : 'не найдена');
+        }
+
+        if (!current) {
+            var partial = entries.filter(function (entry) { return entry.timeline.percent > 0 && entry.timeline.percent < 60; });
+            if (partial.length) current = partial[partial.length - 1];
+            console.log('[Series Manager PRO] Поиск по прогрессу:', current ? 'найдена' : 'не найдена');
+        }
+
+        if (!current) {
+            var lastWatchedIndex = -1;
+            entries.forEach(function (entry, index) {
+                if (entry.timeline.percent >= 60) lastWatchedIndex = index;
+            });
+            current = entries.find(function (entry, index) { return index > lastWatchedIndex && entry.timeline.percent < 60; }) || null;
+            console.log('[Series Manager PRO] Поиск последней просмотренной:', current ? 'найдена' : 'не найдена');
+        }
+
+        var allWatched = !!entries.length && entries.every(function (entry) { return entry.timeline.percent >= 60; });
+        if (!current && entries.length) current = entries[allWatched ? entries.length - 1 : 0];
+        console.log('[Series Manager PRO] Текущая серия:', current ? 'найдена' : 'не найдена');
+
+        var currentIndex = current ? entries.indexOf(current) : -1;
+        var next = currentIndex >= 0 ? entries.slice(currentIndex + 1).find(function (entry) { return entry.timeline.percent < 60; }) || null : null;
+
+        var seriesTitle = card.title || card.name || card.original_title || card.original_name || '';
+        var totalSeasons = card.number_of_seasons || 0;
+        var totalEpisodes = card.number_of_episodes || 0;
+
+        var status = !episodes.length ? 'empty' : !entries.length ? 'upcoming' : allWatched ? 'complete' : 'ready';
+        console.log('[Series Manager PRO] Статус:', status);
+
+        return {
+            card: card,
+            seriesTitle: seriesTitle,
+            totalSeasons: totalSeasons,
+            totalEpisodes: totalEpisodes,
+            episodes: episodes,
+            available: entries,
+            current: current,
+            next: next,
+            allWatched: allWatched,
+            status: status
+        };
     }
+
+    // =============================================
+    // ОСТАЛЬНЫЕ ФУНКЦИИ (без изменений)
+    // =============================================
 
     function episodeTimeline(card, episode) {
         var coordinates = episodeCoordinates(episode);
@@ -282,9 +389,7 @@
                     return road;
                 }
             }
-        } catch (error) {
-            log('Ошибка получения таймлайна:', error);
-        }
+        } catch (error) {}
         var embedded = episode.timeline || episode.view || null;
         if (embedded && typeof embedded === 'object') {
             road.percent = numberValue(embedded.percent, 0);
@@ -293,88 +398,6 @@
         }
         return road;
     }
-
-    // =============================================
-    // АНАЛИЗ ПРОСМОТРА
-    // =============================================
-
-    function resolveSeriesPlayback(card, data) {
-        log('Анализ просмотра...');
-        if (!card) {
-            log('Нет карточки');
-            return { status: 'empty', episodes: [], current: null, next: null, available: [] };
-        }
-
-        var episodes = seriesEpisodesFromData(data || {});
-        log('Эпизоды из данных:', episodes.length);
-        
-        var available = episodes.filter(episodeIsAvailable);
-        log('Доступные эпизоды:', available.length);
-        
-        var entries = available.map(function (episode) {
-            return { episode: episode, timeline: episodeTimeline(card, episode) };
-        });
-
-        var current = null;
-        var memory = readSavedEpisode(card);
-        if (memory) {
-            var hint = memory;
-            current = entries.find(function (entry) {
-                var coords = episodeCoordinates(entry.episode);
-                return coords && coords.season === hint.season && coords.episode === hint.episode && entry.timeline.percent < 60;
-            }) || null;
-            log('Поиск по сохранённой серии:', current ? 'найдена' : 'не найдена');
-        }
-
-        if (!current) {
-            var partial = entries.filter(function (entry) { return entry.timeline.percent > 0 && entry.timeline.percent < 60; });
-            if (partial.length) current = partial[partial.length - 1];
-            log('Поиск по прогрессу:', current ? 'найдена' : 'не найдена');
-        }
-
-        if (!current) {
-            var lastWatchedIndex = -1;
-            entries.forEach(function (entry, index) {
-                if (entry.timeline.percent >= 60) lastWatchedIndex = index;
-            });
-            current = entries.find(function (entry, index) { return index > lastWatchedIndex && entry.timeline.percent < 60; }) || null;
-            log('Поиск последней просмотренной:', current ? 'найдена' : 'не найдена');
-        }
-
-        var allWatched = !!entries.length && entries.every(function (entry) { return entry.timeline.percent >= 60; });
-        if (!current && entries.length) current = entries[allWatched ? entries.length - 1 : 0];
-        log('Текущая серия:', current ? 'найдена' : 'не найдена');
-
-        var currentIndex = current ? entries.indexOf(current) : -1;
-        var next = currentIndex >= 0 ? entries.slice(currentIndex + 1).find(function (entry) { return entry.timeline.percent < 60; }) || null : null;
-
-        var seriesTitle = card.title || card.name || card.original_title || card.original_name || '';
-        var totalSeasons = card.number_of_seasons || 0;
-        var totalEpisodes = card.number_of_episodes || 0;
-
-        log('Результат анализа:', {
-            status: !episodes.length ? 'empty' : !entries.length ? 'upcoming' : allWatched ? 'complete' : 'ready',
-            hasCurrent: !!current,
-            hasNext: !!next
-        });
-
-        return {
-            card: card,
-            seriesTitle: seriesTitle,
-            totalSeasons: totalSeasons,
-            totalEpisodes: totalEpisodes,
-            episodes: episodes,
-            available: entries,
-            current: current,
-            next: next,
-            allWatched: allWatched,
-            status: !episodes.length ? 'empty' : !entries.length ? 'upcoming' : allWatched ? 'complete' : 'ready'
-        };
-    }
-
-    // =============================================
-    // ОТКРЫТИЕ БАЛАНСЕРА LAMPAC
-    // =============================================
 
     function openLampacBalancer(card, season, episode) {
         try {
@@ -385,7 +408,7 @@
 
             var LampacComponent = Lampa.Component.get('lampac');
             if (!LampacComponent) {
-                log('Компонент Lampac не найден');
+                console.warn('[Series Manager PRO] Компонент Lampac не найден');
                 return false;
             }
 
@@ -414,35 +437,22 @@
             return true;
 
         } catch (error) {
-            log('Ошибка открытия Lampac:', error);
+            console.error('[Series Manager PRO] Ошибка открытия Lampac:', error);
             return false;
         }
     }
 
-    // =============================================
-    // СОЗДАНИЕ БЛОКА
-    // =============================================
-
     function createBlock(state) {
-        log('Создание блока...');
-        if (!state || !state.current) {
-            log('Нет данных для блока');
-            return null;
-        }
+        if (!state || !state.current) return null;
 
         var settings = getSettings();
-        if (!settings.show_block) {
-            log('Блок отключен в настройках');
-            return null;
-        }
+        if (!settings.show_block) return null;
 
         var current = state.current;
         var coords = episodeCoordinates(current.episode);
         var title = formatEpisodeTitle(current.episode);
         var progress = Math.round(current.timeline.percent || 0);
         var remaining = formatRemainingTime(current.timeline);
-
-        log('Данные для блока:', { title, progress, remaining, coords });
 
         var statusText = '';
         var statusIcon = '';
@@ -465,7 +475,6 @@
             statusColor = '#69a7ff';
         }
 
-        // Создаём блок
         var block = document.createElement('div');
         block.className = 'series-info-block';
         block.id = 'series-info-block';
@@ -488,25 +497,21 @@
             'margin-bottom:0.5em'
         ].join(';');
 
-        // Eyebrow
         var eyebrow = document.createElement('div');
         eyebrow.style.cssText = 'font-size:0.5em;text-transform:uppercase;letter-spacing:0.08em;color:#69a7ff;font-weight:600;margin-bottom:0.1em;';
         eyebrow.textContent = '▶ СЕЙЧАС СМОТРИТЕ';
         block.appendChild(eyebrow);
 
-        // Название сериала
         var seriesName = document.createElement('div');
         seriesName.style.cssText = 'font-size:0.7em;color:rgba(255,255,255,0.5);margin-bottom:0.05em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
         seriesName.textContent = state.seriesTitle || 'Сериал';
         block.appendChild(seriesName);
 
-        // Название серии
         var titleEl = document.createElement('div');
         titleEl.style.cssText = 'font-size:0.85em;font-weight:700;color:#fff;margin-bottom:0.1em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
         titleEl.textContent = title;
         block.appendChild(titleEl);
 
-        // Мета
         var meta = document.createElement('div');
         meta.style.cssText = 'display:flex;align-items:center;gap:0.5em;flex-wrap:wrap;font-size:0.6em;color:rgba(255,255,255,0.5);';
 
@@ -535,7 +540,6 @@
 
         block.appendChild(meta);
 
-        // Прогресс-бар
         var progressWrap = document.createElement('div');
         progressWrap.style.cssText = 'width:100%;height:3px;border-radius:99em;background:rgba(255,255,255,0.1);margin:0.25em 0 0.05em;overflow:hidden;';
         var progressBar = document.createElement('div');
@@ -545,13 +549,11 @@
         progressWrap.appendChild(progressBar);
         block.appendChild(progressWrap);
 
-        // Подсказка
         var hint = document.createElement('div');
         hint.style.cssText = 'font-size:0.4em;color:rgba(255,255,255,0.15);text-align:right;margin-top:0.05em;';
         hint.textContent = '↗ Нажмите, чтобы открыть в Lampac';
         block.appendChild(hint);
 
-        // Клик
         block.addEventListener('click', function (e) {
             e.stopPropagation();
             var card = state.card;
@@ -565,12 +567,11 @@
             openLampacBalancer(card, season, episode);
         });
 
-        log('Блок создан');
         return block;
     }
 
     // =============================================
-    // ВСТАВКА БЛОКА
+    // УПРАВЛЕНИЕ БЛОКОМ
     // =============================================
 
     var currentBlock = null;
@@ -578,62 +579,41 @@
     var updateTimer = null;
 
     function removeBlock() {
-        log('Удаление блока...');
         var block = document.getElementById('series-info-block');
         if (block && block.parentNode) {
             block.parentNode.removeChild(block);
-            log('Блок удалён');
         }
         currentBlock = null;
     }
 
     function insertBlock() {
-        log('=== ВСТАВКА БЛОКА ===');
         try {
-            // Проверяем, что мы на странице сериала
             var active = Lampa.Activity.active();
-            log('Активная активность:', active ? active.component : null);
             if (!active || active.component !== 'full') {
-                log('Не на странице сериала');
                 removeBlock();
                 return;
             }
 
             var settings = getSettings();
-            log('Настройки:', settings);
             if (!settings.enabled || !settings.show_block) {
-                log('Блок отключен');
                 removeBlock();
                 return;
             }
 
             var card = getCurrentCard();
-            if (!card) {
-                log('Нет карточки');
-                removeBlock();
-                return;
-            }
-
-            if (!isTv(card)) {
-                log('Не сериал');
+            if (!card || !isTv(card)) {
                 removeBlock();
                 return;
             }
 
             var render = getCurrentRender();
             if (!render || !render.length) {
-                log('Нет render');
                 return;
             }
 
-            log('Рендер найден, ищем контейнер...');
-
-            // Ищем .applecation__right
+            // Ищем или создаём .applecation__right
             var container = render.find('.applecation__right');
-            
-            // Если нет, создаём
             if (!container.length) {
-                log('Нет .applecation__right, создаём...');
                 var leftContainer = render.find('.applecation__left');
                 if (!leftContainer.length) {
                     leftContainer = render.find('.applecation__wrapper');
@@ -642,7 +622,6 @@
                     leftContainer = render.find('.full-start-new__right');
                 }
                 if (!leftContainer.length) {
-                    log('Нет подходящего контейнера');
                     return;
                 }
 
@@ -656,15 +635,12 @@
                     'margin-left': '1.5em'
                 });
                 leftContainer.after(container);
-                log('Контейнер .applecation__right создан');
             }
 
             var data = getCurrentData();
             var state = resolveSeriesPlayback(card, data || {});
-            log('Состояние просмотра:', state.status);
 
             if (!state || !state.current) {
-                log('Нет текущей серии');
                 removeBlock();
                 return;
             }
@@ -677,17 +653,12 @@
                 state.status
             ].join('|');
 
-            log('Сигнатура:', signature);
-
-            // Проверяем существующий блок
             var existingBlock = document.getElementById('series-info-block');
             if (existingBlock && lastState === signature) {
-                log('Блок уже есть, обновляем прогресс...');
                 var bar = existingBlock.querySelector('.sw-progress-bar');
                 if (bar && state.current) {
                     var progress = Math.round(state.current.timeline.percent || 0);
                     bar.style.width = Math.max(0, Math.min(100, progress)) + '%';
-                    log('Прогресс обновлён:', progress + '%');
                 }
                 return;
             }
@@ -696,23 +667,14 @@
             removeBlock();
 
             var block = createBlock(state);
-            if (!block) {
-                log('Не удалось создать блок');
-                return;
-            }
+            if (!block) return;
 
-            // Очищаем контейнер и вставляем блок
             container.empty();
             container.append(block);
             currentBlock = block;
 
-            log('=== БЛОК УСПЕШНО ВСТАВЛЕН ===');
-            log('ID блока:', block.id);
-            log('Классы блока:', block.className);
-
         } catch (e) {
-            log('ОШИБКА ВСТАВКИ БЛОКА:', e);
-            console.error(e.stack);
+            console.error('[Series Manager PRO] Ошибка:', e);
         }
     }
 
@@ -721,26 +683,23 @@
     // =============================================
 
     function onFull(event) {
-        log('Событие full:', event ? event.type : null);
         if (!event) return;
         if (event.type === 'complite' || event.type === 'start' || event.type === 'build') {
             clearTimeout(updateTimer);
-            updateTimer = setTimeout(insertBlock, 800);
+            updateTimer = setTimeout(insertBlock, 500);
         }
     }
 
     function onTimeline() {
-        log('Событие timeline');
         clearTimeout(updateTimer);
         updateTimer = setTimeout(insertBlock, 300);
     }
 
     function onActivity(event) {
-        log('Событие activity:', event ? event.type : null, event ? event.component : null);
         if (!event || event.type !== 'start') return;
         clearTimeout(updateTimer);
         if (event.component === 'full') {
-            updateTimer = setTimeout(insertBlock, 1000);
+            updateTimer = setTimeout(insertBlock, 600);
         } else {
             removeBlock();
             lastState = null;
@@ -753,29 +712,102 @@
 
     function start() {
         try {
-            log('Запуск плагина...');
             if (!Lampa || !Lampa.Listener) {
-                log('Lampa.Listener не доступен, повтор через 200ms');
                 setTimeout(start, 200);
                 return;
             }
 
-            log('Подписка на события...');
+            console.log('[Series Manager PRO] v' + VERSION + ' запущен');
+
             Lampa.Listener.follow('full', onFull);
             Lampa.Listener.follow('timeline', onTimeline);
             Lampa.Listener.follow('activity', onActivity);
 
-            log('Первая проверка через 1.5 секунды...');
-            setTimeout(insertBlock, 1500);
-
-            // Дополнительная проверка через 3 секунды
-            setTimeout(insertBlock, 3000);
-
-            log('[Series Manager PRO] v' + VERSION + ' запущен (диагностическая версия)');
+            setTimeout(insertBlock, 1000);
+            setTimeout(insertBlock, 2000);
 
         } catch (e) {
-            log('ОШИБКА ЗАПУСКА:', e);
-            console.error(e.stack);
+            console.error('[Series Manager PRO] Ошибка:', e);
+        }
+    }
+
+    // =============================================
+    // НАСТРОЙКИ
+    // =============================================
+
+    function addSettings() {
+        try {
+            if (!Lampa.SettingsApi) return;
+
+            Lampa.SettingsApi.addComponent({
+                component: 'series_manager_pro',
+                name: 'Series Manager PRO',
+                icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="M8 7v10l7-5-7-5z"/></svg>'
+            });
+
+            Lampa.SettingsApi.addParam({
+                component: 'series_manager_pro',
+                param: {
+                    name: 'series_manager_pro_enabled',
+                    type: 'trigger',
+                    default: true
+                },
+                field: {
+                    name: 'Включить Series Manager PRO'
+                },
+                onChange: function(value) {
+                    var settings = getSettings();
+                    settings.enabled = value === 'true' || value === true;
+                    setSettings(settings);
+                    if (!settings.enabled) {
+                        removeBlock();
+                    } else {
+                        insertBlock();
+                    }
+                }
+            });
+
+            Lampa.SettingsApi.addParam({
+                component: 'series_manager_pro',
+                param: {
+                    name: 'series_manager_pro_show_block',
+                    type: 'trigger',
+                    default: true
+                },
+                field: {
+                    name: 'Показывать блок продолжения'
+                },
+                onChange: function(value) {
+                    var settings = getSettings();
+                    settings.show_block = value === 'true' || value === true;
+                    setSettings(settings);
+                    if (!settings.show_block) {
+                        removeBlock();
+                    } else {
+                        insertBlock();
+                    }
+                }
+            });
+
+            Lampa.SettingsApi.addParam({
+                component: 'series_manager_pro',
+                param: {
+                    name: 'series_manager_pro_balancer',
+                    type: 'trigger',
+                    default: true
+                },
+                field: {
+                    name: 'Открывать Lampac Balancer при клике'
+                },
+                onChange: function(value) {
+                    var settings = getSettings();
+                    settings.auto_open_balancer = value === 'true' || value === true;
+                    setSettings(settings);
+                }
+            });
+
+        } catch (e) {
+            console.warn('[Series Manager PRO] Ошибка добавления настроек:', e);
         }
     }
 
@@ -800,6 +832,8 @@
     // =============================================
     // СТАРТ
     // =============================================
+
+    addSettings();
 
     if (document.readyState === 'complete') {
         start();
