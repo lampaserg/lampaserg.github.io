@@ -1,10 +1,9 @@
-/* Series Manager PRO 2.6.0 — Отдельный блок справа */
+/* Series Manager PRO 2.7.0 — Блок в .applecation__right */
 (function () {
     'use strict';
 
-    var VERSION = '2.6.0';
+    var VERSION = '2.7.0';
     var MEMORY_KEY = 'series_manager_pro_v2';
-    var BLOCK_CLASS = 'series-manager-block';
 
     // =============================================
     // ПРОВЕРКА ЗАГРУЗКИ
@@ -371,7 +370,7 @@
     }
 
     // =============================================
-    // СОЗДАНИЕ БЛОКА (ОТДЕЛЬНЫЙ, СПРАВА)
+    // СОЗДАНИЕ БЛОКА (как в Lampa Modern UI)
     // =============================================
 
     function createBlock(state) {
@@ -389,7 +388,7 @@
         var statusText = '';
         var statusIcon = '';
         var statusColor = '#69a7ff';
-        if (state.status === 'complete') {
+        if (state.status === 'complete' || progress >= 89) {
             statusText = 'Просмотрено';
             statusIcon = '✓';
             statusColor = '#2ecc71';
@@ -397,7 +396,7 @@
             statusText = 'Ожидается';
             statusIcon = '⏳';
             statusColor = '#ffb432';
-        } else if (progress > 0 && progress < 100) {
+        } else if (progress > 0 && progress < 89) {
             statusText = 'Продолжить';
             statusIcon = '▶';
             statusColor = '#69a7ff';
@@ -409,14 +408,12 @@
 
         // Основной блок
         var block = document.createElement('div');
-        block.className = BLOCK_CLASS;
+        block.className = 'series-info-block';
         block.setAttribute('data-status', state.status);
         block.style.cssText = [
             'display:flex',
             'flex-direction:column',
-            'flex-shrink:0',
-            'min-width:200px',
-            'max-width:320px',
+            'width:100%',
             'padding:0.8em 1.2em',
             'border-radius:0.8em',
             'background:rgba(0,0,0,0.25)',
@@ -427,8 +424,7 @@
             'cursor:pointer',
             'color:#f6f8fc',
             'font-family:"SegoeUI",system-ui,sans-serif',
-            'font-size:13px',
-            'margin-left:1.5em'
+            'font-size:13px'
         ].join(';');
 
         // Заголовок
@@ -437,7 +433,7 @@
 
         var label = document.createElement('span');
         label.style.cssText = 'font-size:0.5em;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.25);font-weight:600;';
-        label.textContent = 'Продолжить';
+        label.textContent = 'Продолжить просмотр';
         header.appendChild(label);
 
         var statusEl = document.createElement('span');
@@ -452,7 +448,7 @@
 
         // Название серии
         var titleEl = document.createElement('div');
-        titleEl.style.cssText = 'font-size:0.8em;font-weight:700;color:#fff;margin-bottom:0.1em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+        titleEl.style.cssText = 'font-size:0.85em;font-weight:700;color:#fff;margin-bottom:0.1em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
         titleEl.textContent = title;
 
         // Мета
@@ -525,7 +521,7 @@
     }
 
     // =============================================
-    // ВСТАВКА БЛОКА
+    // ВСТАВКА В .applecation__right
     // =============================================
 
     var currentBlock = null;
@@ -533,13 +529,16 @@
     var updateTimer = null;
 
     function removeBlock() {
-        var blocks = document.querySelectorAll('.' + BLOCK_CLASS);
+        if (currentBlock && currentBlock.parentNode) {
+            currentBlock.parentNode.removeChild(currentBlock);
+        }
+        currentBlock = null;
+        var blocks = document.querySelectorAll('.series-info-block');
         blocks.forEach(function (b) {
             if (b.parentNode) {
                 b.parentNode.removeChild(b);
             }
         });
-        currentBlock = null;
     }
 
     function insertBlock() {
@@ -568,16 +567,34 @@
                 return;
             }
 
-            // Ищем контейнер .applecation__left или .applecation__wrapper
-            var container = render.find('.applecation__left');
-            if (!container.length) {
-                container = render.find('.applecation__wrapper');
-            }
-            if (!container.length) {
-                container = render.find('.full-start-new__right');
-            }
-            if (!container.length) {
-                return;
+            // Ищем .applecation__right
+            var rightContainer = render.find('.applecation__right');
+            
+            // Если нет .applecation__right, создаём его
+            if (!rightContainer.length) {
+                // Ищем .applecation__left или .applecation__wrapper
+                var leftContainer = render.find('.applecation__left');
+                if (!leftContainer.length) {
+                    leftContainer = render.find('.applecation__wrapper');
+                }
+                if (!leftContainer.length) {
+                    leftContainer = render.find('.full-start-new__right');
+                }
+                if (!leftContainer.length) {
+                    return;
+                }
+
+                // Создаём .applecation__right
+                rightContainer = $('<div class="applecation__right"></div>');
+                rightContainer.css({
+                    'display': 'flex',
+                    'flex-direction': 'column',
+                    'flex-shrink': '0',
+                    'min-width': '200px',
+                    'max-width': '320px',
+                    'margin-left': '1.5em'
+                });
+                leftContainer.after(rightContainer);
             }
 
             var data = getCurrentData();
@@ -596,7 +613,7 @@
             ].join('|');
 
             // Проверяем существующий блок
-            var existingBlock = container.find('.' + BLOCK_CLASS);
+            var existingBlock = rightContainer.find('.series-info-block');
             if (existingBlock.length && lastState === signature) {
                 // Обновляем прогресс
                 var bar = existingBlock.find('.sw-progress-bar');
@@ -609,7 +626,7 @@
                         var statusText = '';
                         var statusIcon = '';
                         var statusColor = '#69a7ff';
-                        if (state.status === 'complete') {
+                        if (state.status === 'complete' || progress >= 89) {
                             statusText = 'Просмотрено';
                             statusIcon = '✓';
                             statusColor = '#2ecc71';
@@ -617,7 +634,7 @@
                             statusText = 'Ожидается';
                             statusIcon = '⏳';
                             statusColor = '#ffb432';
-                        } else if (progress > 0 && progress < 100) {
+                        } else if (progress > 0 && progress < 89) {
                             statusText = 'Продолжить';
                             statusIcon = '▶';
                             statusColor = '#69a7ff';
@@ -645,17 +662,12 @@
             var block = createBlock(state);
             if (!block) return;
 
-            // Делаем контейнер flex
-            container.css('display', 'flex');
-            container.css('align-items', 'flex-end');
-            container.css('flex-wrap', 'wrap');
-            container.css('gap', '0.5em');
-
-            // Вставляем блок
-            container.append(block);
+            // Очищаем .applecation__right и вставляем блок
+            rightContainer.empty();
+            rightContainer.append(block);
             currentBlock = block;
 
-            console.log('[Series Manager PRO] Блок добавлен справа');
+            console.log('[Series Manager PRO] Блок добавлен в .applecation__right');
 
         } catch (e) {
             console.error('[Series Manager PRO] Ошибка:', e);
@@ -806,7 +818,7 @@
         getState: function () {
             return {
                 version: VERSION,
-                hasBlock: !!document.querySelector('.' + BLOCK_CLASS),
+                hasBlock: !!currentBlock,
                 settings: getSettings()
             };
         }
