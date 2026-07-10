@@ -1,8 +1,8 @@
-/* Series Manager PRO 2.0.0 — С балансером Lampac и информативным виджетом */
+/* Series Manager PRO 2.1.0 — С балансером Lampac */
 (function () {
     'use strict';
 
-    var VERSION = '2.0.0';
+    var VERSION = '2.1.0';
     var MEMORY_KEY = 'series_manager_pro_v2';
 
     // =============================================
@@ -284,10 +284,7 @@
         var currentIndex = current ? entries.indexOf(current) : -1;
         var next = currentIndex >= 0 ? entries.slice(currentIndex + 1).find(function (entry) { return entry.timeline.percent < 60; }) || null : null;
 
-        // Получаем название сериала
         var seriesTitle = card.title || card.name || card.original_title || card.original_name || '';
-
-        // Получаем общую информацию
         var totalSeasons = card.number_of_seasons || 0;
         var totalEpisodes = card.number_of_episodes || 0;
 
@@ -316,29 +313,52 @@
             var settings = getSettings();
             if (!settings.auto_open_balancer) return false;
 
-            // Проверяем, есть ли Lampac
-            if (!Lampa.Lampac || typeof Lampa.Lampac.open !== 'function') {
-                console.warn('[Series Manager PRO] Lampac не найден');
+            // Проверяем, загружен ли плагин Lampac
+            if (typeof Lampa.Component === 'undefined' || typeof Lampa.Component.get === 'undefined') {
+                console.warn('[Series Manager PRO] Lampa.Component не найден');
+                return false;
+            }
+
+            // Получаем компонент Lampac
+            var LampacComponent = Lampa.Component.get('lampac');
+            if (!LampacComponent) {
+                console.warn('[Series Manager PRO] Компонент Lampac не найден');
                 return false;
             }
 
             // Формируем данные для открытия
-            var payload = {
-                card: card,
-                source: card.source || 'tmdb',
-                id: card.id
-            };
-
-            // Если указаны сезон и эпизод, передаём их
+            var movie = Lampa.Arrays.clone(card);
+            
+            // Добавляем информацию о сезоне и серии
             if (season !== undefined && episode !== undefined) {
-                payload.season = season;
-                payload.episode = episode;
+                movie.season = season;
+                movie.episode = episode;
             }
 
-            console.log('[Series Manager PRO] Открываем Lampac:', payload);
+            // Получаем сохранённый поисковый запрос
+            var id = Lampa.Utils.hash(card.number_of_seasons ? card.original_name : card.original_title);
+            var all = Lampa.Storage.get('clarification_search', '{}');
+            var searchQuery = all[id] || card.title || card.name || '';
 
-            // Открываем Lampac
-            Lampa.Lampac.open(payload);
+            console.log('[Series Manager PRO] Открываем Lampac:', {
+                movie: movie,
+                search: searchQuery,
+                season: season,
+                episode: episode
+            });
+
+            // Открываем через Activity
+            Lampa.Activity.push({
+                url: '',
+                title: 'Lampac - ' + (card.title || card.name || ''),
+                component: 'lampac',
+                search: searchQuery,
+                search_one: card.title || card.name || '',
+                search_two: card.original_title || card.original_name || '',
+                movie: movie,
+                page: 1,
+                clarification: all[id] ? true : false
+            });
 
             return true;
 
@@ -364,7 +384,6 @@
         var progress = Math.round(current.timeline.percent || 0);
         var remaining = formatRemainingTime(current.timeline);
 
-        // Статус просмотра
         var statusText = '';
         var statusIcon = '';
         if (state.status === 'complete') {
@@ -381,12 +400,10 @@
             statusIcon = '▶';
         }
 
-        // Создаём виджет
         var widget = document.createElement('div');
         widget.className = 'series-widget';
         widget.setAttribute('data-status', state.status);
 
-        // Стили виджета
         var style = document.createElement('style');
         style.id = 'series-widget-styles';
         style.textContent = `
@@ -519,19 +536,6 @@
                 margin-top: 0.1em !important;
                 letter-spacing: 0.05em !important;
             }
-            .series-widget .sw-lampac-icon {
-                display: inline-block !important;
-                width: 1em !important;
-                height: 1em !important;
-                margin-right: 0.3em !important;
-                background: currentColor !important;
-                mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'%3E%3Cpath d='M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5'/%3E%3C/svg%3E") no-repeat center !important;
-                -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'%3E%3Cpath d='M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5'/%3E%3C/svg%3E") no-repeat center !important;
-                mask-size: contain !important;
-                -webkit-mask-size: contain !important;
-                background-color: currentColor !important;
-                display: none !important;
-            }
             @keyframes series-widget-in {
                 0% { opacity: 0; transform: translateY(30px) scale(0.92); }
                 100% { opacity: 1; transform: translateY(0) scale(1); }
@@ -570,29 +574,23 @@
         `;
         document.head.appendChild(style);
 
-        // --- Сборка виджета ---
-
-        // Заголовок
+        // Сборка виджета
         var header = document.createElement('div');
         header.className = 'sw-header';
 
         var statusEl = document.createElement('span');
         statusEl.className = 'sw-status';
         statusEl.textContent = statusIcon + ' ' + statusText;
-
         header.appendChild(statusEl);
 
-        // Название сериала
         var seriesName = document.createElement('div');
         seriesName.className = 'sw-series-name';
         seriesName.textContent = state.seriesTitle || 'Сериал';
 
-        // Название серии
         var titleEl = document.createElement('div');
         titleEl.className = 'sw-title';
         titleEl.textContent = title;
 
-        // Мета-информация
         var meta = document.createElement('div');
         meta.className = 'sw-meta';
 
@@ -615,7 +613,6 @@
             meta.appendChild(remainingEl);
         }
 
-        // Прогресс-бар
         var progressWrap = document.createElement('div');
         progressWrap.className = 'sw-progress-wrap';
         var progressBar = document.createElement('div');
@@ -623,7 +620,6 @@
         progressBar.style.width = Math.max(0, Math.min(100, progress)) + '%';
         progressWrap.appendChild(progressBar);
 
-        // Следующая серия
         var nextEl = null;
         if (state.next && state.status !== 'complete' && state.status !== 'upcoming') {
             nextEl = document.createElement('div');
@@ -634,7 +630,6 @@
                 (nextProgress > 0 ? ' (' + nextProgress + '%)' : '');
         }
 
-        // Общая информация
         var totalEl = document.createElement('div');
         totalEl.className = 'sw-total';
         var totalInfo = [];
@@ -649,12 +644,10 @@
         }
         totalEl.textContent = totalInfo.join(' · ') || '';
 
-        // Подсказка
         var hint = document.createElement('div');
         hint.className = 'sw-click-hint';
         hint.textContent = '↗ Открыть в Lampac';
 
-        // Собираем
         widget.appendChild(header);
         widget.appendChild(seriesName);
         widget.appendChild(titleEl);
@@ -671,16 +664,14 @@
             var season = coords ? coords.season : undefined;
             var episode = coords ? coords.episode : undefined;
 
-            // Запоминаем выбранную серию
             if (state.current) {
                 saveEpisode(card, state.current.episode, 'widget-click');
             }
 
-            // Открываем Lampac
             openLampacBalancer(card, season, episode);
         });
 
-        // Авто-скрытие при нулевом прогрессе
+        // Авто-скрытие
         if (progress === 0 && !remaining) {
             var hideTimeout = null;
             var isHidden = false;
@@ -735,7 +726,6 @@
             currentWidget.parentNode.removeChild(currentWidget);
         }
         currentWidget = null;
-        // Удаляем стили, если нет других виджетов
         var widgets = document.querySelectorAll('.series-widget');
         if (widgets.length === 0) {
             var style = document.getElementById('series-widget-styles');
@@ -764,12 +754,10 @@
         ].join('|');
 
         if (lastState === signature && currentWidget && currentWidget.parentNode) {
-            // Обновляем прогресс-бар
             var bar = currentWidget.querySelector('.sw-progress-bar');
             if (bar && state.current) {
                 var progress = Math.round(state.current.timeline.percent || 0);
                 bar.style.width = Math.max(0, Math.min(100, progress)) + '%';
-                // Обновляем статус
                 var statusEl = currentWidget.querySelector('.sw-status');
                 if (statusEl) {
                     var statusText = '';
@@ -789,7 +777,6 @@
                     }
                     statusEl.textContent = statusIcon + ' ' + statusText;
                 }
-                // Обновляем remaining
                 var remaining = formatRemainingTime(state.current.timeline);
                 var remainingEl = currentWidget.querySelector('.sw-remaining');
                 if (remainingEl) {
@@ -846,8 +833,6 @@
 
     function onActivity(event) {
         if (!event || event.type !== 'start') return;
-
-        // При переходе на другую страницу — удаляем виджет
         if (event.component !== 'full') {
             removeWidget();
             lastState = null;
@@ -871,7 +856,6 @@
             Lampa.Listener.follow('timeline', onTimeline);
             Lampa.Listener.follow('activity', onActivity);
 
-            // Проверяем текущий экран
             setTimeout(function () {
                 var active = activeActivity();
                 if (active && active.component === 'full') {
