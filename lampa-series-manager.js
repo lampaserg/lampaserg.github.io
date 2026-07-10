@@ -1,8 +1,8 @@
-/* Series Manager PRO 4.1.0 — Блок привязан к .applecation__left */
+/* Series Manager PRO 4.2.0 — Адаптивная ширина справа */
 (function () {
     'use strict';
 
-    var VERSION = '4.1.0';
+    var VERSION = '4.2.0';
     var MEMORY_KEY = 'lmui_detail_episode_v1';
 
     // =============================================
@@ -368,7 +368,7 @@
     }
 
     // =============================================
-    // СОЗДАНИЕ БЛОКА (ПРИВЯЗАН К .applecation__left)
+    // СОЗДАНИЕ БЛОКА (АДАПТИВНАЯ ШИРИНА 65-95%)
     // =============================================
 
     function createBlock(state, card) {
@@ -407,17 +407,20 @@
             statusColor = '#69a7ff';
         }
 
+        // Вычисляем ширину: 65-95% от ширины экрана
+        var viewportWidth = getViewportWidth();
+        var blockWidth = Math.max(viewportWidth * 0.65, Math.min(viewportWidth * 0.95, 900));
+
         var block = document.createElement('div');
         block.className = 'series-info-block';
         block.id = 'series-info-block';
         block.setAttribute('data-card-id', contentId(card));
 
-        // Ширина блока = ширина .applecation__left
-        // Стили применяются динамически через JS
         block.style.cssText = [
             'display:flex',
             'flex-direction:column',
-            'width:100%',
+            'width:' + blockWidth + 'px',
+            'max-width:95vw',
             'padding:1.2em 1.6em',
             'border-radius:1em',
             'background:rgba(0,0,0,0.5)',
@@ -615,23 +618,6 @@
         currentBlock = null;
     }
 
-    function updateBlockWidth(block) {
-        // Получаем ширину .applecation__left
-        var render = getActiveRender();
-        if (!render || !render.length) return;
-
-        var left = render.find('.applecation__left');
-        if (!left.length) return;
-
-        var leftWidth = left.outerWidth();
-        if (leftWidth > 0) {
-            // Устанавливаем ширину блока равной ширине левой части
-            block.style.width = leftWidth + 'px';
-            block.style.maxWidth = leftWidth + 'px';
-            block.style.minWidth = Math.min(leftWidth, 300) + 'px';
-        }
-    }
-
     function createRightContainer(render) {
         var right = render.find('.full-start-new__right');
         if (!right.length) {
@@ -649,9 +635,9 @@
         newRight.css({
             'display': 'flex',
             'flex-direction': 'column',
-            'align-items': 'flex-start',
+            'align-items': 'flex-end',
             'justify-content': 'flex-end',
-            'width': 'auto',
+            'width': '100%',
             'margin-top': 'auto',
             'padding': '0.5em 0',
             'flex-shrink': '0',
@@ -661,6 +647,15 @@
         right.append(newRight);
 
         return newRight;
+    }
+
+    function updateBlockWidth() {
+        var block = document.getElementById('series-info-block');
+        if (!block) return;
+
+        var viewportWidth = getViewportWidth();
+        var blockWidth = Math.max(viewportWidth * 0.65, Math.min(viewportWidth * 0.95, 900));
+        block.style.width = blockWidth + 'px';
     }
 
     function insertBlock(card, data) {
@@ -728,8 +723,7 @@
                     var progress = Math.round(state.current.timeline.percent || 0);
                     bar.style.width = Math.max(0, Math.min(100, progress)) + '%';
                 }
-                // Обновляем ширину при изменении размера
-                updateBlockWidth(existingBlock);
+                updateBlockWidth();
                 return;
             }
 
@@ -745,9 +739,6 @@
 
             var block = createBlock(state, currentCard);
             if (!block) return;
-
-            // Устанавливаем ширину блока
-            updateBlockWidth(block);
 
             container.find('.series-info-block').remove();
             container.append(block);
@@ -776,19 +767,16 @@
                         if (render && render.length) {
                             var left = render.find('.applecation__left');
                             if (left.length) {
-                                // .applecation__left появился
                                 var card = active.card || (active.object && active.object.card) || null;
                                 var data = active.data || null;
                                 
-                                // Проверяем, есть ли блок
                                 var block = document.getElementById('series-info-block');
                                 if (!block && card && mediaType(card) === 'tv') {
                                     setTimeout(function() {
                                         insertBlock(card, data);
                                     }, 200);
                                 } else if (block) {
-                                    // Обновляем ширину блока
-                                    updateBlockWidth(block);
+                                    updateBlockWidth();
                                 }
                             }
                         }
@@ -903,10 +891,7 @@
 
             // Обработчик изменения размера окна
             window.addEventListener('resize', function() {
-                var block = document.getElementById('series-info-block');
-                if (block) {
-                    updateBlockWidth(block);
-                }
+                updateBlockWidth();
             });
 
         } catch (e) {
