@@ -1,8 +1,8 @@
-/* Series Manager PRO 4.7.0 — Стабильная версия */
+/* Series Manager PRO 4.8.0 — Максимально простая версия */
 (function () {
     'use strict';
 
-    var VERSION = '4.7.0';
+    var VERSION = '4.8.0';
     var MEMORY_KEY = 'lmui_detail_episode_v1';
 
     // =============================================
@@ -41,7 +41,7 @@
     }
 
     // =============================================
-    // УТИЛИТЫ
+    // УТИЛИТЫ (СОКРАЩЕНЫ)
     // =============================================
 
     function sm_mediaType(card) {
@@ -596,7 +596,7 @@
     var currentCard = null;
     var currentData = null;
     var isOnSeriesPage = false;
-    var domObserver = null;
+    var restoreInterval = null;
 
     function sm_removeBlock() {
         var block = document.getElementById('series-info-block');
@@ -677,6 +677,9 @@
             var block = sm_createBlock(state, currentCard);
             if (!block) return;
 
+            // Удаляем старый блок перед вставкой нового
+            sm_removeBlock();
+            
             document.body.appendChild(block);
             currentBlock = block;
 
@@ -686,10 +689,10 @@
     }
 
     // =============================================
-    // ВОССТАНОВЛЕНИЕ БЛОКА
+    // ПРОСТАЯ ПРОВЕРКА (интервал)
     // =============================================
 
-    function sm_restoreBlock() {
+    function sm_checkAndRestore() {
         var settings = getSettings();
         if (!settings.enabled) {
             sm_removeBlock();
@@ -705,30 +708,12 @@
                     sm_insertBlock(card, active.data);
                 }
             }
-        }
-    }
-
-    // =============================================
-    // НАБЛЮДАТЕЛЬ ЗА DOM
-    // =============================================
-
-    function sm_setupDomObserver() {
-        if (domObserver) {
-            domObserver.disconnect();
-        }
-
-        domObserver = new MutationObserver(function(mutations) {
-            // Проверяем, не удалился ли наш блок
-            var block = document.getElementById('series-info-block');
-            if (!block && isOnSeriesPage) {
-                sm_restoreBlock();
+        } else {
+            // Если не на странице сериала — удаляем блок
+            if (active && active.component !== 'full') {
+                sm_removeBlock();
             }
-        });
-
-        domObserver.observe(document.body, {
-            childList: true,
-            subtree: true
-        });
+        }
     }
 
     // =============================================
@@ -736,7 +721,6 @@
     // =============================================
 
     var listenersInstalled = false;
-    var restoreInterval = null;
 
     function sm_onFull(event) {
         if (!event) return;
@@ -757,38 +741,25 @@
                 clearTimeout(updateTimer);
                 updateTimer = setTimeout(function () {
                     sm_insertBlock(card, data);
-                }, 400);
+                }, 500);
             }
         }
     }
 
     function sm_onTimeline() {
-        if (isOnSeriesPage && currentCard) {
-            clearTimeout(updateTimer);
-            updateTimer = setTimeout(function () {
-                var active = sm_activeActivity();
-                if (active && active.data) {
-                    currentData = active.data;
-                }
-                sm_insertBlock(currentCard, currentData);
-            }, 300);
-        }
+        clearTimeout(updateTimer);
+        updateTimer = setTimeout(function () {
+            sm_checkAndRestore();
+        }, 300);
     }
 
     function sm_onActivity(event) {
         if (!event || event.type !== 'start') return;
 
         clearTimeout(updateTimer);
-
-        if (event.component === 'full') {
-            isOnSeriesPage = true;
-            updateTimer = setTimeout(function () {
-                sm_insertBlock();
-            }, 400);
-        } else {
-            isOnSeriesPage = false;
-            sm_removeBlock();
-        }
+        updateTimer = setTimeout(function () {
+            sm_checkAndRestore();
+        }, 400);
     }
 
     function sm_installListeners() {
@@ -801,23 +772,20 @@
         Lampa.Listener.follow('timeline', sm_onTimeline);
         Lampa.Listener.follow('activity', sm_onActivity);
 
-        // Наблюдатель за DOM
-        sm_setupDomObserver();
-
         // Периодическая проверка (каждые 2 секунды)
         if (restoreInterval) clearInterval(restoreInterval);
         restoreInterval = setInterval(function() {
-            sm_restoreBlock();
+            sm_checkAndRestore();
         }, 2000);
 
         // Проверка при скролле
         document.addEventListener('scroll', function() {
-            sm_restoreBlock();
+            sm_checkAndRestore();
         }, { passive: true });
 
         // Проверка при изменении размера
         window.addEventListener('resize', function() {
-            sm_restoreBlock();
+            sm_checkAndRestore();
         });
     }
 
@@ -851,10 +819,8 @@
                     setSettings(settings);
                     
                     if (settings.enabled) {
-                        // Включаем — показываем блок
-                        sm_restoreBlock();
+                        sm_checkAndRestore();
                     } else {
-                        // Выключаем — удаляем блок
                         sm_removeBlock();
                     }
                 }
@@ -899,15 +865,7 @@
             sm_installListeners();
 
             setTimeout(function () {
-                var active = sm_activeActivity();
-                if (active && active.component === 'full') {
-                    var card = active.card || (active.object && active.object.card) || null;
-                    var data = active.data || null;
-                    if (card && sm_mediaType(card) === 'tv') {
-                        isOnSeriesPage = true;
-                        sm_insertBlock(card, data);
-                    }
-                }
+                sm_checkAndRestore();
             }, 1000);
 
         } catch (e) {
@@ -924,7 +882,7 @@
         update: sm_insertBlock,
         remove: sm_removeBlock,
         openLampac: sm_openLampacBalancer,
-        restore: sm_restoreBlock,
+        check: sm_checkAndRestore,
         getState: function () {
             return {
                 version: VERSION,
