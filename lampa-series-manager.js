@@ -1,8 +1,8 @@
-/* Series Manager PRO 4.9.0 — Объединённая версия */
+/* Series Manager PRO 5.0.0 — Окончательная версия */
 (function () {
     'use strict';
 
-    var VERSION = '4.9.0';
+    var VERSION = '5.0.0';
     var MEMORY_KEY = 'lmui_detail_episode_v1';
 
     // =============================================
@@ -402,7 +402,7 @@
         var blockWidth = Math.min(Math.max(viewportWidth * 0.28, 250), 400);
         var bottomOffset = 100;
 
-        // position: fixed — блок всегда на месте (как в 4.5.3)
+        // ПОЗИЦИЯ: FIXED — всегда на месте (как в 4.5.3)
         block.style.cssText = [
             'position:fixed',
             'bottom:' + bottomOffset + 'px',
@@ -588,7 +588,7 @@
     }
 
     // =============================================
-    // УПРАВЛЕНИЕ БЛОКОМ (как в 4.5.2)
+    // УПРАВЛЕНИЕ БЛОКОМ
     // =============================================
 
     var currentBlock = null;
@@ -598,7 +598,6 @@
     var currentData = null;
     var isOnSeriesPage = false;
     var isLampacOpen = false;
-    var restoreInterval = null;
 
     function sm_removeBlock() {
         var block = document.getElementById('series-info-block');
@@ -693,10 +692,10 @@
     }
 
     // =============================================
-    // ПРОВЕРКА И ВОССТАНОВЛЕНИЕ
+    // ВОССТАНОВЛЕНИЕ (как в 4.5.2)
     // =============================================
 
-    function sm_checkAndRestore() {
+    function sm_restoreBlock() {
         // Если открыт Lampac — не восстанавливаем
         if (isLampacOpen) {
             sm_removeBlock();
@@ -718,11 +717,6 @@
                     sm_insertBlock(card, active.data);
                 }
             }
-        } else {
-            // Если не на странице сериала — удаляем блок
-            if (active && active.component !== 'full') {
-                sm_removeBlock();
-            }
         }
     }
 
@@ -731,6 +725,7 @@
     // =============================================
 
     var listenersInstalled = false;
+    var restoreInterval = null;
 
     function sm_onFull(event) {
         if (!event) return;
@@ -748,6 +743,7 @@
             }
 
             if (card && sm_mediaType(card) === 'tv') {
+                isOnSeriesPage = true;
                 clearTimeout(updateTimer);
                 updateTimer = setTimeout(function () {
                     sm_insertBlock(card, data);
@@ -759,7 +755,7 @@
     function sm_onTimeline() {
         clearTimeout(updateTimer);
         updateTimer = setTimeout(function () {
-            sm_checkAndRestore();
+            sm_restoreBlock();
         }, 300);
     }
 
@@ -825,18 +821,8 @@
         // Периодическая проверка (каждые 2 секунды)
         if (restoreInterval) clearInterval(restoreInterval);
         restoreInterval = setInterval(function() {
-            sm_checkAndRestore();
+            sm_restoreBlock();
         }, 2000);
-
-        // Проверка при скролле
-        document.addEventListener('scroll', function() {
-            sm_checkAndRestore();
-        }, { passive: true });
-
-        // Проверка при изменении размера
-        window.addEventListener('resize', function() {
-            sm_checkAndRestore();
-        });
     }
 
     // =============================================
@@ -869,7 +855,7 @@
                     setSettings(settings);
                     
                     if (settings.enabled) {
-                        sm_checkAndRestore();
+                        sm_restoreBlock();
                     } else {
                         sm_removeBlock();
                     }
@@ -915,7 +901,7 @@
             sm_installListeners();
 
             setTimeout(function () {
-                sm_checkAndRestore();
+                sm_restoreBlock();
             }, 1000);
 
         } catch (e) {
@@ -932,7 +918,7 @@
         update: sm_insertBlock,
         remove: sm_removeBlock,
         openLampac: sm_openLampacBalancer,
-        check: sm_checkAndRestore,
+        restore: sm_restoreBlock,
         getState: function () {
             return {
                 version: VERSION,
