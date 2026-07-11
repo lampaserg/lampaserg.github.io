@@ -1,8 +1,8 @@
-/* Series Manager PRO 4.5.2 — Правильное управление */
+/* Series Manager PRO 4.5.3 — Блок всегда на месте */
 (function () {
     'use strict';
 
-    var VERSION = '4.5.2';
+    var VERSION = '4.5.3';
     var MEMORY_KEY = 'lmui_detail_episode_v1';
 
     // =============================================
@@ -42,7 +42,7 @@
     }
 
     // =============================================
-    // УТИЛИТЫ (сокращены)
+    // УТИЛИТЫ (сокращены для экономии места)
     // =============================================
 
     function sm_mediaType(card) {
@@ -355,7 +355,7 @@
     }
 
     // =============================================
-    // БЛОК — FIXED ПОЗИЦИЯ СПРАВА СНИЗУ
+    // БЛОК
     // =============================================
 
     function sm_createBlock(state, card) {
@@ -589,7 +589,7 @@
     }
 
     // =============================================
-    // УПРАВЛЕНИЕ БЛОКОМ — ПРАВИЛЬНОЕ
+    // УПРАВЛЕНИЕ БЛОКОМ — С ПЕРИОДИЧЕСКОЙ ПРОВЕРКОЙ
     // =============================================
 
     var currentBlock = null;
@@ -598,6 +598,7 @@
     var currentCard = null;
     var currentData = null;
     var isOnSeriesPage = false;
+    var checkInterval = null;
 
     function sm_removeBlock() {
         var block = document.getElementById('series-info-block');
@@ -613,7 +614,6 @@
             var active = sm_activeActivity();
             if (!active || active.component !== 'full') {
                 isOnSeriesPage = false;
-                sm_removeBlock();
                 return;
             }
 
@@ -628,13 +628,11 @@
             }
 
             if (!currentCard || sm_mediaType(currentCard) !== 'tv') {
-                sm_removeBlock();
                 return;
             }
 
             var settings = getSettings();
             if (!settings.enabled || !settings.show_block) {
-                sm_removeBlock();
                 return;
             }
 
@@ -642,7 +640,6 @@
 
             var state = sm_resolveSeriesPlayback(currentCard, currentData || {});
             if (!state || !state.current) {
-                sm_removeBlock();
                 return;
             }
 
@@ -682,36 +679,35 @@
             document.body.appendChild(block);
             currentBlock = block;
 
-            console.log('[Series Manager PRO] Блок вставлен');
-
         } catch (e) {
             console.error('[Series Manager PRO] Ошибка:', e);
         }
     }
 
     // =============================================
-    // ВОССТАНОВЛЕНИЕ БЛОКА
+    // ПОСТОЯННОЕ ВОССТАНОВЛЕНИЕ
     // =============================================
 
     function sm_restoreBlock() {
-        var active = sm_activeActivity();
-        if (active && active.component === 'full') {
-            var card = active.card || (active.object && active.object.card) || null;
-            if (card && sm_mediaType(card) === 'tv') {
-                var block = document.getElementById('series-info-block');
-                if (!block) {
-                    sm_insertBlock(card, active.data);
+        if (isOnSeriesPage) {
+            var block = document.getElementById('series-info-block');
+            if (!block) {
+                var active = sm_activeActivity();
+                if (active && active.component === 'full') {
+                    var card = active.card || (active.object && active.object.card) || null;
+                    if (card && sm_mediaType(card) === 'tv') {
+                        sm_insertBlock(card, active.data);
+                    }
                 }
             }
         }
     }
 
     // =============================================
-    // ОБРАБОТЧИКИ СОБЫТИЙ — ПРАВИЛЬНЫЕ
+    // ОБРАБОТЧИКИ СОБЫТИЙ
     // =============================================
 
     var listenersInstalled = false;
-    var restoreInterval = null;
 
     function sm_onFull(event) {
         if (!event) return;
@@ -729,6 +725,7 @@
             }
 
             if (card && sm_mediaType(card) === 'tv') {
+                isOnSeriesPage = true;
                 clearTimeout(updateTimer);
                 updateTimer = setTimeout(function () {
                     sm_insertBlock(card, data);
@@ -755,14 +752,12 @@
 
         clearTimeout(updateTimer);
 
-        // Если перешли на страницу сериала — показываем блок
         if (event.component === 'full') {
             isOnSeriesPage = true;
             updateTimer = setTimeout(function () {
                 sm_insertBlock();
             }, 500);
         } else {
-            // Если ушли с сериала — УДАЛЯЕМ блок
             isOnSeriesPage = false;
             sm_removeBlock();
         }
@@ -774,29 +769,24 @@
 
         listenersInstalled = true;
         
-        // Основные события
         Lampa.Listener.follow('full', sm_onFull);
         Lampa.Listener.follow('timeline', sm_onTimeline);
         Lampa.Listener.follow('activity', sm_onActivity);
 
-        // Восстановление при скролле (если блок пропал)
+        // ПЕРИОДИЧЕСКАЯ ПРОВЕРКА (каждые 2 секунды)
+        if (checkInterval) clearInterval(checkInterval);
+        checkInterval = setInterval(function() {
+            sm_restoreBlock();
+        }, 2000);
+
+        // Проверка при скролле
         document.addEventListener('scroll', function() {
-            if (isOnSeriesPage) {
-                var block = document.getElementById('series-info-block');
-                if (!block) {
-                    sm_restoreBlock();
-                }
-            }
+            sm_restoreBlock();
         }, { passive: true });
 
-        // Восстановление при изменении размера окна
+        // Проверка при изменении размера
         window.addEventListener('resize', function() {
-            if (isOnSeriesPage) {
-                var block = document.getElementById('series-info-block');
-                if (!block) {
-                    sm_restoreBlock();
-                }
-            }
+            sm_restoreBlock();
         });
     }
 
@@ -896,7 +886,6 @@
             addSettings();
             sm_installListeners();
 
-            // Первая проверка при загрузке
             setTimeout(function () {
                 var active = sm_activeActivity();
                 if (active && active.component === 'full') {
