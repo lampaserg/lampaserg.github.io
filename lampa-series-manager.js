@@ -1,8 +1,8 @@
-/* Series Manager PRO 4.6.0 — Упрощённая версия */
+/* Series Manager PRO 4.7.0 — Стабильная версия */
 (function () {
     'use strict';
 
-    var VERSION = '4.6.0';
+    var VERSION = '4.7.0';
     var MEMORY_KEY = 'lmui_detail_episode_v1';
 
     // =============================================
@@ -596,6 +596,7 @@
     var currentCard = null;
     var currentData = null;
     var isOnSeriesPage = false;
+    var domObserver = null;
 
     function sm_removeBlock() {
         var block = document.getElementById('series-info-block');
@@ -607,14 +608,12 @@
 
     function sm_insertBlock(card, data) {
         try {
-            // Проверяем настройки
             var settings = getSettings();
             if (!settings.enabled) {
                 sm_removeBlock();
                 return;
             }
 
-            // Проверяем, что мы на странице сериала
             var active = sm_activeActivity();
             if (!active || active.component !== 'full') {
                 isOnSeriesPage = false;
@@ -710,6 +709,29 @@
     }
 
     // =============================================
+    // НАБЛЮДАТЕЛЬ ЗА DOM
+    // =============================================
+
+    function sm_setupDomObserver() {
+        if (domObserver) {
+            domObserver.disconnect();
+        }
+
+        domObserver = new MutationObserver(function(mutations) {
+            // Проверяем, не удалился ли наш блок
+            var block = document.getElementById('series-info-block');
+            if (!block && isOnSeriesPage) {
+                sm_restoreBlock();
+            }
+        });
+
+        domObserver.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+    }
+
+    // =============================================
     // ОБРАБОТЧИКИ СОБЫТИЙ
     // =============================================
 
@@ -779,6 +801,9 @@
         Lampa.Listener.follow('timeline', sm_onTimeline);
         Lampa.Listener.follow('activity', sm_onActivity);
 
+        // Наблюдатель за DOM
+        sm_setupDomObserver();
+
         // Периодическая проверка (каждые 2 секунды)
         if (restoreInterval) clearInterval(restoreInterval);
         restoreInterval = setInterval(function() {
@@ -827,18 +852,7 @@
                     
                     if (settings.enabled) {
                         // Включаем — показываем блок
-                        var active = sm_activeActivity();
-                        if (active && active.component === 'full') {
-                            var card = active.card || (active.object && active.object.card) || null;
-                            if (card && sm_mediaType(card) === 'tv') {
-                                sm_insertBlock(card, active.data);
-                            }
-                        } else {
-                            // Проверяем, есть ли сериал на странице
-                            setTimeout(function() {
-                                sm_restoreBlock();
-                            }, 200);
-                        }
+                        sm_restoreBlock();
                     } else {
                         // Выключаем — удаляем блок
                         sm_removeBlock();
