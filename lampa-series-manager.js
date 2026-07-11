@@ -1,8 +1,8 @@
-/* Series Manager PRO 4.5.3 — Блок всегда на месте */
+/* Series Manager PRO 4.5.4 — Исправлен возврат из балансера */
 (function () {
     'use strict';
 
-    var VERSION = '4.5.3';
+    var VERSION = '4.5.4';
     var MEMORY_KEY = 'lmui_detail_episode_v1';
 
     // =============================================
@@ -42,7 +42,7 @@
     }
 
     // =============================================
-    // УТИЛИТЫ (сокращены для экономии места)
+    // УТИЛИТЫ (СОКРАЩЕНЫ)
     // =============================================
 
     function sm_mediaType(card) {
@@ -589,7 +589,7 @@
     }
 
     // =============================================
-    // УПРАВЛЕНИЕ БЛОКОМ — С ПЕРИОДИЧЕСКОЙ ПРОВЕРКОЙ
+    // УПРАВЛЕНИЕ БЛОКОМ
     // =============================================
 
     var currentBlock = null;
@@ -599,6 +599,7 @@
     var currentData = null;
     var isOnSeriesPage = false;
     var checkInterval = null;
+    var isLampacOpen = false;
 
     function sm_removeBlock() {
         var block = document.getElementById('series-info-block');
@@ -614,6 +615,11 @@
             var active = sm_activeActivity();
             if (!active || active.component !== 'full') {
                 isOnSeriesPage = false;
+                return;
+            }
+
+            // Если открыт Lampac — не показываем блок
+            if (isLampacOpen) {
                 return;
             }
 
@@ -685,11 +691,11 @@
     }
 
     // =============================================
-    // ПОСТОЯННОЕ ВОССТАНОВЛЕНИЕ
+    // ВОССТАНОВЛЕНИЕ
     // =============================================
 
     function sm_restoreBlock() {
-        if (isOnSeriesPage) {
+        if (isOnSeriesPage && !isLampacOpen) {
             var block = document.getElementById('series-info-block');
             if (!block) {
                 var active = sm_activeActivity();
@@ -735,7 +741,7 @@
     }
 
     function sm_onTimeline() {
-        if (isOnSeriesPage && currentCard) {
+        if (isOnSeriesPage && currentCard && !isLampacOpen) {
             clearTimeout(updateTimer);
             updateTimer = setTimeout(function () {
                 var active = sm_activeActivity();
@@ -752,14 +758,42 @@
 
         clearTimeout(updateTimer);
 
+        // Если перешли на страницу сериала
         if (event.component === 'full') {
             isOnSeriesPage = true;
+            // Если был открыт Lampac — сбрасываем флаг
+            if (isLampacOpen) {
+                isLampacOpen = false;
+            }
             updateTimer = setTimeout(function () {
                 sm_insertBlock();
             }, 500);
-        } else {
-            isOnSeriesPage = false;
+        } 
+        // Если перешли на Lampac (балансер)
+        else if (event.component === 'lampac') {
+            isLampacOpen = true;
             sm_removeBlock();
+        }
+        // Если перешли на другую страницу (не сериал и не Lampac)
+        else {
+            isOnSeriesPage = false;
+            isLampacOpen = false;
+            sm_removeBlock();
+        }
+    }
+
+    function sm_onActivityBack(event) {
+        // Обработка возврата из Lampac
+        if (event && event.type === 'back') {
+            var active = sm_activeActivity();
+            if (active && active.component === 'full') {
+                isLampacOpen = false;
+                isOnSeriesPage = true;
+                clearTimeout(updateTimer);
+                updateTimer = setTimeout(function () {
+                    sm_insertBlock();
+                }, 400);
+            }
         }
     }
 
@@ -773,7 +807,12 @@
         Lampa.Listener.follow('timeline', sm_onTimeline);
         Lampa.Listener.follow('activity', sm_onActivity);
 
-        // ПЕРИОДИЧЕСКАЯ ПРОВЕРКА (каждые 2 секунды)
+        // Слушаем возврат
+        try {
+            Lampa.Listener.follow('activity', sm_onActivityBack);
+        } catch (e) {}
+
+        // Периодическая проверка
         if (checkInterval) clearInterval(checkInterval);
         checkInterval = setInterval(function() {
             sm_restoreBlock();
@@ -918,6 +957,7 @@
                 version: VERSION,
                 hasBlock: !!document.getElementById('series-info-block'),
                 isOnSeriesPage: isOnSeriesPage,
+                isLampacOpen: isLampacOpen,
                 settings: getSettings()
             };
         }
