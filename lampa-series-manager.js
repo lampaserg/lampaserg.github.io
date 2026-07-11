@@ -3121,52 +3121,6 @@
     flex-shrink: 0 !important;
     min-height: 60px !important;
 }
-
-            @media screen and (max-width: 720px) { 
-                .applecation .full-start-new__body { height: auto !important; min-height: 0 !important; } 
-                .applecation .full-start-new__right { display: block !important; padding: 0 1em 1em 1em !important; } 
-                .applecation .applecation__content-wrapper { max-width: 100% !important; padding: 1em !important; } 
-                .applecation .applecation__description { max-width: none !important; width: 100% !important; -webkit-line-clamp: 3 !important; } 
-                .applecation__logo { max-width: 60vw !important; max-height: 80px !important; } 
-                .applecation .full-start-new__title { font-size: 1.8em !important; }
-                .applecation-episode-overview { max-width: 30em !important; min-width: 20em !important; font-size: 0.6em !important; }
-                .applecation .applecation__left { width: 100% !important; max-width: 100% !important; }
-                .applecation .applecation__right { 
-                    width: 100% !important; 
-                    max-width: 100% !important; 
-                    min-width: 0 !important; 
-                    padding: 0.5em 0 !important; 
-                    align-items: center !important; 
-                }
-                .series-info-block { font-size: 14px !important; padding: 1em 1.2em !important; }
-                .content-center .applecation__content-group,
-                .content-right .applecation__content-group {
-                    align-items: flex-start !important;
-                    text-align: left !important;
-                }
-                .ratings-center .applecation__meta,
-                .ratings-center .applecation__ratings,
-                .ratings-center .applecation__reactions,
-                .ratings-right .applecation__meta,
-                .ratings-right .applecation__ratings,
-                .ratings-right .applecation__reactions {
-                    justify-content: flex-start !important;
-                }
-                .info-center .applecation__info,
-                .info-right .applecation__info {
-                    align-items: flex-start !important;
-                    text-align: left !important;
-                }
-            }
-            @media screen and (max-width: 480px) { 
-                .applecation .applecation__description { -webkit-line-clamp: 2 !important; } 
-                .applecation__logo { max-width: 70vw !important; max-height: 60px !important; } 
-                .applecation .full-start-new__title { font-size: 1.4em !important; } 
-                .applecation .applecation__meta { font-size: 0.85em !important; } 
-                .applecation .applecation__ratings { font-size: 0.8em !important; }
-                .applecation-episode-overview { max-width: 20em !important; min-width: 14em !important; font-size: 0.55em !important; }
-                .series-info-block { font-size: 12px !important; padding: 0.8em 1em !important; }
-            }
             `;
 
             $('head').append('<style id="applecation_plus_css">' + css + '</style>');
