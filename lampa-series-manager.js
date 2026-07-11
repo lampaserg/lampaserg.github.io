@@ -1,8 +1,8 @@
-/* Series Manager PRO 4.5.4 — Исправлен возврат из балансера */
+/* Series Manager PRO 4.6.0 — Упрощённая версия */
 (function () {
     'use strict';
 
-    var VERSION = '4.5.4';
+    var VERSION = '4.6.0';
     var MEMORY_KEY = 'lmui_detail_episode_v1';
 
     // =============================================
@@ -22,7 +22,6 @@
 
     var DEFAULTS = {
         enabled: true,
-        show_block: true,
         auto_open_balancer: true
     };
 
@@ -42,7 +41,7 @@
     }
 
     // =============================================
-    // УТИЛИТЫ (СОКРАЩЕНЫ)
+    // УТИЛИТЫ
     // =============================================
 
     function sm_mediaType(card) {
@@ -362,7 +361,7 @@
         if (!state || !state.current) return null;
 
         var settings = getSettings();
-        if (!settings.show_block) return null;
+        if (!settings.enabled) return null;
 
         var current = state.current;
         var coords = sm_episodeCoordinates(current.episode);
@@ -430,7 +429,6 @@
             'pointer-events:auto'
         ].join(';');
 
-        // Декоративный верхний градиент
         var gradient = document.createElement('div');
         gradient.style.cssText = [
             'position:absolute',
@@ -598,8 +596,6 @@
     var currentCard = null;
     var currentData = null;
     var isOnSeriesPage = false;
-    var checkInterval = null;
-    var isLampacOpen = false;
 
     function sm_removeBlock() {
         var block = document.getElementById('series-info-block');
@@ -611,15 +607,18 @@
 
     function sm_insertBlock(card, data) {
         try {
+            // Проверяем настройки
+            var settings = getSettings();
+            if (!settings.enabled) {
+                sm_removeBlock();
+                return;
+            }
+
             // Проверяем, что мы на странице сериала
             var active = sm_activeActivity();
             if (!active || active.component !== 'full') {
                 isOnSeriesPage = false;
-                return;
-            }
-
-            // Если открыт Lampac — не показываем блок
-            if (isLampacOpen) {
+                sm_removeBlock();
                 return;
             }
 
@@ -634,11 +633,7 @@
             }
 
             if (!currentCard || sm_mediaType(currentCard) !== 'tv') {
-                return;
-            }
-
-            var settings = getSettings();
-            if (!settings.enabled || !settings.show_block) {
+                sm_removeBlock();
                 return;
             }
 
@@ -646,6 +641,7 @@
 
             var state = sm_resolveSeriesPlayback(currentCard, currentData || {});
             if (!state || !state.current) {
+                sm_removeBlock();
                 return;
             }
 
@@ -691,19 +687,23 @@
     }
 
     // =============================================
-    // ВОССТАНОВЛЕНИЕ
+    // ВОССТАНОВЛЕНИЕ БЛОКА
     // =============================================
 
     function sm_restoreBlock() {
-        if (isOnSeriesPage && !isLampacOpen) {
-            var block = document.getElementById('series-info-block');
-            if (!block) {
-                var active = sm_activeActivity();
-                if (active && active.component === 'full') {
-                    var card = active.card || (active.object && active.object.card) || null;
-                    if (card && sm_mediaType(card) === 'tv') {
-                        sm_insertBlock(card, active.data);
-                    }
+        var settings = getSettings();
+        if (!settings.enabled) {
+            sm_removeBlock();
+            return;
+        }
+
+        var active = sm_activeActivity();
+        if (active && active.component === 'full') {
+            var card = active.card || (active.object && active.object.card) || null;
+            if (card && sm_mediaType(card) === 'tv') {
+                var block = document.getElementById('series-info-block');
+                if (!block) {
+                    sm_insertBlock(card, active.data);
                 }
             }
         }
@@ -714,6 +714,7 @@
     // =============================================
 
     var listenersInstalled = false;
+    var restoreInterval = null;
 
     function sm_onFull(event) {
         if (!event) return;
@@ -731,7 +732,6 @@
             }
 
             if (card && sm_mediaType(card) === 'tv') {
-                isOnSeriesPage = true;
                 clearTimeout(updateTimer);
                 updateTimer = setTimeout(function () {
                     sm_insertBlock(card, data);
@@ -741,7 +741,7 @@
     }
 
     function sm_onTimeline() {
-        if (isOnSeriesPage && currentCard && !isLampacOpen) {
+        if (isOnSeriesPage && currentCard) {
             clearTimeout(updateTimer);
             updateTimer = setTimeout(function () {
                 var active = sm_activeActivity();
@@ -758,42 +758,14 @@
 
         clearTimeout(updateTimer);
 
-        // Если перешли на страницу сериала
         if (event.component === 'full') {
             isOnSeriesPage = true;
-            // Если был открыт Lampac — сбрасываем флаг
-            if (isLampacOpen) {
-                isLampacOpen = false;
-            }
             updateTimer = setTimeout(function () {
                 sm_insertBlock();
-            }, 500);
-        } 
-        // Если перешли на Lampac (балансер)
-        else if (event.component === 'lampac') {
-            isLampacOpen = true;
-            sm_removeBlock();
-        }
-        // Если перешли на другую страницу (не сериал и не Lampac)
-        else {
+            }, 400);
+        } else {
             isOnSeriesPage = false;
-            isLampacOpen = false;
             sm_removeBlock();
-        }
-    }
-
-    function sm_onActivityBack(event) {
-        // Обработка возврата из Lampac
-        if (event && event.type === 'back') {
-            var active = sm_activeActivity();
-            if (active && active.component === 'full') {
-                isLampacOpen = false;
-                isOnSeriesPage = true;
-                clearTimeout(updateTimer);
-                updateTimer = setTimeout(function () {
-                    sm_insertBlock();
-                }, 400);
-            }
         }
     }
 
@@ -807,14 +779,9 @@
         Lampa.Listener.follow('timeline', sm_onTimeline);
         Lampa.Listener.follow('activity', sm_onActivity);
 
-        // Слушаем возврат
-        try {
-            Lampa.Listener.follow('activity', sm_onActivityBack);
-        } catch (e) {}
-
-        // Периодическая проверка
-        if (checkInterval) clearInterval(checkInterval);
-        checkInterval = setInterval(function() {
+        // Периодическая проверка (каждые 2 секунды)
+        if (restoreInterval) clearInterval(restoreInterval);
+        restoreInterval = setInterval(function() {
             sm_restoreBlock();
         }, 2000);
 
@@ -857,32 +824,24 @@
                     var settings = getSettings();
                     settings.enabled = value === 'true' || value === true;
                     setSettings(settings);
-                    if (!settings.enabled) {
-                        sm_removeBlock();
+                    
+                    if (settings.enabled) {
+                        // Включаем — показываем блок
+                        var active = sm_activeActivity();
+                        if (active && active.component === 'full') {
+                            var card = active.card || (active.object && active.object.card) || null;
+                            if (card && sm_mediaType(card) === 'tv') {
+                                sm_insertBlock(card, active.data);
+                            }
+                        } else {
+                            // Проверяем, есть ли сериал на странице
+                            setTimeout(function() {
+                                sm_restoreBlock();
+                            }, 200);
+                        }
                     } else {
-                        sm_insertBlock();
-                    }
-                }
-            });
-
-            Lampa.SettingsApi.addParam({
-                component: 'series_manager_pro',
-                param: {
-                    name: 'series_manager_show_block',
-                    type: 'trigger',
-                    default: true
-                },
-                field: {
-                    name: 'Показывать блок продолжения'
-                },
-                onChange: function(value) {
-                    var settings = getSettings();
-                    settings.show_block = value === 'true' || value === true;
-                    setSettings(settings);
-                    if (!settings.show_block) {
+                        // Выключаем — удаляем блок
                         sm_removeBlock();
-                    } else {
-                        sm_insertBlock();
                     }
                 }
             });
@@ -957,7 +916,6 @@
                 version: VERSION,
                 hasBlock: !!document.getElementById('series-info-block'),
                 isOnSeriesPage: isOnSeriesPage,
-                isLampacOpen: isLampacOpen,
                 settings: getSettings()
             };
         }
