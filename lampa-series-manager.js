@@ -1,8 +1,8 @@
-/* Series Manager PRO 5.0.0 — Окончательная версия */
+/* Series Manager PRO 5.1.0 — Восстановление при скролле */
 (function () {
     'use strict';
 
-    var VERSION = '5.0.0';
+    var VERSION = '5.1.0';
     var MEMORY_KEY = 'lmui_detail_episode_v1';
 
     // =============================================
@@ -41,7 +41,7 @@
     }
 
     // =============================================
-    // УТИЛИТЫ
+    // УТИЛИТЫ (сокращены)
     // =============================================
 
     function sm_mediaType(card) {
@@ -354,7 +354,7 @@
     }
 
     // =============================================
-    // БЛОК — position: fixed (как в 4.5.3)
+    // БЛОК — position: fixed (всегда на месте)
     // =============================================
 
     function sm_createBlock(state, card) {
@@ -402,7 +402,6 @@
         var blockWidth = Math.min(Math.max(viewportWidth * 0.28, 250), 400);
         var bottomOffset = 100;
 
-        // ПОЗИЦИЯ: FIXED — всегда на месте (как в 4.5.3)
         block.style.cssText = [
             'position:fixed',
             'bottom:' + bottomOffset + 'px',
@@ -430,6 +429,7 @@
             'pointer-events:auto'
         ].join(';');
 
+        // Декоративный градиент
         var gradient = document.createElement('div');
         gradient.style.cssText = [
             'position:absolute',
@@ -514,15 +514,15 @@
 
         // Прогресс-бар
         var progressWrap = document.createElement('div');
-        progressWrap.style.cssText = 'width:100%;height:6px;border-radius:99em;background:rgba(255,255,255,0.08);margin:0.4em 0 0.15em;overflow:hidden;box-shadow:inset 0 1px 3px rgba(0,0,0,0.3);';
+        progressWrap.style.cssText = 'width:100%;height:6px;border-radius:99em;background:rgba(255,255,255,0.08);margin:0.4em 0 0.15em;overflow:hidden;';
         var progressBar = document.createElement('div');
         progressBar.className = 'sw-progress-bar';
-        progressBar.style.cssText = 'height:100%;border-radius:inherit;background:linear-gradient(90deg,#69a7ff,#91beff);transition:width .6s ease;box-shadow:0 0 20px rgba(105,167,255,0.3);';
+        progressBar.style.cssText = 'height:100%;border-radius:inherit;background:linear-gradient(90deg,#69a7ff,#91beff);transition:width .6s ease;';
         progressBar.style.width = Math.max(0, Math.min(100, progress)) + '%';
         progressWrap.appendChild(progressBar);
         block.appendChild(progressWrap);
 
-        // Время просмотра
+        // Время
         var timeRow = document.createElement('div');
         timeRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;font-size:0.75em;color:rgba(255,255,255,0.4);margin-top:0.15em;';
 
@@ -588,7 +588,7 @@
     }
 
     // =============================================
-    // УПРАВЛЕНИЕ БЛОКОМ
+    // УПРАВЛЕНИЕ БЛОКОМ — С ПРОВЕРКОЙ ПРИ СКРОЛЛЕ
     // =============================================
 
     var currentBlock = null;
@@ -598,6 +598,8 @@
     var currentData = null;
     var isOnSeriesPage = false;
     var isLampacOpen = false;
+    var restoreInterval = null;
+    var lastScrollTop = 0;
 
     function sm_removeBlock() {
         var block = document.getElementById('series-info-block');
@@ -615,7 +617,6 @@
                 return;
             }
 
-            // Если открыт Lampac — не показываем блок
             if (isLampacOpen) {
                 return;
             }
@@ -692,11 +693,10 @@
     }
 
     // =============================================
-    // ВОССТАНОВЛЕНИЕ (как в 4.5.2)
+    // ВОССТАНОВЛЕНИЕ
     // =============================================
 
     function sm_restoreBlock() {
-        // Если открыт Lampac — не восстанавливаем
         if (isLampacOpen) {
             sm_removeBlock();
             return;
@@ -721,11 +721,10 @@
     }
 
     // =============================================
-    // ОБРАБОТЧИКИ СОБЫТИЙ (как в 4.5.2)
+    // ОБРАБОТЧИКИ СОБЫТИЙ
     // =============================================
 
     var listenersInstalled = false;
-    var restoreInterval = null;
 
     function sm_onFull(event) {
         if (!event) return;
@@ -743,7 +742,6 @@
             }
 
             if (card && sm_mediaType(card) === 'tv') {
-                isOnSeriesPage = true;
                 clearTimeout(updateTimer);
                 updateTimer = setTimeout(function () {
                     sm_insertBlock(card, data);
@@ -764,24 +762,18 @@
 
         clearTimeout(updateTimer);
 
-        // Если перешли на страницу сериала
         if (event.component === 'full') {
             isOnSeriesPage = true;
-            // Если был открыт Lampac — сбрасываем флаг
             if (isLampacOpen) {
                 isLampacOpen = false;
             }
             updateTimer = setTimeout(function () {
                 sm_insertBlock();
             }, 500);
-        } 
-        // Если перешли на Lampac (балансер)
-        else if (event.component === 'lampac') {
+        } else if (event.component === 'lampac') {
             isLampacOpen = true;
             sm_removeBlock();
-        }
-        // Если перешли на другую страницу (не сериал и не Lampac)
-        else {
+        } else {
             isOnSeriesPage = false;
             isLampacOpen = false;
             sm_removeBlock();
@@ -789,7 +781,6 @@
     }
 
     function sm_onActivityBack(event) {
-        // Обработка возврата из Lampac
         if (event && event.type === 'back') {
             var active = sm_activeActivity();
             if (active && active.component === 'full') {
@@ -799,6 +790,16 @@
                 updateTimer = setTimeout(function () {
                     sm_insertBlock();
                 }, 400);
+            }
+        }
+    }
+
+    function sm_onScroll() {
+        // При скролле проверяем, не пропал ли блок
+        if (isOnSeriesPage && !isLampacOpen) {
+            var block = document.getElementById('series-info-block');
+            if (!block) {
+                sm_restoreBlock();
             }
         }
     }
@@ -813,16 +814,23 @@
         Lampa.Listener.follow('timeline', sm_onTimeline);
         Lampa.Listener.follow('activity', sm_onActivity);
 
-        // Слушаем возврат
         try {
             Lampa.Listener.follow('activity', sm_onActivityBack);
         } catch (e) {}
 
-        // Периодическая проверка (каждые 2 секунды)
+        // ВОССТАНОВЛЕНИЕ ПРИ СКРОЛЛЕ
+        document.addEventListener('scroll', sm_onScroll, { passive: true });
+
+        // Периодическая проверка (каждые 1.5 секунды)
         if (restoreInterval) clearInterval(restoreInterval);
         restoreInterval = setInterval(function() {
             sm_restoreBlock();
-        }, 2000);
+        }, 1500);
+
+        // При изменении размера окна
+        window.addEventListener('resize', function() {
+            sm_restoreBlock();
+        });
     }
 
     // =============================================
