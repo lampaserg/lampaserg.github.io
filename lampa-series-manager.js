@@ -1,8 +1,8 @@
-/* Series Manager PRO 5.5.0 — Фикс для темы SERG */
+/* Series Manager PRO 5.6.0 — Как часть информации сериала */
 (function () {
     'use strict';
 
-    var VERSION = '5.5.0';
+    var VERSION = '5.6.0';
     var MEMORY_KEY = 'lmui_detail_episode_v1';
 
     // =============================================
@@ -41,7 +41,7 @@
     }
 
     // =============================================
-    // УТИЛИТЫ (сокращены)
+    // УТИЛИТЫ (сокращены для экономии места)
     // =============================================
 
     function sm_mediaType(card) {
@@ -354,7 +354,7 @@
     }
 
     // =============================================
-    // БЛОК — position: fixed как в 4.5.3
+    // БЛОК — КАК ЧАСТЬ .full-start-new__right
     // =============================================
 
     function sm_createBlock(state, card) {
@@ -398,35 +398,28 @@
         block.id = 'series-info-block';
         block.setAttribute('data-card-id', sm_contentId(card));
 
-        var viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
-        var blockWidth = Math.min(Math.max(viewportWidth * 0.28, 250), 380);
-        var bottomOffset = 100;
-
-        // position: fixed как в 4.5.3
+        // Стиль как у элементов темы SERG
         block.style.cssText = [
-            'position:fixed',
-            'bottom:' + bottomOffset + 'px',
-            'right:2em',
-            'width:' + blockWidth + 'px',
-            'max-width:380px',
-            'min-width:250px',
-            'padding:1.2em 1.6em',
-            'border-radius:1em',
-            'background:rgba(0,0,0,0.85)',
-            'border:2px solid rgba(105,167,255,0.3)',
-            'backdrop-filter:blur(20px)',
-            '-webkit-backdrop-filter:blur(20px)',
+            'display:flex',
+            'flex-direction:column',
+            'width:100%',
+            'max-width:100%',
+            'padding:0.8em 1.2em',
+            'border-radius:0.8em',
+            'background:rgba(0,0,0,0.25)',
+            'border:1px solid rgba(255,255,255,0.06)',
+            'backdrop-filter:blur(8px)',
+            '-webkit-backdrop-filter:blur(8px)',
             'transition:all .3s ease',
             'cursor:pointer',
-            'color:#ffffff',
+            'color:#f6f8fc',
             'font-family:"SegoeUI",system-ui,sans-serif',
-            'font-size:15px',
-            'box-shadow:0 8px 40px rgba(0,0,0,0.8)',
-            'margin:0',
+            'font-size:13px',
+            'margin:0.5em 0',
             'flex-shrink:0',
+            'position:relative',
             'overflow:hidden',
             'box-sizing:border-box',
-            'z-index:9999',
             'pointer-events:auto'
         ].join(';');
 
@@ -437,33 +430,33 @@
             'top:0',
             'left:0',
             'right:0',
-            'height:4px',
+            'height:3px',
             'background:linear-gradient(90deg, #69a7ff, #91beff)',
-            'opacity:0.7'
+            'opacity:0.4'
         ].join(';');
         block.appendChild(gradient);
 
         // Шапка
         var header = document.createElement('div');
-        header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:0.3em;';
+        header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:0.2em;';
 
         var leftHeader = document.createElement('div');
-        leftHeader.style.cssText = 'display:flex;align-items:center;gap:0.6em;';
+        leftHeader.style.cssText = 'display:flex;align-items:center;gap:0.5em;';
 
         var icon = document.createElement('span');
-        icon.style.cssText = 'font-size:1.2em;color:#69a7ff;text-shadow:0 0 20px rgba(105,167,255,0.3);';
+        icon.style.cssText = 'font-size:0.9em;color:#69a7ff;';
         icon.textContent = '▶';
         leftHeader.appendChild(icon);
 
         var eyebrow = document.createElement('span');
-        eyebrow.style.cssText = 'font-size:0.65em;text-transform:uppercase;letter-spacing:0.12em;color:#69a7ff;font-weight:700;text-shadow:0 0 20px rgba(105,167,255,0.2);';
+        eyebrow.style.cssText = 'font-size:0.55em;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.4);font-weight:600;';
         eyebrow.textContent = 'ПРОДОЛЖИТЬ ПРОСМОТР';
         leftHeader.appendChild(eyebrow);
 
         header.appendChild(leftHeader);
 
         var statusEl = document.createElement('span');
-        statusEl.style.cssText = 'font-size:0.65em;font-weight:700;color:' + statusColor + ';padding:0.2em 0.8em;border-radius:99em;background:rgba(0,0,0,0.4);border:1px solid ' + statusColor + '40;white-space:nowrap;text-shadow:0 0 20px ' + statusColor + '20;';
+        statusEl.style.cssText = 'font-size:0.55em;font-weight:700;color:' + statusColor + ';padding:0.12em 0.5em;border-radius:99em;background:rgba(0,0,0,0.25);border:1px solid ' + statusColor + '25;white-space:nowrap;';
         statusEl.textContent = statusIcon + ' ' + statusText;
         header.appendChild(statusEl);
 
@@ -471,42 +464,37 @@
 
         // Название сериала
         var seriesName = document.createElement('div');
-        seriesName.style.cssText = 'font-size:1.8em;font-weight:800;color:#ffffff;margin-bottom:0.05em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.2;text-shadow:0 2px 10px rgba(0,0,0,0.5);';
+        seriesName.style.cssText = 'font-size:1.1em;font-weight:700;color:#ffffff;margin-bottom:0.05em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.2;';
         seriesName.textContent = seriesTitle || 'Сериал';
         block.appendChild(seriesName);
 
         // Название серии
         var titleEl = document.createElement('div');
-        titleEl.style.cssText = 'font-size:1.15em;font-weight:600;color:rgba(255,255,255,0.85);margin-bottom:0.2em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:0 1px 6px rgba(0,0,0,0.4);';
+        titleEl.style.cssText = 'font-size:0.85em;font-weight:600;color:rgba(255,255,255,0.75);margin-bottom:0.1em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
         titleEl.textContent = title;
         block.appendChild(titleEl);
 
-        // Разделитель
-        var divider = document.createElement('div');
-        divider.style.cssText = 'width:100%;height:1px;background:rgba(255,255,255,0.08);margin:0.15em 0 0.3em;';
-        block.appendChild(divider);
-
         // Мета
         var meta = document.createElement('div');
-        meta.style.cssText = 'display:flex;align-items:center;gap:0.6em;flex-wrap:wrap;font-size:0.85em;';
+        meta.style.cssText = 'display:flex;align-items:center;gap:0.4em;flex-wrap:wrap;font-size:0.7em;';
 
         if (coords) {
             var seasonText = document.createElement('span');
-            seasonText.style.cssText = 'background:rgba(255,255,255,0.08);padding:0.25em 0.8em;border-radius:0.4em;color:rgba(255,255,255,0.7);font-weight:500;';
+            seasonText.style.cssText = 'background:rgba(255,255,255,0.06);padding:0.15em 0.5em;border-radius:0.3em;color:rgba(255,255,255,0.5);';
             seasonText.textContent = 'Сезон ' + coords.season + ' · Эпизод ' + coords.episode;
             meta.appendChild(seasonText);
         }
 
         if (progress > 0) {
             var progressText = document.createElement('span');
-            progressText.style.cssText = 'background:rgba(105,167,255,0.15);padding:0.25em 0.8em;border-radius:0.4em;color:#69a7ff;font-weight:700;border:1px solid rgba(105,167,255,0.2);';
+            progressText.style.cssText = 'background:rgba(105,167,255,0.12);padding:0.15em 0.5em;border-radius:0.3em;color:#69a7ff;font-weight:600;';
             progressText.textContent = progress + '%';
             meta.appendChild(progressText);
         }
 
         if (remaining) {
             var remainingEl = document.createElement('span');
-            remainingEl.style.cssText = 'background:rgba(255,255,255,0.06);padding:0.25em 0.8em;border-radius:0.4em;color:rgba(255,255,255,0.5);';
+            remainingEl.style.cssText = 'background:rgba(255,255,255,0.06);padding:0.15em 0.5em;border-radius:0.3em;color:rgba(255,255,255,0.4);';
             remainingEl.textContent = '⏱ ' + remaining;
             meta.appendChild(remainingEl);
         }
@@ -515,27 +503,25 @@
 
         // Прогресс-бар
         var progressWrap = document.createElement('div');
-        progressWrap.style.cssText = 'width:100%;height:6px;border-radius:99em;background:rgba(255,255,255,0.08);margin:0.4em 0 0.15em;overflow:hidden;box-shadow:inset 0 1px 3px rgba(0,0,0,0.3);';
+        progressWrap.style.cssText = 'width:100%;height:3px;border-radius:99em;background:rgba(255,255,255,0.06);margin:0.25em 0 0.05em;overflow:hidden;';
         var progressBar = document.createElement('div');
         progressBar.className = 'sw-progress-bar';
-        progressBar.style.cssText = 'height:100%;border-radius:inherit;background:linear-gradient(90deg,#69a7ff,#91beff);transition:width .6s ease;box-shadow:0 0 20px rgba(105,167,255,0.3);';
+        progressBar.style.cssText = 'height:100%;border-radius:inherit;background:linear-gradient(90deg,#69a7ff,#91beff);transition:width .5s ease;';
         progressBar.style.width = Math.max(0, Math.min(100, progress)) + '%';
         progressWrap.appendChild(progressBar);
         block.appendChild(progressWrap);
 
         // Время просмотра
         var timeRow = document.createElement('div');
-        timeRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;font-size:0.75em;color:rgba(255,255,255,0.4);margin-top:0.15em;';
+        timeRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;font-size:0.6em;color:rgba(255,255,255,0.3);margin-top:0.05em;';
 
         var watchedEl = document.createElement('span');
-        watchedEl.style.cssText = 'color:rgba(255,255,255,0.5);';
-        watchedEl.textContent = '👁 Просмотрено: ' + watchedTime;
+        watchedEl.textContent = '👁 ' + watchedTime;
         timeRow.appendChild(watchedEl);
 
         if (remaining) {
             var remainingShort = document.createElement('span');
-            remainingShort.style.cssText = 'color:rgba(255,255,255,0.4);';
-            remainingShort.textContent = '⏱ Осталось: ' + remaining;
+            remainingShort.textContent = '⏱ ' + remaining;
             timeRow.appendChild(remainingShort);
         }
 
@@ -546,7 +532,7 @@
             var nextCoords = sm_episodeCoordinates(state.next.episode);
             if (nextCoords) {
                 var nextRow = document.createElement('div');
-                nextRow.style.cssText = 'font-size:0.8em;color:#ffffff;margin-top:0.2em;padding-top:0.15em;border-top:1px solid rgba(255,255,255,0.06);font-weight:500;';
+                nextRow.style.cssText = 'font-size:0.65em;color:rgba(255,255,255,0.35);margin-top:0.1em;padding-top:0.1em;border-top:1px solid rgba(255,255,255,0.04);';
                 nextRow.textContent = '▶ Далее: S' + sm_padEpisodeNumber(nextCoords.season) + ' E' + sm_padEpisodeNumber(nextCoords.episode);
                 block.appendChild(nextRow);
             }
@@ -554,22 +540,18 @@
 
         // Подсказка
         var hint = document.createElement('div');
-        hint.style.cssText = 'font-size:0.6em;color:rgba(255,255,255,0.15);text-align:right;margin-top:0.1em;letter-spacing:0.05em;';
-        hint.textContent = '↗ Нажмите, чтобы открыть в Lampac';
+        hint.style.cssText = 'font-size:0.45em;color:rgba(255,255,255,0.1);text-align:right;margin-top:0.05em;';
+        hint.textContent = '↗ Открыть в Lampac';
         block.appendChild(hint);
 
         // Ховер
         block.addEventListener('mouseenter', function () {
-            this.style.borderColor = 'rgba(105,167,255,0.5)';
-            this.style.background = 'rgba(0,0,0,0.9)';
-            this.style.transform = 'scale(1.02)';
-            this.style.boxShadow = '0 12px 50px rgba(0,0,0,0.9)';
+            this.style.borderColor = 'rgba(105,167,255,0.15)';
+            this.style.background = 'rgba(0,0,0,0.35)';
         });
         block.addEventListener('mouseleave', function () {
-            this.style.borderColor = 'rgba(105,167,255,0.3)';
-            this.style.background = 'rgba(0,0,0,0.85)';
-            this.style.transform = 'scale(1)';
-            this.style.boxShadow = '0 8px 40px rgba(0,0,0,0.8)';
+            this.style.borderColor = 'rgba(255,255,255,0.06)';
+            this.style.background = 'rgba(0,0,0,0.25)';
         });
 
         // Клик
@@ -589,7 +571,7 @@
     }
 
     // =============================================
-    // УПРАВЛЕНИЕ БЛОКОМ
+    // УПРАВЛЕНИЕ БЛОКОМ — КАК ВСЯ ИНФОРМАЦИЯ
     // =============================================
 
     var currentBlock = null;
@@ -598,8 +580,6 @@
     var currentCard = null;
     var currentData = null;
     var isOnSeriesPage = false;
-    var isBalancerOpen = false;
-    var restoreInterval = null;
 
     function sm_removeBlock() {
         var block = document.getElementById('series-info-block');
@@ -614,11 +594,6 @@
             var settings = getSettings();
             if (!settings.enabled) {
                 sm_removeBlock();
-                return;
-            }
-
-            // Если открыт балансер — не показываем блок
-            if (isBalancerOpen) {
                 return;
             }
 
@@ -646,46 +621,43 @@
 
             isOnSeriesPage = true;
 
+            var render = sm_getActiveRender();
+            if (!render || !render.length) {
+                return;
+            }
+
+            // Ищем контейнер .full-start-new__right
+            var container = render.find('.full-start-new__right');
+            if (!container.length) {
+                return;
+            }
+
+            // Проверяем, не появился ли уже блок
+            var existingBlock = container.find('#series-info-block');
+            if (existingBlock.length) {
+                // Обновляем существующий блок
+                var bar = existingBlock.find('.sw-progress-bar');
+                if (bar.length && currentData) {
+                    var state = sm_resolveSeriesPlayback(currentCard, currentData || {});
+                    if (state && state.current) {
+                        var progress = Math.round(state.current.timeline.percent || 0);
+                        bar.css('width', Math.max(0, Math.min(100, progress)) + '%');
+                    }
+                }
+                return;
+            }
+
             var state = sm_resolveSeriesPlayback(currentCard, currentData || {});
             if (!state || !state.current) {
                 sm_removeBlock();
                 return;
             }
 
-            var cardId = sm_contentId(currentCard);
-            var signature = [
-                cardId,
-                state.current ? sm_episodeCoordinates(state.current.episode).season : '',
-                state.current ? sm_episodeCoordinates(state.current.episode).episode : '',
-                Math.round(state.current.timeline.percent || 0),
-                state.status
-            ].join('|');
-
-            var existingBlock = document.getElementById('series-info-block');
-            
-            if (existingBlock && lastState === signature) {
-                var bar = existingBlock.querySelector('.sw-progress-bar');
-                if (bar && state.current) {
-                    var progress = Math.round(state.current.timeline.percent || 0);
-                    bar.style.width = Math.max(0, Math.min(100, progress)) + '%';
-                }
-                return;
-            }
-
-            if (existingBlock && existingBlock.getAttribute('data-card-id') !== cardId) {
-                sm_removeBlock();
-            }
-
-            lastState = signature;
-            
-            if (document.getElementById('series-info-block')) {
-                sm_removeBlock();
-            }
-
             var block = sm_createBlock(state, currentCard);
             if (!block) return;
 
-            document.body.appendChild(block);
+            // ВСТРАИВАЕМ В КОНЕЦ .full-start-new__right (как бейджи и информация)
+            container.append(block);
             currentBlock = block;
 
         } catch (e) {
@@ -694,16 +666,10 @@
     }
 
     // =============================================
-    // ВОССТАНОВЛЕНИЕ БЛОКА (как бейджи)
+    // ВОССТАНОВЛЕНИЕ БЛОКА
     // =============================================
 
     function sm_restoreBlock() {
-        // Если открыт балансер — не восстанавливаем
-        if (isBalancerOpen) {
-            sm_removeBlock();
-            return;
-        }
-
         var settings = getSettings();
         if (!settings.enabled) {
             sm_removeBlock();
@@ -727,6 +693,7 @@
     // =============================================
 
     var listenersInstalled = false;
+    var restoreInterval = null;
 
     function sm_onFull(event) {
         if (!event) return;
@@ -744,7 +711,6 @@
             }
 
             if (card && sm_mediaType(card) === 'tv') {
-                isBalancerOpen = false;
                 clearTimeout(updateTimer);
                 updateTimer = setTimeout(function () {
                     sm_insertBlock(card, data);
@@ -754,7 +720,7 @@
     }
 
     function sm_onTimeline() {
-        if (isOnSeriesPage && currentCard && !isBalancerOpen) {
+        if (isOnSeriesPage && currentCard) {
             clearTimeout(updateTimer);
             updateTimer = setTimeout(function () {
                 var active = sm_activeActivity();
@@ -771,39 +737,15 @@
 
         clearTimeout(updateTimer);
 
-        // Если перешли на страницу сериала
         if (event.component === 'full') {
             isOnSeriesPage = true;
-            isBalancerOpen = false;
             updateTimer = setTimeout(function () {
                 sm_insertBlock();
             }, 500);
-        } 
-        // Если перешли на балансер (любой, не только lampac)
-        else if (event.component === 'lampac' || event.component === 'online' || event.component === 'torrent' || event.component === 'balancer') {
-            isBalancerOpen = true;
-            sm_removeBlock();
-        }
-        // Если перешли на другую страницу
-        else {
+        } else {
+            // При переходе на другую страницу — удаляем блок
             isOnSeriesPage = false;
-            isBalancerOpen = false;
             sm_removeBlock();
-        }
-    }
-
-    function sm_onActivityBack(event) {
-        // Обработка возврата из любого балансера
-        if (event && event.type === 'back') {
-            var active = sm_activeActivity();
-            if (active && active.component === 'full') {
-                isBalancerOpen = false;
-                isOnSeriesPage = true;
-                clearTimeout(updateTimer);
-                updateTimer = setTimeout(function () {
-                    sm_insertBlock();
-                }, 400);
-            }
         }
     }
 
@@ -817,31 +759,11 @@
         Lampa.Listener.follow('timeline', sm_onTimeline);
         Lampa.Listener.follow('activity', sm_onActivity);
 
-        // Слушаем возврат
-        try {
-            Lampa.Listener.follow('activity', sm_onActivityBack);
-        } catch (e) {}
-
-        // Периодическая проверка (каждые 2 секунды)
+        // Проверка каждые 2 секунды для надёжности
         if (restoreInterval) clearInterval(restoreInterval);
         restoreInterval = setInterval(function() {
             sm_restoreBlock();
         }, 2000);
-
-        // Проверка при скролле
-        document.addEventListener('scroll', function() {
-            if (isOnSeriesPage && !isBalancerOpen) {
-                var block = document.getElementById('series-info-block');
-                if (!block) {
-                    sm_restoreBlock();
-                }
-            }
-        }, { passive: true });
-
-        // Проверка при изменении размера
-        window.addEventListener('resize', function() {
-            sm_restoreBlock();
-        });
     }
 
     // =============================================
@@ -943,7 +865,6 @@
                 version: VERSION,
                 hasBlock: !!document.getElementById('series-info-block'),
                 isOnSeriesPage: isOnSeriesPage,
-                isBalancerOpen: isBalancerOpen,
                 settings: getSettings()
             };
         }
