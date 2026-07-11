@@ -1,8 +1,8 @@
-/* Series Manager PRO 4.3.0 — Исправленная версия */
+/* Series Manager PRO 4.4.0 — Привязан к .full-start-new__body */
 (function () {
     'use strict';
 
-    var VERSION = '4.3.0';
+    var VERSION = '4.4.0';
     var MEMORY_KEY = 'lmui_detail_episode_v1';
 
     // =============================================
@@ -141,18 +141,6 @@
             return null;
         } catch (e) {
             return null;
-        }
-    }
-
-    function sm_isSergTheme() {
-        try {
-            var render = sm_getActiveRender();
-            if (render && render.length) {
-                return render.hasClass('applecation');
-            }
-            return document.querySelector('.applecation') !== null;
-        } catch (e) {
-            return false;
         }
     }
 
@@ -367,7 +355,39 @@
     }
 
     // =============================================
-    // СОЗДАНИЕ БЛОКА — НАЧИНАЕТСЯ ОТ 65% ЭКРАНА
+    // ПОИСК КОНТЕЙНЕРА .full-start-new__body
+    // =============================================
+
+    function sm_findContainer(render) {
+        // Ищем .full-start-new__body
+        var container = render.find('.full-start-new__body');
+        if (container.length) {
+            return container;
+        }
+
+        // Если нет, ищем .full-start-new
+        container = render.find('.full-start-new');
+        if (container.length) {
+            return container;
+        }
+
+        // Если нет, ищем .applecation
+        container = render.find('.applecation');
+        if (container.length) {
+            return container;
+        }
+
+        // Если нет, ищем .activity--active
+        container = render.find('.activity--active');
+        if (container.length) {
+            return container;
+        }
+
+        return null;
+    }
+
+    // =============================================
+    // СОЗДАНИЕ БЛОКА — ПРИВЯЗАН К .full-start-new__body
     // =============================================
 
     function sm_createBlock(state, card) {
@@ -406,47 +426,34 @@
             statusColor = '#69a7ff';
         }
 
-        // Ширина блока: начинается от 65% экрана и до 95%
-        var viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
-        var leftMargin = viewportWidth * 0.65; // 65% от левого края
-        var blockWidth = viewportWidth * 0.30; // 30% ширины (от 65% до 95%)
-        blockWidth = Math.max(blockWidth, 250); // минимум 250px
-        blockWidth = Math.min(blockWidth, 500); // максимум 500px
-
-        // Вычисляем позицию: от левого края 65%
-        var leftPosition = viewportWidth * 0.65;
-
         var block = document.createElement('div');
         block.className = 'series-info-block';
         block.id = 'series-info-block';
         block.setAttribute('data-card-id', sm_contentId(card));
 
         block.style.cssText = [
-            'position:fixed',
-            'top:50%',
-            'transform:translateY(-50%)',
-            'left:' + leftPosition + 'px',
-            'width:' + blockWidth + 'px',
-            'max-width:95vw',
+            'display:flex',
+            'flex-direction:column',
+            'width:100%',
+            'max-width:400px',
+            'min-width:280px',
             'padding:1.2em 1.6em',
             'border-radius:1em',
-            'background:rgba(0,0,0,0.85)',
-            'border:2px solid rgba(105,167,255,0.3)',
-            'backdrop-filter:blur(20px)',
-            '-webkit-backdrop-filter:blur(20px)',
+            'background:rgba(0,0,0,0.7)',
+            'border:2px solid rgba(105,167,255,0.25)',
+            'backdrop-filter:blur(16px)',
+            '-webkit-backdrop-filter:blur(16px)',
             'transition:all .3s ease',
             'cursor:pointer',
             'color:#ffffff',
             'font-family:"SegoeUI",system-ui,sans-serif',
             'font-size:15px',
-            'box-shadow:0 8px 40px rgba(0,0,0,0.8)',
+            'box-shadow:0 8px 40px rgba(0,0,0,0.6)',
             'margin:0',
             'flex-shrink:0',
-            'position:fixed',
+            'position:relative',
             'overflow:hidden',
-            'box-sizing:border-box',
-            'z-index:9999',
-            'pointer-events:auto'
+            'box-sizing:border-box'
         ].join(';');
 
         // Декоративный верхний градиент
@@ -580,15 +587,15 @@
         // Ховер
         block.addEventListener('mouseenter', function () {
             this.style.borderColor = 'rgba(105,167,255,0.5)';
-            this.style.background = 'rgba(0,0,0,0.9)';
-            this.style.transform = 'translateY(-50%) scale(1.02)';
-            this.style.boxShadow = '0 12px 50px rgba(0,0,0,0.9)';
+            this.style.background = 'rgba(0,0,0,0.8)';
+            this.style.transform = 'scale(1.02)';
+            this.style.boxShadow = '0 12px 50px rgba(0,0,0,0.7)';
         });
         block.addEventListener('mouseleave', function () {
-            this.style.borderColor = 'rgba(105,167,255,0.3)';
-            this.style.background = 'rgba(0,0,0,0.85)';
-            this.style.transform = 'translateY(-50%) scale(1)';
-            this.style.boxShadow = '0 8px 40px rgba(0,0,0,0.8)';
+            this.style.borderColor = 'rgba(105,167,255,0.25)';
+            this.style.background = 'rgba(0,0,0,0.7)';
+            this.style.transform = 'scale(1)';
+            this.style.boxShadow = '0 8px 40px rgba(0,0,0,0.6)';
         });
 
         // Клик
@@ -608,7 +615,7 @@
     }
 
     // =============================================
-    // УПРАВЛЕНИЕ БЛОКОМ — СТАБИЛЬНОЕ
+    // УПРАВЛЕНИЕ БЛОКОМ — ПРИВЯЗКА К .full-start-new__body
     // =============================================
 
     var currentBlock = null;
@@ -617,7 +624,7 @@
     var currentCard = null;
     var currentData = null;
     var isOnSeriesPage = false;
-    var blockCheckInterval = null;
+    var blockContainer = null;
 
     function sm_removeBlock() {
         var block = document.getElementById('series-info-block');
@@ -625,6 +632,7 @@
             block.parentNode.removeChild(block);
         }
         currentBlock = null;
+        blockContainer = null;
     }
 
     function sm_insertBlock(card, data) {
@@ -655,6 +663,17 @@
             var settings = getSettings();
             if (!settings.enabled || !settings.show_block) {
                 sm_removeBlock();
+                return;
+            }
+
+            var render = sm_getActiveRender();
+            if (!render || !render.length) {
+                return;
+            }
+
+            // Находим контейнер .full-start-new__body
+            var container = sm_findContainer(render);
+            if (!container) {
                 return;
             }
 
@@ -699,10 +718,28 @@
             var block = sm_createBlock(state, currentCard);
             if (!block) return;
 
-            document.body.appendChild(block);
-            currentBlock = block;
+            // Создаём контейнер для блока в правом нижнем углу
+            var blockWrapper = document.createElement('div');
+            blockWrapper.className = 'series-block-wrapper';
+            blockWrapper.style.cssText = [
+                'display:flex',
+                'justify-content:flex-end',
+                'align-items:flex-end',
+                'width:100%',
+                'height:100%',
+                'padding:0.5em 0',
+                'flex:1',
+                'position:relative'
+            ].join(';');
 
-            console.log('[Series Manager PRO] Блок вставлен');
+            blockWrapper.appendChild(block);
+            
+            // Добавляем в контейнер
+            container.append(blockWrapper);
+            currentBlock = block;
+            blockContainer = blockWrapper;
+
+            console.log('[Series Manager PRO] Блок вставлен в .full-start-new__body');
 
         } catch (e) {
             console.error('[Series Manager PRO] Ошибка:', e);
@@ -710,10 +747,10 @@
     }
 
     // =============================================
-    // ПРИНУДИТЕЛЬНОЕ ВОССТАНОВЛЕНИЕ БЛОКА
+    // ВОССТАНОВЛЕНИЕ БЛОКА
     // =============================================
 
-    function sm_forceRestore() {
+    function sm_restoreBlock() {
         var active = sm_activeActivity();
         if (active && active.component === 'full') {
             var card = active.card || (active.object && active.object.card) || null;
@@ -751,7 +788,7 @@
                 clearTimeout(updateTimer);
                 updateTimer = setTimeout(function () {
                     sm_insertBlock(card, data);
-                }, 400);
+                }, 500);
             }
         }
     }
@@ -778,7 +815,7 @@
             isOnSeriesPage = true;
             updateTimer = setTimeout(function () {
                 sm_insertBlock();
-            }, 400);
+            }, 500);
         } else {
             isOnSeriesPage = false;
             sm_removeBlock();
@@ -794,11 +831,10 @@
         Lampa.Listener.follow('timeline', sm_onTimeline);
         Lampa.Listener.follow('activity', sm_onActivity);
 
-        // Периодическая проверка (каждые 3 секунды)
-        if (blockCheckInterval) clearInterval(blockCheckInterval);
-        blockCheckInterval = setInterval(function() {
-            sm_forceRestore();
-        }, 3000);
+        // Восстановление при возврате
+        setTimeout(function() {
+            sm_restoreBlock();
+        }, 1000);
     }
 
     // =============================================
@@ -909,20 +945,10 @@
                 }
             }, 1000);
 
-            // Дополнительная проверка через 2 секунды
+            // Дополнительное восстановление через 2 секунды
             setTimeout(function() {
-                sm_forceRestore();
+                sm_restoreBlock();
             }, 2000);
-
-            // При изменении размера окна обновляем позицию блока
-            window.addEventListener('resize', function() {
-                var block = document.getElementById('series-info-block');
-                if (block) {
-                    var viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
-                    var leftPosition = viewportWidth * 0.65;
-                    block.style.left = leftPosition + 'px';
-                }
-            });
 
         } catch (e) {
             console.error('[Series Manager PRO] Ошибка:', e);
@@ -938,7 +964,7 @@
         update: sm_insertBlock,
         remove: sm_removeBlock,
         openLampac: sm_openLampacBalancer,
-        forceRestore: sm_forceRestore,
+        restore: sm_restoreBlock,
         getState: function () {
             return {
                 version: VERSION,
