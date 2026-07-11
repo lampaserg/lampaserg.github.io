@@ -3875,111 +3875,114 @@
         sm_currentBlock = null;
     }
 
-    function sm_insertBlock(card, data) {
-        try {
-            if (card) {
-                sm_currentCard = card;
-                sm_currentData = data;
-            }
-
-            if (!sm_currentCard) {
-                var active = sm_activeActivity();
-                if (!active || active.component !== 'full') {
-                    sm_isOnSeriesPage = false;
-                    sm_removeBlock();
-                    return;
-                }
-                sm_currentCard = active.card || (active.object && active.object.card) || null;
-                sm_currentData = active.data || null;
-                sm_isOnSeriesPage = true;
-            }
-
-            if (!sm_currentCard || sm_mediaType(sm_currentCard) !== 'tv') {
-                sm_removeBlock();
-                return;
-            }
-
-            var settings = getSettings();
-            if (!settings.series_manager_enabled || !settings.series_manager_show_block) {
-                sm_removeBlock();
-                return;
-            }
-
-            var render = sm_getActiveRender();
-            if (!render || !render.length) {
-                return;
-            }
-
-            // Ищем правую часть (уже создана в modifyCardDOM)
-            var rightContainer = render.find('.applecation__right');
-            if (!rightContainer.length) {
-                // Если нет — создаём
-                var right = render.find('.full-start-new__right');
-                if (!right.length) return;
-                rightContainer = $('<div class="applecation__right"></div>');
-                rightContainer.css({
-                    'display': 'flex',
-                    'flex-direction': 'column',
-                    'align-items': 'flex-end',
-                    'justify-content': 'flex-end',
-                    'flex': '1 1 30%',
-                    'min-width': '250px',
-                    'max-width': '35%',
-                    'margin-top': 'auto',
-                    'padding': '0.5em 0 0 1em',
-                    'flex-shrink': '0',
-                    'min-height': '60px'
-                });
-                right.append(rightContainer);
-            }
-
-            var state = sm_resolveSeriesPlayback(sm_currentCard, sm_currentData || {});
-            if (!state || !state.current) {
-                sm_removeBlock();
-                return;
-            }
-
-            var cardId = sm_contentId(sm_currentCard);
-            var signature = [
-                cardId,
-                state.current ? sm_episodeCoordinates(state.current.episode).season : '',
-                state.current ? sm_episodeCoordinates(state.current.episode).episode : '',
-                Math.round(state.current.timeline.percent || 0),
-                state.status
-            ].join('|');
-
-            var existingBlock = document.getElementById('series-info-block');
-            
-            if (existingBlock && sm_lastState === signature) {
-                var bar = existingBlock.querySelector('.sw-progress-bar');
-                if (bar && state.current) {
-                    var progress = Math.round(state.current.timeline.percent || 0);
-                    bar.style.width = Math.max(0, Math.min(100, progress)) + '%';
-                }
-                return;
-            }
-
-            if (existingBlock && existingBlock.getAttribute('data-card-id') !== cardId) {
-                sm_removeBlock();
-            }
-
-            sm_lastState = signature;
-            
-            if (document.getElementById('series-info-block')) {
-                sm_removeBlock();
-            }
-
-            var block = sm_createBlock(state, sm_currentCard);
-            if (!block) return;
-
-            rightContainer.empty();
-            rightContainer.append(block);
-            sm_currentBlock = block;
-
-        } catch (e) {
-            console.error('[Series Manager PRO] Ошибка:', e);
+function sm_insertBlock(card, data) {
+    try {
+        if (card) {
+            sm_currentCard = card;
+            sm_currentData = data;
         }
+
+        if (!sm_currentCard) {
+            var active = sm_activeActivity();
+            if (!active || active.component !== 'full') {
+                sm_isOnSeriesPage = false;
+                sm_removeBlock();
+                return;
+            }
+            sm_currentCard = active.card || (active.object && active.object.card) || null;
+            sm_currentData = active.data || null;
+            sm_isOnSeriesPage = true;
+        }
+
+        if (!sm_currentCard || sm_mediaType(sm_currentCard) !== 'tv') {
+            sm_removeBlock();
+            return;
+        }
+
+        var settings = getSettings();
+        if (!settings.series_manager_enabled || !settings.series_manager_show_block) {
+            sm_removeBlock();
+            return;
+        }
+
+        var render = sm_getActiveRender();
+        if (!render || !render.length) {
+            return;
+        }
+
+        // Ищем правую часть
+        var rightContainer = render.find('.applecation__right');
+        if (!rightContainer.length) {
+            // Создаём правую часть, если её нет
+            var right = render.find('.full-start-new__right');
+            if (!right.length) return;
+            
+            rightContainer = $('<div class="applecation__right"></div>');
+            rightContainer.css({
+                'display': 'flex',
+                'flex-direction': 'column',
+                'align-items': 'flex-end',
+                'justify-content': 'flex-end',
+                'flex': '1 1 30%',
+                'min-width': '250px',
+                'max-width': '35%',
+                'margin-top': 'auto',
+                'padding': '0.5em 0 0 1em',
+                'flex-shrink': '0',
+                'min-height': '60px'
+            });
+            right.append(rightContainer);
+        }
+
+        var state = sm_resolveSeriesPlayback(sm_currentCard, sm_currentData || {});
+        if (!state || !state.current) {
+            sm_removeBlock();
+            return;
+        }
+
+        var cardId = sm_contentId(sm_currentCard);
+        var signature = [
+            cardId,
+            state.current ? sm_episodeCoordinates(state.current.episode).season : '',
+            state.current ? sm_episodeCoordinates(state.current.episode).episode : '',
+            Math.round(state.current.timeline.percent || 0),
+            state.status
+        ].join('|');
+
+        var existingBlock = document.getElementById('series-info-block');
+        
+        if (existingBlock && sm_lastState === signature) {
+            var bar = existingBlock.querySelector('.sw-progress-bar');
+            if (bar && state.current) {
+                var progress = Math.round(state.current.timeline.percent || 0);
+                bar.style.width = Math.max(0, Math.min(100, progress)) + '%';
+            }
+            return;
+        }
+
+        if (existingBlock && existingBlock.getAttribute('data-card-id') !== cardId) {
+            sm_removeBlock();
+        }
+
+        sm_lastState = signature;
+        
+        if (document.getElementById('series-info-block')) {
+            sm_removeBlock();
+        }
+
+        var block = sm_createBlock(state, sm_currentCard);
+        if (!block) return;
+
+        rightContainer.empty();
+        rightContainer.append(block);
+        sm_currentBlock = block;
+
+        console.log('[Series Manager PRO] Блок вставлен:', cardId);
+
+    } catch (e) {
+        console.error('[Series Manager PRO] Ошибка:', e);
     }
+}
 
     // ----- Обработчики событий -----
 
@@ -4546,114 +4549,128 @@
     // MAIN PLUGIN INIT
     // =================================================================
 
-    function initPlugin() {
-        if (window._applecation_plus_initialized) return;
-        window._applecation_plus_initialized = true;
+function initPlugin() {
+    if (window._applecation_plus_initialized) return;
+    window._applecation_plus_initialized = true;
 
-        var enabled = Lampa.Storage.get('applecation_enabled', true);
-        if (!enabled) {
-            console.log('[Тема от SERG] Плагин отключен');
-            return;
-        }
-
-        console.log('[Тема от SERG] Инициализация v' + PLUGIN_VERSION);
-
-        injectStyles();
-        injectAdditionalStyles();
-
-        overrideImageApi();
-
-        // Запускаем Series Manager PRO
-        sm_installListeners();
-
-        Lampa.Listener.follow('full', function(e) {
-            if (e.type !== 'complite') return;
-
-            try {
-                var activity = e.object && e.object.activity;
-                if (!activity || !activity.render) return;
-
-                var render = activity.render();
-                if (!render || !render.length) return;
-
-                if (render.data('applecation_plus_processed')) return;
-                render.data('applecation_plus_processed', true);
-                render.data('movie', e.data.movie);
-
-                var movie = e.data && e.data.movie;
-                if (!movie) return;
-
-                captureEpisodesFromFull(e);
-
-                console.log('[Тема от SERG] Обработка карточки для:', movie.title || movie.name);
-
-                render.addClass('applecation');
-                modifyCardDOM(render, movie);
-
-                var pending = 3;
-                var ratingsData = { tmdb: 0, imdb: 0, kinopoisk: 0 };
-                var lampaData = null;
-                var qualityData = null;
-                var isComplete = false;
-
-                function checkComplete() {
-                    if (isComplete) return;
-                    pending--;
-                    if (pending === 0) {
-                        isComplete = true;
-                        fillContent(render, movie, ratingsData, lampaData, qualityData);
-                        setTimeout(function() {
-                            try {
-                                focusFirstButton(render);
-                            } catch (err) {}
-                        }, 600);
-                    }
-                }
-
-                getRatings(movie, function(ratings) {
-                    ratingsData = ratings;
-                    checkComplete();
-                });
-
-                getLampaRating(movie, function(data) {
-                    lampaData = data;
-                    checkComplete();
-                });
-
-                getBestJacred(movie, function(data) {
-                    qualityData = data;
-                    checkComplete();
-                });
-
-                loadLogo(render, movie);
-                setupAnimations(render);
-
-                setTimeout(function() {
-                    try {
-                        if (Lampa.Controller && typeof Lampa.Controller.toggle === 'function') {
-                            Lampa.Controller.toggle('full_start');
-                        }
-                    } catch (err) {}
-                }, 300);
-
-                setupPosterScrollHandler(render);
-
-                setTimeout(function() {
-                    updateContentScale(render);
-                }, 100);
-
-            } catch (err) {
-                console.error('[Тема от SERG] Ошибка обработки карточки:', err);
-            }
-        });
-
-        // Запускаем Series Manager PRO при готовности
-        setTimeout(function() {
-            sm_insertBlock();
-        }, 500);
-
-        console.log('[Тема от SERG] Инициализация успешно завершена');
+    var enabled = Lampa.Storage.get('applecation_enabled', true);
+    if (!enabled) {
+        console.log('[Тема от SERG] Плагин отключен');
+        return;
     }
+
+    console.log('[Тема от SERG] Инициализация v' + PLUGIN_VERSION);
+
+    injectStyles();
+    injectAdditionalStyles();
+
+    overrideImageApi();
+
+    // ============================================================
+    // ЗАПУСК SERIES MANAGER PRO
+    // ============================================================
+    sm_installListeners();
+
+    // Принудительная вставка блока после загрузки
+    setTimeout(function() {
+        sm_insertBlock();
+    }, 800);
+
+    Lampa.Listener.follow('full', function(e) {
+        if (e.type !== 'complite') return;
+
+        try {
+            var activity = e.object && e.object.activity;
+            if (!activity || !activity.render) return;
+
+            var render = activity.render();
+            if (!render || !render.length) return;
+
+            if (render.data('applecation_plus_processed')) return;
+            render.data('applecation_plus_processed', true);
+            render.data('movie', e.data.movie);
+
+            var movie = e.data && e.data.movie;
+            if (!movie) return;
+
+            captureEpisodesFromFull(e);
+
+            console.log('[Тема от SERG] Обработка карточки для:', movie.title || movie.name);
+
+            render.addClass('applecation');
+            modifyCardDOM(render, movie);
+
+            var pending = 3;
+            var ratingsData = { tmdb: 0, imdb: 0, kinopoisk: 0 };
+            var lampaData = null;
+            var qualityData = null;
+            var isComplete = false;
+
+            function checkComplete() {
+                if (isComplete) return;
+                pending--;
+                if (pending === 0) {
+                    isComplete = true;
+                    fillContent(render, movie, ratingsData, lampaData, qualityData);
+                    setTimeout(function() {
+                        try {
+                            focusFirstButton(render);
+                        } catch (err) {}
+                    }, 600);
+                }
+            }
+
+            getRatings(movie, function(ratings) {
+                ratingsData = ratings;
+                checkComplete();
+            });
+
+            getLampaRating(movie, function(data) {
+                lampaData = data;
+                checkComplete();
+            });
+
+            getBestJacred(movie, function(data) {
+                qualityData = data;
+                checkComplete();
+            });
+
+            loadLogo(render, movie);
+            setupAnimations(render);
+
+            setTimeout(function() {
+                try {
+                    if (Lampa.Controller && typeof Lampa.Controller.toggle === 'function') {
+                        Lampa.Controller.toggle('full_start');
+                    }
+                } catch (err) {}
+            }, 300);
+
+            setupPosterScrollHandler(render);
+
+            setTimeout(function() {
+                updateContentScale(render);
+            }, 100);
+
+            // ============================================================
+            // ВСТАВКА БЛОКА SERIES MANAGER PRO ПОСЛЕ ЗАГРУЗКИ КАРТОЧКИ
+            // ============================================================
+            setTimeout(function() {
+                sm_insertBlock(movie, e.data);
+            }, 400);
+
+        } catch (err) {
+            console.error('[Тема от SERG] Ошибка обработки карточки:', err);
+        }
+    });
+
+    // Дополнительная проверка через 2 секунды
+    setTimeout(function() {
+        sm_insertBlock();
+    }, 2000);
+
+    console.log('[Тема от SERG] Инициализация успешно завершена');
+}
 
     // =================================================================
     // INIT
