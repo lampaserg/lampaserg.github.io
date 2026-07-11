@@ -1,8 +1,8 @@
-/* Series Manager PRO 4.4.0 — Привязан к .full-start-new__body */
+/* Series Manager PRO 4.5.0 — Блок всегда на месте */
 (function () {
     'use strict';
 
-    var VERSION = '4.4.0';
+    var VERSION = '4.5.0';
     var MEMORY_KEY = 'lmui_detail_episode_v1';
 
     // =============================================
@@ -355,39 +355,7 @@
     }
 
     // =============================================
-    // ПОИСК КОНТЕЙНЕРА .full-start-new__body
-    // =============================================
-
-    function sm_findContainer(render) {
-        // Ищем .full-start-new__body
-        var container = render.find('.full-start-new__body');
-        if (container.length) {
-            return container;
-        }
-
-        // Если нет, ищем .full-start-new
-        container = render.find('.full-start-new');
-        if (container.length) {
-            return container;
-        }
-
-        // Если нет, ищем .applecation
-        container = render.find('.applecation');
-        if (container.length) {
-            return container;
-        }
-
-        // Если нет, ищем .activity--active
-        container = render.find('.activity--active');
-        if (container.length) {
-            return container;
-        }
-
-        return null;
-    }
-
-    // =============================================
-    // СОЗДАНИЕ БЛОКА — ПРИВЯЗАН К .full-start-new__body
+    // СОЗДАНИЕ БЛОКА — В ПРАВОМ НИЖНЕМ УГЛУ
     // =============================================
 
     function sm_createBlock(state, card) {
@@ -439,16 +407,16 @@
             'min-width:280px',
             'padding:1.2em 1.6em',
             'border-radius:1em',
-            'background:rgba(0,0,0,0.7)',
-            'border:2px solid rgba(105,167,255,0.25)',
-            'backdrop-filter:blur(16px)',
-            '-webkit-backdrop-filter:blur(16px)',
+            'background:rgba(0,0,0,0.75)',
+            'border:2px solid rgba(105,167,255,0.3)',
+            'backdrop-filter:blur(20px)',
+            '-webkit-backdrop-filter:blur(20px)',
             'transition:all .3s ease',
             'cursor:pointer',
             'color:#ffffff',
             'font-family:"SegoeUI",system-ui,sans-serif',
             'font-size:15px',
-            'box-shadow:0 8px 40px rgba(0,0,0,0.6)',
+            'box-shadow:0 8px 40px rgba(0,0,0,0.7)',
             'margin:0',
             'flex-shrink:0',
             'position:relative',
@@ -587,15 +555,15 @@
         // Ховер
         block.addEventListener('mouseenter', function () {
             this.style.borderColor = 'rgba(105,167,255,0.5)';
-            this.style.background = 'rgba(0,0,0,0.8)';
+            this.style.background = 'rgba(0,0,0,0.85)';
             this.style.transform = 'scale(1.02)';
-            this.style.boxShadow = '0 12px 50px rgba(0,0,0,0.7)';
+            this.style.boxShadow = '0 12px 50px rgba(0,0,0,0.8)';
         });
         block.addEventListener('mouseleave', function () {
-            this.style.borderColor = 'rgba(105,167,255,0.25)';
-            this.style.background = 'rgba(0,0,0,0.7)';
+            this.style.borderColor = 'rgba(105,167,255,0.3)';
+            this.style.background = 'rgba(0,0,0,0.75)';
             this.style.transform = 'scale(1)';
-            this.style.boxShadow = '0 8px 40px rgba(0,0,0,0.6)';
+            this.style.boxShadow = '0 8px 40px rgba(0,0,0,0.7)';
         });
 
         // Клик
@@ -615,7 +583,7 @@
     }
 
     // =============================================
-    // УПРАВЛЕНИЕ БЛОКОМ — ПРИВЯЗКА К .full-start-new__body
+    // УПРАВЛЕНИЕ БЛОКОМ — ВСЕГДА НА МЕСТЕ
     // =============================================
 
     var currentBlock = null;
@@ -625,6 +593,7 @@
     var currentData = null;
     var isOnSeriesPage = false;
     var blockContainer = null;
+    var restoreInterval = null;
 
     function sm_removeBlock() {
         var block = document.getElementById('series-info-block');
@@ -633,6 +602,48 @@
         }
         currentBlock = null;
         blockContainer = null;
+    }
+
+    function sm_createContainer(render) {
+        // Ищем .full-start-new__body
+        var container = render.find('.full-start-new__body');
+        if (!container.length) {
+            container = render.find('.full-start-new');
+        }
+        if (!container.length) {
+            container = render.find('.applecation');
+        }
+        if (!container.length) {
+            container = render.find('.activity--active');
+        }
+        if (!container.length) {
+            return null;
+        }
+
+        // Проверяем, есть ли уже наш контейнер для блока
+        var wrapper = container.find('.series-block-wrapper');
+        if (wrapper.length) {
+            return wrapper;
+        }
+
+        // Создаём контейнер для блока в правом нижнем углу
+        var newWrapper = document.createElement('div');
+        newWrapper.className = 'series-block-wrapper';
+        newWrapper.style.cssText = [
+            'display:flex',
+            'justify-content:flex-end',
+            'align-items:flex-end',
+            'width:100%',
+            'height:100%',
+            'padding:0.5em 0.5em 0.5em 0',
+            'flex:1',
+            'position:relative',
+            'min-height:60px',
+            'pointer-events:none'
+        ].join(';');
+
+        container[0].appendChild(newWrapper);
+        return $(newWrapper);
     }
 
     function sm_insertBlock(card, data) {
@@ -671,9 +682,9 @@
                 return;
             }
 
-            // Находим контейнер .full-start-new__body
-            var container = sm_findContainer(render);
-            if (!container) {
+            // Создаём контейнер для блока
+            var wrapper = sm_createContainer(render);
+            if (!wrapper) {
                 return;
             }
 
@@ -718,28 +729,16 @@
             var block = sm_createBlock(state, currentCard);
             if (!block) return;
 
-            // Создаём контейнер для блока в правом нижнем углу
-            var blockWrapper = document.createElement('div');
-            blockWrapper.className = 'series-block-wrapper';
-            blockWrapper.style.cssText = [
-                'display:flex',
-                'justify-content:flex-end',
-                'align-items:flex-end',
-                'width:100%',
-                'height:100%',
-                'padding:0.5em 0',
-                'flex:1',
-                'position:relative'
-            ].join(';');
+            // Делаем блок кликабельным
+            block.style.pointerEvents = 'auto';
 
-            blockWrapper.appendChild(block);
-            
-            // Добавляем в контейнер
-            container.append(blockWrapper);
+            // Очищаем wrapper и вставляем блок
+            wrapper.empty();
+            wrapper.append(block);
             currentBlock = block;
-            blockContainer = blockWrapper;
+            blockContainer = wrapper;
 
-            console.log('[Series Manager PRO] Блок вставлен в .full-start-new__body');
+            console.log('[Series Manager PRO] Блок вставлен в правый нижний угол');
 
         } catch (e) {
             console.error('[Series Manager PRO] Ошибка:', e);
@@ -747,7 +746,7 @@
     }
 
     // =============================================
-    // ВОССТАНОВЛЕНИЕ БЛОКА
+    // ПОСТОЯННОЕ ВОССТАНОВЛЕНИЕ БЛОКА
     // =============================================
 
     function sm_restoreBlock() {
@@ -758,6 +757,11 @@
                 var block = document.getElementById('series-info-block');
                 if (!block) {
                     sm_insertBlock(card, active.data);
+                } else {
+                    // Проверяем, что блок видим
+                    if (block.style.display === 'none') {
+                        block.style.display = 'flex';
+                    }
                 }
             }
         }
@@ -788,7 +792,7 @@
                 clearTimeout(updateTimer);
                 updateTimer = setTimeout(function () {
                     sm_insertBlock(card, data);
-                }, 500);
+                }, 400);
             }
         }
     }
@@ -817,8 +821,18 @@
                 sm_insertBlock();
             }, 500);
         } else {
-            isOnSeriesPage = false;
-            sm_removeBlock();
+            // Не удаляем блок при переходе, он останется
+            // При возврате на full он обновится
+        }
+    }
+
+    function sm_onScroll() {
+        // Проверяем, не пропал ли блок при скролле
+        if (isOnSeriesPage) {
+            var block = document.getElementById('series-info-block');
+            if (!block) {
+                sm_restoreBlock();
+            }
         }
     }
 
@@ -831,10 +845,19 @@
         Lampa.Listener.follow('timeline', sm_onTimeline);
         Lampa.Listener.follow('activity', sm_onActivity);
 
-        // Восстановление при возврате
-        setTimeout(function() {
+        // Следим за скроллом
+        document.addEventListener('scroll', sm_onScroll, true);
+
+        // Периодическое восстановление (каждые 2 секунды)
+        if (restoreInterval) clearInterval(restoreInterval);
+        restoreInterval = setInterval(function() {
             sm_restoreBlock();
-        }, 1000);
+        }, 2000);
+
+        // Восстановление при изменении размера окна
+        window.addEventListener('resize', function() {
+            sm_restoreBlock();
+        });
     }
 
     // =============================================
@@ -945,10 +968,10 @@
                 }
             }, 1000);
 
-            // Дополнительное восстановление через 2 секунды
+            // Дополнительное восстановление через 3 секунды
             setTimeout(function() {
                 sm_restoreBlock();
-            }, 2000);
+            }, 3000);
 
         } catch (e) {
             console.error('[Series Manager PRO] Ошибка:', e);
