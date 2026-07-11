@@ -1,8 +1,8 @@
-/* Series Manager PRO 4.5.3 — РАБОЧАЯ ВЕРСИЯ */
+/* Series Manager PRO 5.7.0 — ФИНАЛЬНАЯ РАБОЧАЯ ВЕРСИЯ */
 (function () {
     'use strict';
 
-    var VERSION = '4.5.3';
+    var VERSION = '5.7.0';
     var MEMORY_KEY = 'lmui_detail_episode_v1';
 
     // =============================================
@@ -22,7 +22,6 @@
 
     var DEFAULTS = {
         enabled: true,
-        show_block: true,
         auto_open_balancer: true
     };
 
@@ -355,14 +354,14 @@
     }
 
     // =============================================
-    // БЛОК — FIXED ПОЗИЦИЯ (КАК В 4.5.3)
+    // БЛОК — ИДЕАЛЬНЫЙ РАЗМЕР И ПОЗИЦИЯ
     // =============================================
 
     function sm_createBlock(state, card) {
         if (!state || !state.current) return null;
 
         var settings = getSettings();
-        if (!settings.enabled || !settings.show_block) return null;
+        if (!settings.enabled) return null;
 
         var current = state.current;
         var coords = sm_episodeCoordinates(current.episode);
@@ -400,17 +399,17 @@
         block.setAttribute('data-card-id', sm_contentId(card));
 
         var viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
-        var blockWidth = Math.min(Math.max(viewportWidth * 0.28, 250), 400);
+        var blockWidth = Math.min(Math.max(viewportWidth * 0.28, 260), 380);
         var bottomOffset = 100;
 
-        // FIXED ПОЗИЦИЯ — НЕ ЗАВИСИТ ОТ СКРОЛЛА
+        // ИДЕАЛЬНАЯ ПОЗИЦИЯ: fixed, справа снизу
         block.style.cssText = [
             'position:fixed',
             'bottom:' + bottomOffset + 'px',
             'right:2em',
             'width:' + blockWidth + 'px',
-            'max-width:400px',
-            'min-width:250px',
+            'max-width:380px',
+            'min-width:260px',
             'padding:1.2em 1.6em',
             'border-radius:1em',
             'background:rgba(0,0,0,0.85)',
@@ -469,24 +468,20 @@
 
         block.appendChild(header);
 
-        // Название сериала
         var seriesName = document.createElement('div');
         seriesName.style.cssText = 'font-size:1.8em;font-weight:800;color:#ffffff;margin-bottom:0.05em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.2;text-shadow:0 2px 10px rgba(0,0,0,0.5);';
         seriesName.textContent = seriesTitle || 'Сериал';
         block.appendChild(seriesName);
 
-        // Название серии
         var titleEl = document.createElement('div');
         titleEl.style.cssText = 'font-size:1.15em;font-weight:600;color:rgba(255,255,255,0.85);margin-bottom:0.2em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:0 1px 6px rgba(0,0,0,0.4);';
         titleEl.textContent = title;
         block.appendChild(titleEl);
 
-        // Разделитель
         var divider = document.createElement('div');
         divider.style.cssText = 'width:100%;height:1px;background:rgba(255,255,255,0.08);margin:0.15em 0 0.3em;';
         block.appendChild(divider);
 
-        // Мета
         var meta = document.createElement('div');
         meta.style.cssText = 'display:flex;align-items:center;gap:0.6em;flex-wrap:wrap;font-size:0.85em;';
 
@@ -513,7 +508,6 @@
 
         block.appendChild(meta);
 
-        // Прогресс-бар
         var progressWrap = document.createElement('div');
         progressWrap.style.cssText = 'width:100%;height:6px;border-radius:99em;background:rgba(255,255,255,0.08);margin:0.4em 0 0.15em;overflow:hidden;box-shadow:inset 0 1px 3px rgba(0,0,0,0.3);';
         var progressBar = document.createElement('div');
@@ -523,7 +517,6 @@
         progressWrap.appendChild(progressBar);
         block.appendChild(progressWrap);
 
-        // Время просмотра
         var timeRow = document.createElement('div');
         timeRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;font-size:0.75em;color:rgba(255,255,255,0.4);margin-top:0.15em;';
 
@@ -541,7 +534,6 @@
 
         block.appendChild(timeRow);
 
-        // Следующая серия
         if (state.next && state.status !== 'complete' && state.status !== 'upcoming') {
             var nextCoords = sm_episodeCoordinates(state.next.episode);
             if (nextCoords) {
@@ -552,13 +544,11 @@
             }
         }
 
-        // Подсказка
         var hint = document.createElement('div');
         hint.style.cssText = 'font-size:0.6em;color:rgba(255,255,255,0.15);text-align:right;margin-top:0.1em;letter-spacing:0.05em;';
         hint.textContent = '↗ Нажмите, чтобы открыть в Lampac';
         block.appendChild(hint);
 
-        // Ховер
         block.addEventListener('mouseenter', function () {
             this.style.borderColor = 'rgba(105,167,255,0.5)';
             this.style.background = 'rgba(0,0,0,0.9)';
@@ -572,7 +562,6 @@
             this.style.boxShadow = '0 8px 40px rgba(0,0,0,0.8)';
         });
 
-        // Клик
         block.addEventListener('click', function (e) {
             e.stopPropagation();
             var season = coords ? coords.season : undefined;
@@ -589,7 +578,7 @@
     }
 
     // =============================================
-    // УПРАВЛЕНИЕ БЛОКОМ
+    // УПРАВЛЕНИЕ
     // =============================================
 
     var currentBlock = null;
@@ -612,7 +601,7 @@
     function sm_insertBlock(card, data) {
         try {
             var settings = getSettings();
-            if (!settings.enabled || !settings.show_block) {
+            if (!settings.enabled) {
                 sm_removeBlock();
                 return;
             }
@@ -692,17 +681,13 @@
         }
     }
 
-    // =============================================
-    // ВОССТАНОВЛЕНИЕ
-    // =============================================
-
     function sm_restoreBlock() {
         if (isBalancerOpen) {
             return;
         }
 
         var settings = getSettings();
-        if (!settings.enabled || !settings.show_block) {
+        if (!settings.enabled) {
             sm_removeBlock();
             return;
         }
@@ -720,7 +705,7 @@
     }
 
     // =============================================
-    // ОБРАБОТЧИКИ СОБЫТИЙ
+    // СОБЫТИЯ
     // =============================================
 
     var listenersInstalled = false;
@@ -754,11 +739,7 @@
         if (isOnSeriesPage && currentCard && !isBalancerOpen) {
             clearTimeout(updateTimer);
             updateTimer = setTimeout(function () {
-                var active = sm_activeActivity();
-                if (active && active.data) {
-                    currentData = active.data;
-                }
-                sm_insertBlock(currentCard, currentData);
+                sm_restoreBlock();
             }, 300);
         }
     }
@@ -774,7 +755,7 @@
             updateTimer = setTimeout(function () {
                 sm_insertBlock();
             }, 500);
-        } else if (event.component === 'lampac' || event.component === 'online' || event.component === 'torrent') {
+        } else if (event.component === 'lampac' || event.component === 'online' || event.component === 'torrent' || event.component === 'balancer') {
             isBalancerOpen = true;
             sm_removeBlock();
         } else {
@@ -812,13 +793,11 @@
             Lampa.Listener.follow('activity', sm_onActivityBack);
         } catch (e) {}
 
-        // ВОССТАНОВЛЕНИЕ КАЖДЫЕ 2 СЕКУНДЫ
         if (restoreInterval) clearInterval(restoreInterval);
         restoreInterval = setInterval(function() {
             sm_restoreBlock();
         }, 2000);
 
-        // ВОССТАНОВЛЕНИЕ ПРИ СКРОЛЛЕ
         document.addEventListener('scroll', function() {
             if (isOnSeriesPage && !isBalancerOpen) {
                 var block = document.getElementById('series-info-block');
@@ -828,7 +807,6 @@
             }
         }, { passive: true });
 
-        // ВОССТАНОВЛЕНИЕ ПРИ РЕСАЙЗЕ
         window.addEventListener('resize', function() {
             sm_restoreBlock();
         });
@@ -864,29 +842,6 @@
                     setSettings(settings);
                     
                     if (settings.enabled) {
-                        sm_restoreBlock();
-                    } else {
-                        sm_removeBlock();
-                    }
-                }
-            });
-
-            Lampa.SettingsApi.addParam({
-                component: 'series_manager_pro',
-                param: {
-                    name: 'series_manager_show_block',
-                    type: 'trigger',
-                    default: true
-                },
-                field: {
-                    name: 'Показывать блок продолжения'
-                },
-                onChange: function(value) {
-                    var settings = getSettings();
-                    settings.show_block = value === 'true' || value === true;
-                    setSettings(settings);
-                    
-                    if (settings.show_block) {
                         sm_restoreBlock();
                     } else {
                         sm_removeBlock();
