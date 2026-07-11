@@ -1,8 +1,8 @@
-/* Series Manager PRO 4.5.1 — Исправленная версия */
+/* Series Manager PRO 4.5.2 — Правильное управление */
 (function () {
     'use strict';
 
-    var VERSION = '4.5.1';
+    var VERSION = '4.5.2';
     var MEMORY_KEY = 'lmui_detail_episode_v1';
 
     // =============================================
@@ -42,7 +42,7 @@
     }
 
     // =============================================
-    // УТИЛИТЫ (СОКРАЩЕНЫ)
+    // УТИЛИТЫ (сокращены)
     // =============================================
 
     function sm_mediaType(card) {
@@ -355,7 +355,7 @@
     }
 
     // =============================================
-    // БЛОК — ВСТАВЛЯЕТСЯ В .full-start-new__right
+    // БЛОК — FIXED ПОЗИЦИЯ СПРАВА СНИЗУ
     // =============================================
 
     function sm_createBlock(state, card) {
@@ -399,15 +399,13 @@
         block.id = 'series-info-block';
         block.setAttribute('data-card-id', sm_contentId(card));
 
-        // БЛОК В ПРАВОМ НИЖНЕМ УГЛУ — FIXED ПОЗИЦИЯ
         var viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
-        var leftPosition = Math.max(viewportWidth * 0.65, 400);
-        var blockWidth = Math.min(viewportWidth * 0.30, 400);
-        var bottomPosition = 100; // отступ снизу
+        var blockWidth = Math.min(Math.max(viewportWidth * 0.28, 250), 400);
+        var bottomOffset = 100;
 
         block.style.cssText = [
             'position:fixed',
-            'bottom:' + bottomPosition + 'px',
+            'bottom:' + bottomOffset + 'px',
             'right:2em',
             'width:' + blockWidth + 'px',
             'max-width:400px',
@@ -591,7 +589,7 @@
     }
 
     // =============================================
-    // УПРАВЛЕНИЕ БЛОКОМ
+    // УПРАВЛЕНИЕ БЛОКОМ — ПРАВИЛЬНОЕ
     // =============================================
 
     var currentBlock = null;
@@ -692,7 +690,7 @@
     }
 
     // =============================================
-    // ВОССТАНОВЛЕНИЕ
+    // ВОССТАНОВЛЕНИЕ БЛОКА
     // =============================================
 
     function sm_restoreBlock() {
@@ -709,7 +707,7 @@
     }
 
     // =============================================
-    // ОБРАБОТЧИКИ СОБЫТИЙ
+    // ОБРАБОТЧИКИ СОБЫТИЙ — ПРАВИЛЬНЫЕ
     // =============================================
 
     var listenersInstalled = false;
@@ -756,16 +754,17 @@
         if (!event || event.type !== 'start') return;
 
         clearTimeout(updateTimer);
-        
+
+        // Если перешли на страницу сериала — показываем блок
         if (event.component === 'full') {
             isOnSeriesPage = true;
             updateTimer = setTimeout(function () {
                 sm_insertBlock();
             }, 500);
         } else {
-            // НЕ УДАЛЯЕМ БЛОК при уходе со страницы
-            // Он останется и обновится при возврате
+            // Если ушли с сериала — УДАЛЯЕМ блок
             isOnSeriesPage = false;
+            sm_removeBlock();
         }
     }
 
@@ -774,24 +773,30 @@
         if (!window.Lampa || !Lampa.Listener) return;
 
         listenersInstalled = true;
+        
+        // Основные события
         Lampa.Listener.follow('full', sm_onFull);
         Lampa.Listener.follow('timeline', sm_onTimeline);
         Lampa.Listener.follow('activity', sm_onActivity);
 
-        // Восстановление каждые 3 секунды (для надёжности)
-        if (restoreInterval) clearInterval(restoreInterval);
-        restoreInterval = setInterval(function() {
-            sm_restoreBlock();
-        }, 3000);
-
-        // Восстановление при скролле
+        // Восстановление при скролле (если блок пропал)
         document.addEventListener('scroll', function() {
-            sm_restoreBlock();
+            if (isOnSeriesPage) {
+                var block = document.getElementById('series-info-block');
+                if (!block) {
+                    sm_restoreBlock();
+                }
+            }
         }, { passive: true });
 
         // Восстановление при изменении размера окна
         window.addEventListener('resize', function() {
-            sm_restoreBlock();
+            if (isOnSeriesPage) {
+                var block = document.getElementById('series-info-block');
+                if (!block) {
+                    sm_restoreBlock();
+                }
+            }
         });
     }
 
@@ -891,6 +896,7 @@
             addSettings();
             sm_installListeners();
 
+            // Первая проверка при загрузке
             setTimeout(function () {
                 var active = sm_activeActivity();
                 if (active && active.component === 'full') {
@@ -902,15 +908,6 @@
                     }
                 }
             }, 1000);
-
-            // Дополнительное восстановление через 2 и 4 секунды
-            setTimeout(function() {
-                sm_restoreBlock();
-            }, 2000);
-
-            setTimeout(function() {
-                sm_restoreBlock();
-            }, 4000);
 
         } catch (e) {
             console.error('[Series Manager PRO] Ошибка:', e);
